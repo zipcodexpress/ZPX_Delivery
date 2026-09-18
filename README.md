@@ -30,6 +30,7 @@ Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the p
 | apps/customer-web | React customer shell |
 | apps/operations-web | React hub/admin shell |
 | packages/ui | Shared web foundation components |
+| packages/contracts | Generated shared API types and contract compilation gate |
 | simulators/locker | Persistent authenticated normalized door-event simulator |
 | scripts | Mac external-SSD checkout and local development commands |
 | deployment | Local-only Docker Compose services |
@@ -58,3 +59,5 @@ Start with [the handoff](docs/handoff/README.md), [execution contract](docs/hand
 The canonical API remains [OpenAPI](docs/handoff/contracts/openapi.json). The handoff was moved in a dedicated commit; no competing editable copy is maintained. The older ZPX_Delivery_Codex_Implementation_Package remains future-routing reference. Root ZIP files remain historical inputs.
 
 Use feature branches and pull requests. Keep code, tests, affected design and milestone evidence together. GitHub Issues/Projects owns task status. Never commit credentials, real customer records or production configuration. The development Compose database user is not the final restricted production role.
+
+See [remaining Phase 1 work and owner inputs](docs/PHASE1_REMAINING_WORK.md) for what comes next. API contract edits require `npm run contracts:generate`; `npm run check` rejects invalid contracts or stale generated definitions. Generated types do not imply the business API endpoints are implemented.

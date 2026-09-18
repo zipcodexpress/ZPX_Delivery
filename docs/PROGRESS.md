@@ -19,6 +19,11 @@ Implementation review: [draft PR 4](https://github.com/zipcodexpress/ZPX_Deliver
 - Implemented synthetic door command/evidence service with durable state, authentication, idempotency, ownership checks and fault scenarios.
 - Added M4 external APFS checkout validation and local startup scripts that preserve existing configuration/data.
 - Added automated tests and CI; actual results are in [M0 verification](verification/M0-foundation.md).
+- Added external OpenAPI schema/reference validation and generated TypeScript definitions for the 54-operation canonical API; CI checks consistency and compiles the definitions. Four additional tests reject malformed contracts. See [contract verification](verification/M0-contracts.md).
+
+## Remaining work and owner inputs
+
+See [Phase 1 remaining work](PHASE1_REMAINING_WORK.md) for the application-by-application status, dependency order and information requested from Richard. No user decision blocks contract/migration/software work. Hardware commissioning does require terminal/controller details, missing source, deployed-writer inventory and selected test sites. Local setup requires the actual external SSD mount path and an M4 test run.
 
 User local preference: M4 Mac, external SSD. Exact volume name not yet provided. No files have been written to the user's Mac by this cloud session. Native shell Git authentication here remains unavailable; connector commits preserve the work remotely.
 
@@ -29,7 +34,7 @@ Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup te
 ## Next dependencies
 
 1. Get the first M4 startup results and lock tested image digests; Linux Docker/MySQL CI now passes.
-2. Finish P0.1 reuse decision and real ThinkPHP/application scaffolding; semantic OpenAPI validation and client generation.
+2. Finish P0.1 reuse decision and real ThinkPHP/application scaffolding; add request transport/runtime validation around the now-generated API types.
 3. Add mobile/native build lanes and terminal protocol fixtures.
 4. Convert draft schema into tracked migrations and enforce/test P1.1 constraints and runtime roles.
 5. Implement P1.2/P1.3 identity/topology before shipping/payment/label workflows.
