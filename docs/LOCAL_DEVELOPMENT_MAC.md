@@ -4,6 +4,8 @@ Purpose: run the first development increment locally.
 Audience: Richard and ZPX developers. Status: implemented setup; first physical M4/Docker run pending.
 Owner: unassigned. Last reviewed: 2026-09-18.
 
+The Linux Docker setup, all 73 draft tables and HTTP readiness passed in [GitHub Actions](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35401756927). This does not yet verify an M4 run. Development code is available in [draft PR 4](https://github.com/zipcodexpress/ZPX_Delivery/pull/4).
+
 ## Storage and prerequisites
 
 Keep the repository at `/Volumes/<your SSD name>/Developer/ZPX_Delivery`. Replace the placeholder with the actual mounted volume name; quote the path if it contains spaces. This cloud session cannot mount, inspect or write to your Mac's SSD.

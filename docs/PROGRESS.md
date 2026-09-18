@@ -9,6 +9,7 @@ Status: Development started; M0 incomplete. Owner: unassigned. Last reviewed: 20
 [P0.1/P0.2 foundation issue 3](https://github.com/zipcodexpress/ZPX_Delivery/issues/3): IN_PROGRESS.
 Planning remains in [PR 2](https://github.com/zipcodexpress/ZPX_Delivery/pull/2).
 Implementation branch: feature/P0.1-m4-foundation, stacked on the planning branch.
+Implementation review: [draft PR 4](https://github.com/zipcodexpress/ZPX_Delivery/pull/4). Code and staged notes are committed; no merge or deployment has occurred.
 
 ## Implemented this increment
 
@@ -23,11 +24,11 @@ User local preference: M4 Mac, external SSD. Exact volume name not yet provided.
 
 ## Current evidence
 
-Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup tests and static handoff validation pass. Docker/PHP/MySQL and physical M4 validation are not claimed. The PHP endpoint is health-only, not a completed business API.
+Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup tests and static handoff validation pass. [GitHub Actions run 35401756927](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35401756927) also passed PHP lint, Docker startup, initialization of all 73 draft tables and service/proxy HTTP readiness. Physical M4 and locker validation remain pending. The PHP endpoint is health-only, not a completed business API.
 
 ## Next dependencies
 
-1. Get the Docker/MySQL CI and first M4 startup results; resolve failures and lock actual image digests.
+1. Get the first M4 startup results and lock tested image digests; Linux Docker/MySQL CI now passes.
 2. Finish P0.1 reuse decision and real ThinkPHP/application scaffolding; semantic OpenAPI validation and client generation.
 3. Add mobile/native build lanes and terminal protocol fixtures.
 4. Convert draft schema into tracked migrations and enforce/test P1.1 constraints and runtime roles.

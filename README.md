@@ -20,7 +20,7 @@ python3 scripts/dev.py up
 
 Customer: http://localhost:5173 · Operations: http://localhost:5174
 
-The full Docker/MySQL and M4 run is pending verification; see [actual evidence and limits](docs/verification/M0-foundation.md). The current pages report environment readiness; they are not simulated completed shipping products.
+Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the physical M4 run remains pending. See [actual evidence and limits](docs/verification/M0-foundation.md). The current pages report environment readiness; they are not simulated completed shipping products.
 
 ## Project map
 
