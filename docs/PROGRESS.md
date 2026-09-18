@@ -29,6 +29,8 @@ User local preference: M4 Mac, external SSD. Exact volume name not yet provided.
 
 ## Current evidence
 
+Latest increment: [CI run 35403370288](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35403370288) passed code and Docker jobs for commit `3847544`. Contract/type checks, 9 Node tests, 3 Python tests, web builds, database initialization and HTTP readiness passed. Remaining-work and owner-input notes are committed alongside code.
+
 Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup tests and static handoff validation pass. [GitHub Actions run 35401756927](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35401756927) also passed PHP lint, Docker startup, initialization of all 73 draft tables and service/proxy HTTP readiness. Physical M4 and locker validation remain pending. The PHP endpoint is health-only, not a completed business API.
 
 ## Next dependencies
