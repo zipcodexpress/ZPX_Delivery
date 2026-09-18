@@ -6,6 +6,8 @@ Status: Development started; M0 incomplete. Owner: unassigned. Last reviewed: 20
 
 ## Current stage
 
+Current development: [P1.1 PostgreSQL foundation issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5), branch `feature/P1.1-postgresql-foundation`, based on PR 4. Richard selected PostgreSQL. Canonical 73-table migrations, migration tracking, restricted runtime role, integrity/history rules and modular PHP infrastructure are implemented. See [backend/database architecture](BACKEND_DATABASE_ARCHITECTURE.md) and [current verification](verification/P1.1-postgresql.md). Previous MySQL results below are historical, not PostgreSQL evidence. Full P1.1 remains in progress.
+
 [P0.1/P0.2 foundation issue 3](https://github.com/zipcodexpress/ZPX_Delivery/issues/3): IN_PROGRESS.
 Planning remains in [PR 2](https://github.com/zipcodexpress/ZPX_Delivery/pull/2).
 Implementation branch: feature/P0.1-m4-foundation, stacked on the planning branch.

@@ -3,6 +3,8 @@
 Purpose: record actual pins and remaining M0 decisions. Audience: developers.
 Status: Provisional; M0 is incomplete. Owner: unassigned. Last reviewed: 2026-09-18.
 
+Database amendment: [decision 0003](0003-postgresql-backend.md) replaces the MySQL choice below with PostgreSQL 17. The PHP image now builds pdo_pgsql; application migrations and runtime configuration no longer target MySQL.
+
 Terminal amendment: [decision 0002](0002-new-terminal-platform.md) replaces Windows terminal tooling as an M0 requirement. Android is preferred for a new terminal; legacy executable/service builds are out of scope. The historical Windows mention below does not apply to the current work order.
 
 The user selected an M4 Mac and external SSD for the local checkout. Use external APFS and native arm64 containers where supplied by the image. Do not force amd64 emulation or put the repository on the internal drive by default.

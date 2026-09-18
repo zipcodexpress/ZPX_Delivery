@@ -8,7 +8,7 @@ export function Foundation({ audience }: { audience: 'customer' | 'operations' }
     const timeout = setTimeout(() => controller.abort(), 5000);
     fetch('/health/ready', { signal: controller.signal }).then(async response => {
       const result = await response.json();
-      setHealth(response.ok ? `API connected · ${result.draft_tables} draft database tables` : 'Database not ready');
+      setHealth(response.ok ? 'API connected · Database ready' : 'Database not ready');
     }).catch(() => setHealth('API unavailable — check the local services')).finally(() => clearTimeout(timeout));
     return () => { clearTimeout(timeout); controller.abort(); };
   }, []);

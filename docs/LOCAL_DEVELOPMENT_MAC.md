@@ -4,6 +4,8 @@ Purpose: run the first development increment locally.
 Audience: Richard and ZPX developers. Status: implemented setup; first physical M4/Docker run pending.
 Owner: unassigned. Last reviewed: 2026-09-18.
 
+Current database/setup amendment: use branch `feature/P1.1-postgresql-foundation`. PostgreSQL replaces MySQL. `python3 scripts/dev.py init` preserves existing secrets and adds a missing migration secret; `up` creates a separate PostgreSQL volume and applies tracked migrations. Old MySQL volumes remain untouched. `python3 scripts/dev.py migrate` applies new migrations, and `test-db` now runs PostgreSQL integration tests with synthetic data. Earlier MySQL/empty-volume initialization descriptions below are historical; see [current architecture](BACKEND_DATABASE_ARCHITECTURE.md).
+
 SSD context recovered from the September 16 “Reformat SSD for development” conversation: proposed name `Development`, path `/Volumes/Development`, APFS, GUID Partition Map. Use `/Volumes/Development/Developer/ZPX_Delivery` as the planned checkout. The retrieved conversation did not confirm formatting was completed; the setup checks actual disk metadata before proceeding. Substitute `Development` for YOUR_SSD_NAME below if that volume is mounted.
 
 The Linux Docker setup, all 73 draft tables and HTTP readiness passed in [GitHub Actions](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35401756927). This does not yet verify an M4 run. Development code is available in [draft PR 4](https://github.com/zipcodexpress/ZPX_Delivery/pull/4).

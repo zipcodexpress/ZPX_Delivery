@@ -1,6 +1,6 @@
 FROM php:8.3-cli-bookworm
-RUN docker-php-ext-install pdo_mysql
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && docker-php-ext-install pdo_pgsql && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY apps/api/public ./public
+COPY apps/api/ ./
 EXPOSE 8000
 CMD ["php", "-S", "0.0.0.0:8000", "-t", "public", "public/index.php"]

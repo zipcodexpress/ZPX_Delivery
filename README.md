@@ -2,6 +2,8 @@
 
 Initial development foundation for the Austin hub-and-spoke delivery network.
 
+**Current database: PostgreSQL.** See [backend and database architecture](docs/BACKEND_DATABASE_ARCHITECTURE.md), [database decision](docs/decisions/0003-postgresql-backend.md) and [P1.1 verification](docs/verification/P1.1-postgresql.md). Use branch `feature/P1.1-postgresql-foundation` for this increment; earlier MySQL foundation notes below are historical. Canonical migrations live in `apps/api/database/migrations`, with checksum tracking and separate migration/runtime credentials. PostgreSQL startup uses a new volume and leaves any previous MySQL volume intact.
+
 **Status:** P0.1/P0.2 in progress. Customer and operations web shells, local service configuration, API health bootstrap and a tested synthetic locker simulator are implemented. Shipping, authentication, native apps and physical terminal control are not yet implemented.
 
 ## Run on your M4 Mac
