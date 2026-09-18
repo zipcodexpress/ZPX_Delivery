@@ -1,6 +1,6 @@
 # Repository instruction entry point
 
-The current handoff is in ZPX_Phase1_Codex_Package/. References below to CODEX_START_HERE.md and docs/13_IMPLEMENTATION_EXECUTION.md refer to paths within that package. Read the root README.md and docs/DOCUMENTATION_GUIDE.md for repository navigation and documentation workflow.
+The current handoff is in docs/handoff/. References below to CODEX_START_HERE.md and docs/13_IMPLEMENTATION_EXECUTION.md refer to paths within that package. Read the root README.md and docs/DOCUMENTATION_GUIDE.md for repository navigation and documentation workflow.
 
 # Instructions for implementation in the new ZPX delivery project
 
@@ -16,3 +16,4 @@ Scope: this handoff and the new delivery project. These instructions do not gran
 - Record exact toolchains and lockfiles. Do not claim that absent native libraries, the missing ZipporaService project or untested hardware work.
 - Continue independent software work when hardware evidence is unavailable. Report the precise blocked capability and evidence needed to unblock it.
 - Use task IDs from doc 11 in changes and verification notes. Mark a task done only with its specified evidence; a placeholder page or mocked success response is not completion.
+

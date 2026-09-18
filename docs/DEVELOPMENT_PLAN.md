@@ -8,7 +8,7 @@ Last reviewed: 2026-09-18.
 
 ## 1. Baseline and scope
 
-The repository README selects Phase 1 revision 4 as authoritative. Read [the entry point](../ZPX_Phase1_Codex_Package/CODEX_START_HERE.md), [execution contract](../ZPX_Phase1_Codex_Package/docs/13_IMPLEMENTATION_EXECUTION.md), [domain rules](../ZPX_Phase1_Codex_Package/docs/07_BACKEND_AND_STATE_MACHINES.md) and [acceptance backlog](../ZPX_Phase1_Codex_Package/docs/11_BACKLOG_AND_ACCEPTANCE.md).
+The repository README selects Phase 1 revision 4 as authoritative. Read [the entry point](handoff/CODEX_START_HERE.md), [execution contract](handoff/docs/13_IMPLEMENTATION_EXECUTION.md), [domain rules](handoff/docs/07_BACKEND_AND_STATE_MACHINES.md) and [acceptance backlog](handoff/docs/11_BACKLOG_AND_ACCEPTANCE.md).
 
 The initial business is approximately 20 Austin locations, one hub and assigned drivers. The synthetic fixture has three downtown locations and 17 satellites; these are not confirmed site addresses. Existing apartments may participate through partitioned compartments. Public sites require new customer registration. The delivery platform has its own data and authentication.
 
@@ -147,3 +147,4 @@ At each task start fetch the latest repository state and inspect active changes.
 Use small branches such as feature/P3.1-terminal-journal. Merge after relevant checks and review, without force-pushing others' work. Committing or downloading files alone does not continuously synchronize a local machine.
 
 This planning session obtained a pinned text snapshot through the GitHub connection. Native git clone failed because shell credentials were unavailable; no full local Git history or working clone is claimed. Connector commits/PRs can keep this plan in GitHub. Establish a repository-enabled development environment or authenticated local checkout before the build sprint.
+
