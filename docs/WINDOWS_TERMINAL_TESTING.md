@@ -1,5 +1,7 @@
 # Windows terminal test procedure
 
+**Superseded by [decision 0002](decisions/0002-new-terminal-platform.md).** This procedure was based on an incorrect migration assumption. The old terminal is reference-only. Do not request Windows screenshots, legacy builds or Zippora.exe testing for the new project. Build a new terminal with Android as the preferred direction. The remaining text is historical and is not an active work order.
+
 Purpose: explain how Richard can help test the Windows terminal while development uses an M4 Mac.
 Audience: owner and terminal developer. Status: planned; no new terminal binary is ready yet.
 Owner: engineering prepares the build; Richard operates the test device. Last reviewed: 2026-09-18.

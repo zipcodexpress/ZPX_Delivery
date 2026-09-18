@@ -6,6 +6,8 @@ The current handoff is in docs/handoff/. References below to CODEX_START_HERE.md
 
 Scope: this handoff and the new delivery project. These instructions do not grant production access or override instructions in separately checked-out reference repositories.
 
+User clarification superseding historical terminal platform requirements: the old terminal is reference-only for locker/API behavior and door-control/status protocols. Build a new terminal; Android is the preferred direction, with device/SDK selection pending. Do not port, rebuild or depend on Zippora.exe/ZipporaService, legacy Windows DLLs or a Windows compatibility lane unless separately requested. Read docs/decisions/0002-new-terminal-platform.md. Shared physical locker coexistence rules still apply where existing sites participate.
+
 - Read CODEX_START_HERE.md and docs/13_IMPLEMENTATION_EXECUTION.md first. The handoff contains specifications and draft migrations, not an existing implementation.
 - Keep new delivery data and authentication separate from legacy apartment records. Shared hardware requires fixed compartment ownership and one command gate before any physical pilot.
 - Preserve package identity across sorting, route changes, relabeling and returns. A label or SI is identification, never permission to open a door.
@@ -16,4 +18,3 @@ Scope: this handoff and the new delivery project. These instructions do not gran
 - Record exact toolchains and lockfiles. Do not claim that absent native libraries, the missing ZipporaService project or untested hardware work.
 - Continue independent software work when hardware evidence is unavailable. Report the precise blocked capability and evidence needed to unblock it.
 - Use task IDs from doc 11 in changes and verification notes. Mark a task done only with its specified evidence; a placeholder page or mocked success response is not completion.
-

@@ -27,7 +27,7 @@ See [Phase 1 remaining work](PHASE1_REMAINING_WORK.md) for the application-by-ap
 
 User local preference: M4 Mac, external SSD. The September 16 SSD conversation proposed `Development`, mounted at `/Volumes/Development`, formatted APFS with GUID Partition Map. Completion was not confirmed in the retrieved conversation. Planned checkout: `/Volumes/Development/Developer/ZPX_Delivery`; the setup script will validate the actual volume. No files have been written to the user's Mac by this cloud session. Native shell Git authentication here remains unavailable; connector commits preserve the work remotely.
 
-Richard clarified that ZipporaService only keeps Zippora.exe running/restarts it. Its source is no longer requested as a delivery development prerequisite. Focus the terminal build on Zippora.exe and isolate any obsolete watchdog project reference in the new build; that build is still unverified. See [Windows terminal testing](WINDOWS_TERMINAL_TESTING.md).
+Richard clarified that the entire old terminal is reference-only for locker/API behavior and door protocols. Build a new terminal, with Android as the preferred direction. Zippora.exe, ZipporaService, Windows screenshots and legacy build dependencies are not requested. [Decision 0002](decisions/0002-new-terminal-platform.md) supersedes previous Windows migration/testing assumptions; hardware adapter and physical coexistence validation remain necessary.
 
 ## Current evidence
 

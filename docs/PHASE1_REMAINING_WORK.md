@@ -6,6 +6,8 @@ Owner: Richard for business/site inputs; engineering execution owner unassigned.
 
 Task status remains in GitHub Issues; this document explains dependencies. See [progress](PROGRESS.md), [ordered backlog and T01–T20](handoff/docs/11_BACKLOG_AND_ACCEPTANCE.md), and [implementation review](https://github.com/zipcodexpress/ZPX_Delivery/pull/4).
 
+Terminal scope correction: [decision 0002](decisions/0002-new-terminal-platform.md) supersedes old Windows migration/build requirements. The old terminal is reference-only; develop a new kiosk with Android as the preferred direction.
+
 ## What works today
 
 Customer and operations web shells, PHP health endpoints, local Docker/MySQL setup and a persistent normalized locker simulator exist. Linux CI verified startup, initialization of 73 draft tables and HTTP readiness. The next increment adds OpenAPI structural validation, deterministic shared TypeScript definitions and a stale-output check in CI. These are development foundations, not usable shipping or driver products. The schema still needs tracked migrations, permission constraints and transactional tests.
@@ -31,7 +33,7 @@ Customer and operations web shells, PHP health endpoints, local Docker/MySQL set
 | Customer/driver mobile | None yet | Shared native app with role navigation; customer flows; assigned driver runs, camera scans, ordered stops/maps and pending offline queue |
 | Hub staff | Operations shell only | Individual receipt, discrepancies, destination staging, label reprint, manifests and dispatch handoff |
 | Admin | Shared operations shell only | Sites/hardware/users/roles/drivers, ownership, routing, rates, exceptions, audit, reporting and finance |
-| Terminal | Normalized simulator only | C# host, delivery/receive/pickup flows, existing apartment flows, one command gate, durable journal, scanner/printer/native protocol integration |
+| Terminal | Normalized simulator only | New kiosk (Android preferred), delivery/receive/pickup flows, required apartment continuity, one command gate, durable journal and hardware transport integration |
 | Public website | No marketing pages | Service coverage, how-to-send/pickup, support and approved operating policies |
 
 Phase 1 routing is dispatcher-published ordered stops via a hub. A driver scans every parcel when collecting, loading and delivering. Hub staff independently scan receipt. Map estimates and driver preferences never authorize an unassigned package or substitute for a complete manifest. A route optimization solver is not a launch prerequisite.
@@ -43,8 +45,7 @@ Software work continues with synthetic fixtures while these are gathered. Do not
 | Priority | Requested input | Why / next action |
 |---|---|---|
 | First local run | Use the SSD plan from the September 16 conversation: `/Volumes/Development`, APFS/GUID; run the [Mac setup](LOCAL_DEVELOPMENT_MAC.md) when convenient | Reformat completion was not confirmed in retrieved context. The script verifies actual storage; record M4 startup results |
-| Terminal integration | One representative terminal's OS, CPU/bitness, controller model/profile, serial baud/parity/address settings, scanner/printer models and available test locker | Reproduce the build and validate protocol/label hardware without touching operating lockers |
-| Terminal build | Identify the deployed Zippora.exe revision and available native DLLs | Richard confirmed ZipporaService is only a watchdog. No need to provide that service; engineering will isolate its build reference and validate the executable independently |
+| Terminal hardware, when needed | Controller model, USB/serial/network connection, protocol settings, scanner/printer connections and any proposed Android kiosk model | Select the new transport adapter and test it against a designated locker; no old Windows build or screenshot is required |
 | Legacy coexistence | Schema-only DB export without records or secrets, plus list of services/admin tools that allocate, open, reset or maintain compartments | Audit every writer before enabling delivery compartments at apartment sites |
 | Pilot design | Proposed hub and first apartment/public test sites, operating/access hours, available compartment sizes and proposed delivery-only doors | Start with two sites for commissioning, then expand toward the 20-location Austin pilot |
 

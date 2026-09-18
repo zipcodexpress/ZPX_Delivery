@@ -147,4 +147,6 @@ At each task start fetch the latest repository state and inspect active changes.
 Use small branches such as feature/P3.1-terminal-journal. Merge after relevant checks and review, without force-pushing others' work. Committing or downloading files alone does not continuously synchronize a local machine.
 
 This planning session obtained a pinned text snapshot through the GitHub connection. Native git clone failed because shell credentials were unavailable; no full local Git history or working clone is claimed. Connector commits/PRs can keep this plan in GitHub. Establish a repository-enabled development environment or authenticated local checkout before the build sprint.
+# Terminal scope amendment
 
+Read [decision 0002](decisions/0002-new-terminal-platform.md) before using this plan. Richard clarified that the old terminal is reference-only for locker/API behavior and door-control/status protocols. Build a new terminal with Android as the preferred direction; historical Windows/C# compatibility builds and Zippora dependencies below are superseded. Shared-site ownership and single-command-gate requirements remain applicable.

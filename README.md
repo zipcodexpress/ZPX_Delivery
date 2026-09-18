@@ -38,7 +38,7 @@ Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the p
 | docs/DEVELOPMENT_PLAN.md | Cross-application milestones and next sprint |
 | docs/PROGRESS.md | Current stage and session handoff |
 
-Native mobile and Windows terminal applications are still required by the plan. They have not been scaffolded or built in this increment.
+Native mobile and a new kiosk terminal are still required. Android is the preferred terminal direction; the old Windows terminal is reference-only, per [decision 0002](docs/decisions/0002-new-terminal-platform.md). Neither application has been scaffolded or built in this increment.
 
 ## Checks
 
