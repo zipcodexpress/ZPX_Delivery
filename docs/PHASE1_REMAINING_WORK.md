@@ -42,9 +42,9 @@ Software work continues with synthetic fixtures while these are gathered. Do not
 
 | Priority | Requested input | Why / next action |
 |---|---|---|
-| First local run | Confirm current SSD mount path (for example `/Volumes/Document`) and whether it is now APFS; run the [Mac setup](LOCAL_DEVELOPMENT_MAC.md) when convenient | The cloud workspace cannot inspect the Mac. Record actual M4 startup results; paste redacted errors if startup fails |
+| First local run | Use the SSD plan from the September 16 conversation: `/Volumes/Development`, APFS/GUID; run the [Mac setup](LOCAL_DEVELOPMENT_MAC.md) when convenient | Reformat completion was not confirmed in retrieved context. The script verifies actual storage; record M4 startup results |
 | Terminal integration | One representative terminal's OS, CPU/bitness, controller model/profile, serial baud/parity/address settings, scanner/printer models and available test locker | Reproduce the build and validate protocol/label hardware without touching operating lockers |
-| Missing source | Provide the referenced ZipporaService project, or explain whether it is obsolete; identify deployed source revisions and native DLL availability | Resolve the existing terminal build dependency; identify which code actually controls doors |
+| Terminal build | Identify the deployed Zippora.exe revision and available native DLLs | Richard confirmed ZipporaService is only a watchdog. No need to provide that service; engineering will isolate its build reference and validate the executable independently |
 | Legacy coexistence | Schema-only DB export without records or secrets, plus list of services/admin tools that allocate, open, reset or maintain compartments | Audit every writer before enabling delivery compartments at apartment sites |
 | Pilot design | Proposed hub and first apartment/public test sites, operating/access hours, available compartment sizes and proposed delivery-only doors | Start with two sites for commissioning, then expand toward the 20-location Austin pilot |
 

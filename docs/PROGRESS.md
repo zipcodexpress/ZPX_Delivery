@@ -25,7 +25,9 @@ Implementation review: [draft PR 4](https://github.com/zipcodexpress/ZPX_Deliver
 
 See [Phase 1 remaining work](PHASE1_REMAINING_WORK.md) for the application-by-application status, dependency order and information requested from Richard. No user decision blocks contract/migration/software work. Hardware commissioning does require terminal/controller details, missing source, deployed-writer inventory and selected test sites. Local setup requires the actual external SSD mount path and an M4 test run.
 
-User local preference: M4 Mac, external SSD. Exact volume name not yet provided. No files have been written to the user's Mac by this cloud session. Native shell Git authentication here remains unavailable; connector commits preserve the work remotely.
+User local preference: M4 Mac, external SSD. The September 16 SSD conversation proposed `Development`, mounted at `/Volumes/Development`, formatted APFS with GUID Partition Map. Completion was not confirmed in the retrieved conversation. Planned checkout: `/Volumes/Development/Developer/ZPX_Delivery`; the setup script will validate the actual volume. No files have been written to the user's Mac by this cloud session. Native shell Git authentication here remains unavailable; connector commits preserve the work remotely.
+
+Richard clarified that ZipporaService only keeps Zippora.exe running/restarts it. Its source is no longer requested as a delivery development prerequisite. Focus the terminal build on Zippora.exe and isolate any obsolete watchdog project reference in the new build; that build is still unverified. See [Windows terminal testing](WINDOWS_TERMINAL_TESTING.md).
 
 ## Current evidence
 
@@ -43,6 +45,6 @@ Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup te
 
 ## Hardware and business gates
 
-P0.3 deployed-writer inventory, ZipporaService resolution and physical protocol evidence remain needed before shared-locker commissioning. Actual sites, providers and service policies remain launch decisions.
+P0.3 deployed-writer inventory and physical protocol evidence remain needed before shared-locker commissioning. ZipporaService is a watchdog per Richard's clarification, not a required delivery module. Actual sites, providers and service policies remain launch decisions.
 
 No application has been deployed, no production data accessed and no physical door commanded.
