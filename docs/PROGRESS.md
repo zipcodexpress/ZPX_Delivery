@@ -1,35 +1,40 @@
 # Development progress
 
-Purpose: milestone summary and session handoff; task status belongs in GitHub Issues/Projects.
+Purpose: milestone/session summary; task status belongs in GitHub Issues/Projects.
 Audience: ZPX owner, developers and Codex.
-Status: Draft planning baseline.
-Owner: Unassigned.
-Last reviewed: 2026-09-18.
+Status: Development started; M0 incomplete. Owner: unassigned. Last reviewed: 2026-09-18.
 
 ## Current stage
 
-P0.1 planning subtask: IN_PROGRESS, pending review of [issue 1](https://github.com/zipcodexpress/ZPX_Delivery/issues/1) and the associated documentation PR. Application implementation has not started. See [development plan](DEVELOPMENT_PLAN.md).
+[P0.1/P0.2 foundation issue 3](https://github.com/zipcodexpress/ZPX_Delivery/issues/3): IN_PROGRESS.
+Planning remains in [PR 2](https://github.com/zipcodexpress/ZPX_Delivery/pull/2).
+Implementation branch: feature/P0.1-m4-foundation, stacked on the planning branch.
 
-The current authority is Phase 1 revision 4. The older relay/matchmaking package remains reference material. Customer/driver share a mobile codebase with role navigation; hub/admin share operations web.
+## Implemented this increment
 
-## Work completed in this session
+- Moved the authoritative Phase 1 handoff to docs/handoff without changing original ZIP archives.
+- Created an application workspace, locked Node/web dependencies and added customer/operations React shells.
+- Added local-only API health bootstrap, MySQL draft-schema initialization and Docker configuration.
+- Implemented synthetic door command/evidence service with durable state, authentication, idempotency, ownership checks and fault scenarios.
+- Added M4 external APFS checkout validation and local startup scripts that preserve existing configuration/data.
+- Added automated tests and CI; actual results are in [M0 verification](verification/M0-foundation.md).
 
-- Verified private repository access through the connected GitHub app.
-- Materialized 66 text files at reviewed commit 8b58ee5913bddd43335207a70e15f8afb8d8f1ba; ZIP archives were not downloaded or changed.
-- Read root instructions and current design, with targeted comparison to older routing scope.
-- Prepared comprehensive milestones, application boundaries, first sprint, reuse decision and rollout criteria.
-- Reran static handoff validation and checked plan links; see [verification](verification/development-plan-review.md).
+User local preference: M4 Mac, external SSD. Exact volume name not yet provided. No files have been written to the user's Mac by this cloud session. Native shell Git authentication here remains unavailable; connector commits preserve the work remotely.
 
-## Next dependency
+## Current evidence
 
-Begin P0.1 with documentation reorganization and a bounded platform-reuse decision, then lock toolchains and scaffold applications. Start P0.2 simulator and P0.3 hardware/deployed-writer discovery alongside the foundation work.
+Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup tests and static handoff validation pass. Docker/PHP/MySQL and physical M4 validation are not claimed. The PHP endpoint is health-only, not a completed business API.
 
-## Blockers and open decisions
+## Next dependencies
 
-- Native shell git clone lacks credentials. GitHub connector reads and branch/file writes work. Establish a repository-enabled development environment before build work; do not mistake this text snapshot for a full clone.
-- Fleetbase adoption is unselected; current ThinkPHP/React baseline remains in force.
-- Resolve requested_size prose/schema mismatch and delegated terminal API gaps before corresponding UI paths.
-- Physical rollout needs missing terminal dependency resolution, actual hardware inventory and legacy writer/schema evidence.
-- Assign engineering/operations owners and confirm actual pilot sites, rates and provider choices before launch.
+1. Get the Docker/MySQL CI and first M4 startup results; resolve failures and lock actual image digests.
+2. Finish P0.1 reuse decision and real ThinkPHP/application scaffolding; semantic OpenAPI validation and client generation.
+3. Add mobile/native build lanes and terminal protocol fixtures.
+4. Convert draft schema into tracked migrations and enforce/test P1.1 constraints and runtime roles.
+5. Implement P1.2/P1.3 identity/topology before shipping/payment/label workflows.
 
-No database migration, application build, physical door operation or deployment was performed.
+## Hardware and business gates
+
+P0.3 deployed-writer inventory, ZipporaService resolution and physical protocol evidence remain needed before shared-locker commissioning. Actual sites, providers and service policies remain launch decisions.
+
+No application has been deployed, no production data accessed and no physical door commanded.

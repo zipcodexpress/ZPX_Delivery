@@ -19,6 +19,7 @@ coverage/
 __pycache__/
 *.py[cod]
 .venv/
+.local/
 
 # Local editor and OS files
 .vs/
