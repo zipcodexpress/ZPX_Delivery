@@ -1,0 +1,59 @@
+openapi: 3.0.3
+info:
+  title: ZipcodeXpress Delivery API
+  version: 0.1.0
+servers:
+  - url: /api/delivery
+paths:
+  /shipments/quote:
+    post:
+      summary: Create shipping quote
+      responses:
+        '200':
+          description: Quote created
+  /shipments:
+    post:
+      summary: Create shipment
+      responses:
+        '201':
+          description: Shipment created
+  /shipments/{id}/tracking:
+    get:
+      summary: Customer shipment tracking
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tracking result
+  /driver/trips:
+    post:
+      summary: Create planned driver trip
+      responses:
+        '201':
+          description: Driver trip created
+  /driver/trips/{id}/matches:
+    get:
+      summary: Get matching package/batch opportunities
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Ranked opportunities
+  /locker/validate-relay-drop:
+    post:
+      summary: Validate relay drop
+      responses:
+        '200':
+          description: Validation result
+  /locker/validate-final-drop:
+    post:
+      summary: Validate final destination drop
+      responses:
+        '200':
+          description: Validation result

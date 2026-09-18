@@ -1,0 +1,150 @@
+{
+  "synthetic": true,
+  "description": "Not real site addresses or live device configuration",
+  "hub": {
+    "id": "HUB-AUS-01",
+    "name": "Synthetic Austin Hub"
+  },
+  "drivers": [
+    "DRIVER-IN",
+    "DRIVER-OUT"
+  ],
+  "locations": [
+    {
+      "id": "AUS-001",
+      "zone": "DOWNTOWN",
+      "site_mode": "HYBRID_PARTITIONED"
+    },
+    {
+      "id": "AUS-002",
+      "zone": "DOWNTOWN",
+      "site_mode": "HYBRID_PARTITIONED"
+    },
+    {
+      "id": "AUS-003",
+      "zone": "DOWNTOWN",
+      "site_mode": "HYBRID_PARTITIONED"
+    },
+    {
+      "id": "AUS-004",
+      "zone": "SATELLITE",
+      "site_mode": "HYBRID_PARTITIONED"
+    },
+    {
+      "id": "AUS-005",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-006",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-007",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-008",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-009",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-010",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-011",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-012",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-013",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-014",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-015",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-016",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-017",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-018",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-019",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    },
+    {
+      "id": "AUS-020",
+      "zone": "SATELLITE",
+      "site_mode": "DELIVERY_ONLY"
+    }
+  ],
+  "run": {
+    "id": "RUN-PM-01",
+    "type": "OUTBOUND",
+    "driver": "DRIVER-OUT",
+    "revision": 1,
+    "stops": [
+      {
+        "sequence": 1,
+        "location_id": "AUS-004",
+        "package_ids": [
+          "P01",
+          "P02",
+          "P03",
+          "P04",
+          "P05",
+          "P06"
+        ]
+      },
+      {
+        "sequence": 2,
+        "location_id": "AUS-005",
+        "package_ids": [
+          "P07",
+          "P08",
+          "P09",
+          "P10"
+        ]
+      }
+    ]
+  },
+  "negative_scenarios": [
+    "nine_plus_duplicate_blocks_departure",
+    "wrong_destination_denies_before_open",
+    "legacy_reset_cannot_free_delivery_door",
+    "dispatch_timeout_remains_claimed"
+  ]
+}

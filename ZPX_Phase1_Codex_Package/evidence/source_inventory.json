@@ -1,0 +1,464 @@
+[
+  {
+    "path": "Zippora/ControllerNew/ExpressBoxActionControllerFactory.cs",
+    "repo": "terminal_452",
+    "sha": "71f208575041d4c9b401fd70faceb9ba118a045e",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/ControllerNew/ExpressBoxActionControllerFactory.cs"
+  },
+  {
+    "path": "Zippora/ControllerNew/IExpressBoxActionController.cs",
+    "repo": "terminal_452",
+    "sha": "0dca5750b58fd08de48e6ad641477414f01e6886",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/ControllerNew/IExpressBoxActionController.cs"
+  },
+  {
+    "path": "Zippora/ControllerNew/ExpressBoxActionControllerV1.cs",
+    "repo": "terminal_452",
+    "sha": "eea73b47a295c46725acd8c67984c47f50bc179f",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/ControllerNew/ExpressBoxActionControllerV1.cs"
+  },
+  {
+    "path": "Zippora/ControllerNew/ExpressBoxActionControllerV2.cs",
+    "repo": "terminal_452",
+    "sha": "6085e5ea8b1f4ef4872361cd9810cd6b44f40ade",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/ControllerNew/ExpressBoxActionControllerV2.cs"
+  },
+  {
+    "path": "Zippora/ControllerNew/ExpressBoxActionControllerV4.cs",
+    "repo": "terminal_452",
+    "sha": "983d2c1ae9ec194d4d1717a309cd653c8c26d987",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/ControllerNew/ExpressBoxActionControllerV4.cs"
+  },
+  {
+    "path": "Zippora/Controller/BoxHelper.cs",
+    "repo": "terminal_452",
+    "sha": "dac8907276d4bb5ded8944f7e78e4456f5637613",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Controller/BoxHelper.cs"
+  },
+  {
+    "path": "Zippora/Controller/ExpressBoxPackageHelper.cs",
+    "repo": "terminal_452",
+    "sha": "1fdbd23e05903a7741b1ac41bad1bb095a9f99a0",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Controller/ExpressBoxPackageHelper.cs"
+  },
+  {
+    "path": "Zippora/Controller/CommitTaskHelper.cs",
+    "repo": "terminal_452",
+    "sha": "9af04acfede2e90fbf868ba1203ec87fa63bec2e",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Controller/CommitTaskHelper.cs"
+  },
+  {
+    "path": "Zippora/Service/ExpressBoxService.cs",
+    "repo": "terminal_452",
+    "sha": "12d25f9ec258b595950e3077f6a32adc365eb08e",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Service/ExpressBoxService.cs"
+  },
+  {
+    "path": "Zippora/frmOpen.cs",
+    "repo": "terminal_452",
+    "sha": "561cf748133f206b8354dfe992cf846491979070",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/frmOpen.cs"
+  },
+  {
+    "path": "Zippora/Main.cs",
+    "repo": "terminal_452",
+    "sha": "2de2980e4e363fc584d624f972386e0a0d1fdd3f",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Main.cs"
+  },
+  {
+    "path": "Zippora/frmSelectBoxModel.cs",
+    "repo": "terminal_452",
+    "sha": "95a84c066db735e2f163860b4325a49dd84b54ee",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/frmSelectBoxModel.cs"
+  },
+  {
+    "path": "Zippora/frmScanQR.cs",
+    "repo": "terminal_452",
+    "sha": "81318eb35a47585c12e95526aabc5ddaf350b77b",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/frmScanQR.cs"
+  },
+  {
+    "path": "Zippora/Common/BarCodeHook.cs",
+    "repo": "terminal_452",
+    "sha": "8d9b5ef0be90c2fe4ad4585d9a287eaefb5aea3b",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Common/BarCodeHook.cs"
+  },
+  {
+    "path": "Zippora/Model/ExpressBoxPackageModel.cs",
+    "repo": "terminal_452",
+    "sha": "26f0800e45d4f4db77916e6ea68d8139c0b133be",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Model/ExpressBoxPackageModel.cs"
+  },
+  {
+    "path": "Zippora/Model/DoorStatus.cs",
+    "repo": "terminal_452",
+    "sha": "02b35bc09fbf5123d34e248bb48578b6bd18400c",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Model/DoorStatus.cs"
+  },
+  {
+    "path": "Zippora/Zippora.csproj",
+    "repo": "terminal_452",
+    "sha": "d0ba74914d3a45e5218f78499fff8da978dc731f",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Zippora.csproj"
+  },
+  {
+    "path": "Zippora/api_summary.md",
+    "repo": "terminal_452",
+    "sha": "08ce70632064d6efa62f01a4779190d5aae6f280",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/api_summary.md"
+  },
+  {
+    "path": "route/app.php",
+    "repo": "zpxapi_tp8",
+    "sha": "786cb1e91aa3c6cf9ac323bb5a894e14822435f6",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/route/app.php"
+  },
+  {
+    "path": "app/cabinet/controller/Base.php",
+    "repo": "zpxapi_tp8",
+    "sha": "88c9fc3a22df3ce007143e5b1b90981836376873",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/cabinet/controller/Base.php"
+  },
+  {
+    "path": "app/cabinet/controller/Zippora.php",
+    "repo": "zpxapi_tp8",
+    "sha": "dc9fa2a1919c38943c6738cb566e6a99edaa5b1e",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/cabinet/controller/Zippora.php"
+  },
+  {
+    "path": "app/cabinet/controller/Ziplocker.php",
+    "repo": "zpxapi_tp8",
+    "sha": "d4c171c53a67b0ef2a19a92c2ffb942306886688",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/cabinet/controller/Ziplocker.php"
+  },
+  {
+    "path": "app/adminuser/model/CabinetBoxModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "147f97f7090d6e30adb6f2e2e76d9dbb600dc756",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/adminuser/model/CabinetBoxModel.php"
+  },
+  {
+    "path": "app/adminuser/model/OStoreModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "8e30acfdc8dfe8420a131c2ca17254b0cdf03c8f",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/adminuser/model/OStoreModel.php"
+  },
+  {
+    "path": "app/adminuser/model/ZDeliverModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "faec728af47527e9d06cd6b21cf2baafb833bf7d",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/adminuser/model/ZDeliverModel.php"
+  },
+  {
+    "path": "app/zpi/controller/Base.php",
+    "repo": "zpxapi_tp8",
+    "sha": "713055f858b85a8109ecd87321e0784482fb5793",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/zpi/controller/Base.php"
+  },
+  {
+    "path": "app/zpi/controller/Login.php",
+    "repo": "zpxapi_tp8",
+    "sha": "ac391bf59eb4f80eabddbd56bee0341e6258a1ae",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/zpi/controller/Login.php"
+  },
+  {
+    "path": "app/zpi/controller/Pick.php",
+    "repo": "zpxapi_tp8",
+    "sha": "6acd99359788d28343b47ecd71f8e850945afd51",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/zpi/controller/Pick.php"
+  },
+  {
+    "path": "config/z_box_status.php",
+    "repo": "zpxapi_tp8",
+    "sha": "e20b751178da7b9cddeb82de608e7ef26e2f3abb",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/config/z_box_status.php"
+  },
+  {
+    "path": "config/z_cargo_status.php",
+    "repo": "zpxapi_tp8",
+    "sha": "ce4bc95d55bb7755ec41b9717965ffad18e3a519",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/config/z_cargo_status.php"
+  },
+  {
+    "path": "backend/controllers/CabinetbodyController.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "6dbb9658ffa66163b281572143d15680a5033df2",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/controllers/CabinetbodyController.php"
+  },
+  {
+    "path": "backend/controllers/StoreController.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "a642f3d19480190c31c606c595bd8935025676c0",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/controllers/StoreController.php"
+  },
+  {
+    "path": "backend/controllers/UtilityController.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "965c799ab3b9baea3c5ee62aa04ce70f81c87fac",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/controllers/UtilityController.php"
+  },
+  {
+    "path": "backend/models/Cabinet.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "ff64e8cef2f365e59ca3fff97cd4723c5d3ef8a7",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Cabinet.php"
+  },
+  {
+    "path": "backend/models/Cabinetbody.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "c697a934de792677e9d520e3a730fff58f1622de",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Cabinetbody.php"
+  },
+  {
+    "path": "backend/models/Cabinetbodybox.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "4aa526ffff7a3bf2874ce43fb291a5e1ed7e4eb7",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Cabinetbodybox.php"
+  },
+  {
+    "path": "backend/models/Store.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "3076468453e33ab5429f9e274d3c0576f449185d",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Store.php"
+  },
+  {
+    "path": "backend/models/Member.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "bb39367ced00aec805ac5104ea3e50f96610c04d",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Member.php"
+  },
+  {
+    "path": "backend/models/Memberapartment.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "7eb4a66d06cac20b9dee401e77b5779fa1a1deec",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Memberapartment.php"
+  },
+  {
+    "path": "backend/models/Zdeliver.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "8f0c3b3dec387915933e05b27a0c2ad9e48b4e6d",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Zdeliver.php"
+  },
+  {
+    "path": "backend/common/CommonStatus.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "74707c50d9435ddecefb298f8b06f9ed6e0e06b5",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/common/CommonStatus.php"
+  },
+  {
+    "path": "src/config/network.jsx",
+    "repo": "ZPXWebsite",
+    "sha": "2d9dc97c55ed009373af23e59e4efcb8c2927176",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/config/network.jsx"
+  },
+  {
+    "path": "src/config/api.jsx",
+    "repo": "ZPXWebsite",
+    "sha": "2a6ce9b9b4132240f33a5139bc66713645d2c311",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/config/api.jsx"
+  },
+  {
+    "path": "src/utils/authUtils.js",
+    "repo": "ZPXWebsite",
+    "sha": "de3e82ca160cb7e7d8842008d5ce23a4af7b9beb",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/utils/authUtils.js"
+  },
+  {
+    "path": "src/components/Account/Login.jsx",
+    "repo": "ZPXWebsite",
+    "sha": "ea0d46b25a6bf6da5a0a835bc0e3dad614d68b46",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/components/Account/Login.jsx"
+  },
+  {
+    "path": "src/components/Account/Register.jsx",
+    "repo": "ZPXWebsite",
+    "sha": "e922e4126862fe90c7b972d3a7d0990fc6e77022",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/components/Account/Register.jsx"
+  },
+  {
+    "path": "src/components/Account/Transactions.jsx",
+    "repo": "ZPXWebsite",
+    "sha": "b1e91ed01a7f58dddc47b53a9fd25d691f04591c",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/components/Account/Transactions.jsx"
+  },
+  {
+    "path": "src/App.jsx",
+    "repo": "ZPXWebsite",
+    "sha": "dc1c13ba0f7344b0b1250d2083a0b15aa126cb16",
+    "revision": "b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2",
+    "url": "https://github.com/zipcodexpress/ZPXWebsite/blob/b7a3b45c3c7b4fcec0b6718d2392e92f20e38ba2/src/App.jsx"
+  },
+  {
+    "path": "app/common/model/CabinetBoxModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "f5ad55e70babb06a005409cc9e19fa026588f84b",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/common/model/CabinetBoxModel.php"
+  },
+  {
+    "path": "app/common/model/OStoreModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "b0847fb52253e9d2b8db077a01eedfc9f1f12f32",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/common/model/OStoreModel.php"
+  },
+  {
+    "path": "app/common/model/CabinetModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "85723545904d65b4e9ca682cd2f6596953c98a38",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/common/model/CabinetModel.php"
+  },
+  {
+    "path": "app/common/model/OMemberApartmentModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "aefa38556f735b1194b5ba0026e1f63076c19fbf",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/common/model/OMemberApartmentModel.php"
+  },
+  {
+    "path": "app/common/model/ZDeliverModel.php",
+    "repo": "zpxapi_tp8",
+    "sha": "6182eddda2b9ac1a139b26872c616e0ed099e4b4",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/common/model/ZDeliverModel.php"
+  },
+  {
+    "path": "app/common/Model.php",
+    "repo": "zpxapi_tp8",
+    "sha": "aecaacacf600f48220e95d2669907674a2052080",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/common/Model.php"
+  },
+  {
+    "path": "app/cabinet/controller/Product.php",
+    "repo": "zpxapi_tp8",
+    "sha": "e889d2211d95ddf72da7644f37c24ef9cdc4ed37",
+    "revision": "f59bb3d3b7f243f3536bbdcdb6fd536647f303ea",
+    "url": "https://github.com/zipcodexpress/zpxapi_tp8/blob/f59bb3d3b7f243f3536bbdcdb6fd536647f303ea/app/cabinet/controller/Product.php"
+  },
+  {
+    "path": "Zippora/Shared/DataService.cs",
+    "repo": "terminal_452",
+    "sha": "272a2816c5b65f2c34ed2cd613436d51fce7505b",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Shared/DataService.cs"
+  },
+  {
+    "path": "Zippora/Common/CommonValues.cs",
+    "repo": "terminal_452",
+    "sha": "cf17f7edc7080dde286deefd495d1f6a83b4bae7",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Common/CommonValues.cs"
+  },
+  {
+    "path": "Zippora/Controller/ExpressBoxController.cs",
+    "repo": "terminal_452",
+    "sha": "16c3165a5f4ad555b69e5b1405c57e1b93ac2dd3",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Controller/ExpressBoxController.cs"
+  },
+  {
+    "path": "Zippora/Common/SerialClass.cs",
+    "repo": "terminal_452",
+    "sha": "eb24d7d9cd6d8607ea399bb7853e338ddb7aa1a6",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Common/SerialClass.cs"
+  },
+  {
+    "path": "Zippora/Model/BusinessType.cs",
+    "repo": "terminal_452",
+    "sha": "fa20454c4adfd4a3655b44d42e1f4b6004c6e8c8",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Model/BusinessType.cs"
+  },
+  {
+    "path": "Zippora/frmPickupNew.cs",
+    "repo": "terminal_452",
+    "sha": "2224692b8120afe90061725f1da04850a401647b",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/frmPickupNew.cs"
+  },
+  {
+    "path": "Zippora/Common/TSCLIB_DLL.cs",
+    "repo": "terminal_452",
+    "sha": "a44990b749f619642202196040b2cf3deaef4908",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/Common/TSCLIB_DLL.cs"
+  },
+  {
+    "path": "智莱最新协议.txt",
+    "repo": "terminal_452",
+    "sha": "c93a1a3600af2a56cfa620de4be98890b1b341ff",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/智莱最新协议.txt"
+  },
+  {
+    "path": "backend/controllers/CabinetboxController.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "4d0012d8736759b68af10f24f5b19c46f5ed038e",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/controllers/CabinetboxController.php"
+  },
+  {
+    "path": "backend/models/Cabinetbox.php",
+    "repo": "zpxadmin-php8x",
+    "sha": "2a809ca84c4a6e05c22cde0eb7cb68376a448817",
+    "revision": "b617fa51e912e91f1fb982457601ada6b95b859f",
+    "url": "https://github.com/zipcodexpress/zpxadmin-php8x/blob/b617fa51e912e91f1fb982457601ada6b95b859f/backend/models/Cabinetbox.php"
+  },
+  {
+    "path": "Zippora/ControllerNew/ExpressBoxActionControllerBase.cs",
+    "repo": "terminal_452",
+    "sha": "b8d97497e4650ec084966b3ef310e7590325488b",
+    "revision": "0494a99453effd69be548f1a69ebe5a782768ace",
+    "url": "https://github.com/zipcodexpress/terminal_452/blob/0494a99453effd69be548f1a69ebe5a782768ace/Zippora/ControllerNew/ExpressBoxActionControllerBase.cs"
+  }
+]
