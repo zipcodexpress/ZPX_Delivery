@@ -174,7 +174,7 @@ These two localhost ports share browser cookies. Signing into another role switc
 the local session; use separate browser profiles if you want simultaneous accounts.
 The customer portal explains when a staff-only account is signed in.
 
-Authorize.net was selected for the provider integration. Its adapter is not active.
+Authorize.net sandbox checkout is available when configured; see [provider setup](verification/P2.2-providers.md).
 Do not put production keys or card details into this local test checkout.
 
 ## Private environment files
@@ -184,6 +184,7 @@ automatically loads `.env.prod`. The prepared `.env.dev` puts existing local dat
 credentials first, then Authorize.net sandbox and SMTP email fields, then existing
 application keys. Existing `.env` and `.local/authorize-net.env` remain preserved;
 enter new provider credentials in `.env.dev`. These private files are Git-ignored.
-Provider placeholders are configuration storage, not an active email/payment adapter.
+The API receives only sandbox payment keys and delivery-mode settings. SMTP credentials
+are isolated to the opt-in mail worker, which does not start with the normal development stack.
 A future `.env.prod` can use the same layout with separate production credentials and
 an explicit deployment configuration; do not reuse development encryption or DB secrets.

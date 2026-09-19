@@ -4,10 +4,11 @@ Initial development foundation for the Austin hub-and-spoke delivery network.
 
 **Current status:** PostgreSQL + ThinkPHP + React are running on the external SSD.
 Local identity, customer sending/receiving, operator shipment inspection, test quotes,
-simulated checkout and printable test labels are implemented. See [current progress](docs/PROGRESS.md)
-and [shipping verification](docs/verification/P2.1-shipping.md). Authorize.net is the
-selected payment provider; its adapter/sandbox validation, real messaging, driver/hub
-handoffs, native apps and physical terminal control remain incomplete.
+local/sandbox checkout and printable test labels are implemented. See [current progress](docs/PROGRESS.md)
+and [shipping verification](docs/verification/P2.1-shipping.md). Authorize.net sandbox authentication, hosted token issuance, test capture and label generation passed.
+See [provider evidence](docs/verification/P2.2-providers.md). SMTP authentication and one
+authorized test email passed; automatic mail delivery remains opt-in. Driver/hub handoffs,
+native apps and physical terminal control remain incomplete.
 
 **Database:** PostgreSQL 17. Canonical migrations live in `apps/api/database/migrations`,
 with checksum tracking and separate migration/runtime credentials. Earlier MySQL

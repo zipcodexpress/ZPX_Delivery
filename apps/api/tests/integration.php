@@ -24,6 +24,10 @@ function uuid(): string {
     $h=bin2hex(random_bytes(16)); return substr($h,0,8).'-'.substr($h,8,4).'-4'.substr($h,13,3).'-8'.substr($h,17,3).'-'.substr($h,20,12);
 }
 if (getenv('APP_ENV') !== 'test' || (getenv('DB_NAME') ?: 'zpx_delivery_dev') !== 'zpx_delivery_dev') { throw new RuntimeException('Tests require disposable development database'); }
+if (count($argv)===1) {
+    $suiteComplete=false;
+    register_shutdown_function(static function () use (&$suiteComplete): void { if (!$suiteComplete) { fwrite(STDERR,"Integration suite did not complete.\n"); exit(1); } });
+}
 $runtime = Connection::fromEnvironment();
 if (($argv[1] ?? '') === '--shipping-race') {
     $q=$runtime->prepare("SELECT set_config('application_name',?,false)"); $q->execute([$argv[2]]);
@@ -160,4 +164,9 @@ check($kernel->handle('GET','/health/live','test')[0]===200,'liveness independen
 putenv('DB_PASSWORD=' . $password);
 require __DIR__ . '/identity.php';
 require __DIR__ . '/shipping.php';
+// ThinkPHP installs a CLI exception handler during HTTP tests; force subsequent failures to fail CI.
+set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, get_class($error).': '.$error->getMessage()."\n"); exit(1); });
+require __DIR__ . '/providers.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
+
+$suiteComplete=true;

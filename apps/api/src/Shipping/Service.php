@@ -184,17 +184,21 @@ final class Service
     }
     public function payment(string $user,string $id,array $input,string $key,string $match): array {
         Input::fields($input,['quote_id']); self::id($input['quote_id']);
-        return $this->once($user,'payment:'.$id,$key,[$input,$match],fn()=>$this->sender($user,$id),function () use ($user,$id,$input,$match) {
+        $result=$this->once($user,'payment:'.$id,$key,[$input,$match],fn()=>$this->sender($user,$id),function () use ($user,$id,$input,$match) {
             $row=$this->sender($user,$id,true); $this->localShipment($row); $this->version($row,$match);
             if ($row['order_status']!=='DRAFT' || !in_array($row['payment_status'],['UNPAID','FAILED'],true)) { throw new Failure(409,'PAYMENT_UNAVAILABLE','This shipment cannot start a checkout.'); }
             $quote=$this->q("SELECT * FROM pricing_quotes WHERE id=? AND shipment_id=? AND shipment_version=? AND expires_at>now() AND policy_version='DEMO-2026-01'",[$input['quote_id'],$id,$row['version']])->fetch(PDO::FETCH_ASSOC);
             if (!$quote) { throw new Failure(409,'QUOTE_EXPIRED','Request a new quote before checkout.'); }
-            $reference='LOCAL-'.Secrets::uuid();
-            $payment=(string)$this->q("INSERT INTO payments(shipment_id,provider,provider_reference,amount_cents,status,quote_id) VALUES (?,'LOCAL_TEST',?,?,'PENDING',?) RETURNING id",[$id,$reference,$quote['amount_cents'],$quote['id']])->fetchColumn();
+            $provider=getenv('PAYMENT_PROVIDER') ?: 'LOCAL_TEST';
+            if (!in_array($provider,['LOCAL_TEST','AUTHORIZE_NET_SANDBOX'],true)) { throw new Failure(503,'PAYMENT_NOT_CONFIGURED','Unsupported development payment provider.'); }
+            if ($provider==='AUTHORIZE_NET_SANDBOX' && !\Zpx\Payments\AuthorizeNet::configured()) { throw new Failure(503,'PAYMENT_NOT_CONFIGURED','The sandbox credentials are incomplete.'); }
+            $reference=$provider==='LOCAL_TEST'?'LOCAL-'.Secrets::uuid():'ZP'.strtoupper(bin2hex(random_bytes(9)));
+            $payment=(string)$this->q("INSERT INTO payments(shipment_id,provider,provider_reference,amount_cents,status,quote_id) VALUES (?,?,?,?,'PENDING',?) RETURNING id",[$id,$provider,$reference,$quote['amount_cents'],$quote['id']])->fetchColumn();
             $this->q("UPDATE shipments SET payment_status='PENDING',version=version+1 WHERE id=?",[$id]);
-            $this->event($user,$row,'TEST_CHECKOUT_STARTED');
-            return ['payment_id'=>$payment,'provider_session_reference'=>$reference,'status'=>'PENDING','development_only'=>true];
+            $this->event($user,$row,$provider==='LOCAL_TEST'?'TEST_CHECKOUT_STARTED':'SANDBOX_CHECKOUT_STARTED');
+            return ['provider'=>$provider,'payment_id'=>$payment,'provider_session_reference'=>$reference,'status'=>'PENDING','development_only'=>true];
         });
+        return (new \Zpx\Payments\HostedCheckout($this->db,$this->crypto))->prepare($user,$result['payment_id']);
     }
     public function confirmPayment(string $user,string $payment,array $input,string $key): array {
         self::id($payment); Input::fields($input,['outcome']);
@@ -213,11 +217,17 @@ final class Service
             return ['payment_id'=>$payment,'provider_session_reference'=>$pay['provider_reference'],'status'=>$status,'development_only'=>true];
         });
     }
+    public function paymentHistory(string $user,string $id): array {
+        $this->identity->profile($user);
+        $this->row($user,$id,'operations');
+        $rows=$this->q("SELECT p.id,p.provider,p.provider_reference,p.provider_transaction_id,p.amount_cents,q.currency,p.status,p.created_at,q.expires_at FROM payments p JOIN pricing_quotes q ON q.id=p.quote_id WHERE p.shipment_id=? ORDER BY p.id DESC LIMIT 50",[$id])->fetchAll(PDO::FETCH_ASSOC);
+        return ['items'=>array_map(static fn($r)=>['payment_id'=>(string)$r['id'],'provider'=>$r['provider'],'reference'=>$r['provider_reference'],'transaction_id'=>$r['provider_transaction_id'],'amount_cents'=>(int)$r['amount_cents'],'currency'=>$r['currency'],'status'=>$r['status'],'created_at'=>gmdate('c',strtotime($r['created_at'])),'quote_expires_at'=>gmdate('c',strtotime($r['expires_at']))],$rows)];
+    }
     public function pendingPayment(string $user,string $id): array {
         $row=$this->sender($user,$id); $this->localShipment($row);
-        $p=$this->q("SELECT * FROM payments WHERE shipment_id=? AND provider='LOCAL_TEST' AND status='PENDING' ORDER BY id DESC LIMIT 1",[$id])->fetch(PDO::FETCH_ASSOC);
+        $p=$this->q("SELECT * FROM payments WHERE shipment_id=? AND status='PENDING' ORDER BY id DESC LIMIT 1",[$id])->fetch(PDO::FETCH_ASSOC);
         if (!$p) { throw new Failure(404,'PAYMENT_NOT_FOUND','No pending test checkout.'); }
-        return ['payment_id'=>(string)$p['id'],'provider_session_reference'=>$p['provider_reference'],'status'=>'PENDING','development_only'=>true];
+        return (new \Zpx\Payments\HostedCheckout($this->db,$this->crypto))->status($user,(string)$p['id']);
     }
     private function labelRow(string $user,string $package,bool $lock=false): array {
         self::id($package);
@@ -265,7 +275,7 @@ final class Service
             if ($row) {
                 $recipient=json_decode($this->crypto->decrypt($row['contact_encrypted']),true,512,JSON_THROW_ON_ERROR);
                 $message=$this->crypto->encrypt(json_encode(['challenge_id'=>$public,'kind'=>'EMAIL','to'=>$recipient['email'],'code'=>$code],JSON_THROW_ON_ERROR));
-                (new Outbox($this->db))->append(Secrets::uuid(),'verification_challenge',(string)$challenge['id'],'identity.contact_verification',['encrypted_message'=>$message,'delivery'=>'LOCAL_ONLY']);
+                (new Outbox($this->db))->append(Secrets::uuid(),'verification_challenge',(string)$challenge['id'],'identity.contact_verification',['encrypted_message'=>$message,'delivery'=>\Zpx\Mail\Delivery::channel('EMAIL',$recipient['email'])]);
             }
             return ['challenge_id'=>$public,'expires_at'=>gmdate('c',strtotime($challenge['expires_at'])),'delivery_status'=>'QUEUED'];
         });
