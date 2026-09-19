@@ -8,6 +8,18 @@ spec=importlib.util.spec_from_file_location('dev', Path(__file__).resolve().pare
 dev=importlib.util.module_from_spec(spec); spec.loader.exec_module(dev)
 
 class SetupTests(unittest.TestCase):
+    def test_development_env_preferred_without_loading_production(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(dev, 'ROOT', Path(directory)), patch.object(dev, 'check_storage'), patch.object(dev.subprocess, 'run') as run:
+            root = Path(directory)
+            (root / '.env.prod').write_text('DB_PASSWORD=production-do-not-use\n')
+            dev.init_env()
+            self.assertEqual(dev.env_path().name, '.env')
+            original = (root / '.env').read_text()
+            (root / '.env.dev').write_text(original)
+            dev.init_env(); dev.compose('config', '--quiet')
+            self.assertEqual((root / '.env.dev').read_text(), original)
+            self.assertIn(str(root / '.env.dev'), run.call_args.args[0])
+            self.assertEqual((root / '.env.prod').read_text(), 'DB_PASSWORD=production-do-not-use\n')
     def test_inbox_is_private_and_not_printed(self):
         result = MagicMock(stdout='[{"code":"123456"}]')
         with tempfile.TemporaryDirectory() as directory, patch.object(dev, 'ROOT', Path(directory)), patch.object(dev, 'compose', return_value=result), patch('builtins.print') as output:

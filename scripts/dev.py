@@ -39,9 +39,13 @@ def check_storage():
         print(f'External APFS checkout: {ROOT}')
         print(f'Mac architecture: {platform.machine()} (M4 should report arm64)')
 
+def env_path():
+    # Explicit development file wins; never auto-load production configuration.
+    return ROOT / ('.env.dev' if (ROOT / '.env.dev').is_file() else '.env')
+
 def init_env():
     check_storage()
-    path = ROOT / '.env'
+    path = env_path()
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
@@ -54,7 +58,7 @@ def init_env():
                     file.write('\n' + key + '=' + secrets.token_hex(32) + '\n')
             print('Added missing local secrets; existing credentials preserved.')
         else:
-            print('Existing .env preserved.')
+            print(f'Existing {path.name} preserved.')
         return
     with os.fdopen(fd, 'w') as file:
         file.write('# Local development only; generated credentials.\n')
@@ -69,7 +73,7 @@ def docker():
     subprocess.run(['docker', 'info'], check=True, stdout=subprocess.DEVNULL)
 
 def compose(*args, capture=False):
-    cmd = ['docker', 'compose', '--project-directory', str(ROOT), '--env-file', str(ROOT / '.env'), '-f', str(ROOT / 'deployment/compose.yaml'), *args]
+    cmd = ['docker', 'compose', '--project-directory', str(ROOT), '--env-file', str(env_path()), '-f', str(ROOT / 'deployment/compose.yaml'), *args]
     return subprocess.run(cmd, cwd=ROOT, check=True, text=True, capture_output=capture)
 
 def smoke(timeout=180):
@@ -131,7 +135,7 @@ def main():
         print('Docker available. Named volumes use the active container engine disk storage, not automatically the repo SSD.'); return
     if args.command == 'up':
         init_env(); compose('build'); compose('up', '-d', 'postgres'); compose('run', '--rm', 'migrate'); compose('up', '-d'); smoke(); return
-    if not (ROOT / '.env').exists(): raise RuntimeError('Run python3 scripts/dev.py init first.')
+    if not env_path().exists(): raise RuntimeError('Run python3 scripts/dev.py init first.')
     if args.command == 'down': compose('down'); print('Stopped. Database and simulator volumes retained.')
     elif args.command == 'logs': compose('logs', '--tail', '100')
     elif args.command == 'config': compose('config', '--quiet')

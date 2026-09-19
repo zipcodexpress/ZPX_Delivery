@@ -176,3 +176,14 @@ The customer portal explains when a staff-only account is signed in.
 
 Authorize.net was selected for the provider integration. Its adapter is not active.
 Do not put production keys or card details into this local test checkout.
+
+## Private environment files
+
+The local runner prefers `.env.dev` when present and otherwise uses `.env`. It never
+automatically loads `.env.prod`. The prepared `.env.dev` puts existing local database
+credentials first, then Authorize.net sandbox and SMTP email fields, then existing
+application keys. Existing `.env` and `.local/authorize-net.env` remain preserved;
+enter new provider credentials in `.env.dev`. These private files are Git-ignored.
+Provider placeholders are configuration storage, not an active email/payment adapter.
+A future `.env.prod` can use the same layout with separate production credentials and
+an explicit deployment configuration; do not reuse development encryption or DB secrets.
