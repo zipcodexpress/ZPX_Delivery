@@ -4,22 +4,13 @@ import './foundation.css';
 
 type Profile = components['schemas']['Profile'];
 type Challenge = components['schemas']['ContactChallenge'];
-class RequestError extends Error { constructor(message: string, public status: number) { super(message); } }
-const base = '/api/delivery/v1';
-async function api<T>(path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-  const response = await fetch(base + path, {
-    method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', signal: AbortSignal.timeout(15000),
-    headers: body === undefined ? headers : { 'Content-Type': 'application/json', ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  }).catch(() => { throw new RequestError('We could not reach the service. Please try again.', 503); });
-  const data = await response.json().catch(() => { throw new RequestError('The service is unavailable. Please try again.', response.status); });
-  if (!response.ok) throw new RequestError(data?.message || 'Please try again.', response.status);
-  return data as T;
-}
+import { api, RequestError } from './api';
+import { Shipping } from './Shipping';
 
 export function Account({ audience }: { audience: 'customer' | 'operations' }) {
   const customer = audience === 'customer';
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [accountOnly, setAccountOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [busy, setBusy] = useState(false);
@@ -54,7 +45,7 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
         });
       }
       await api('/auth/login', { email, password, client_kind: 'BROWSER' });
-      setProfile(await api<Profile>('/me'));
+      setProfile(await api<Profile>('/me')); setAccountOnly(false);
       form.reset();
       setNotice(mode === 'register' ? 'Your account is created. Verify both contacts before shipping.' : 'Welcome back.');
     });
@@ -67,6 +58,7 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
     });
   }
   const operationsAccess = profile?.roles.some(role => ['ADMIN', 'DISPATCHER', 'HUB_STAFF', 'HUB_SUPERVISOR'].includes(role));
+  if (profile && profile.email_verified && profile.phone_verified && (customer || operationsAccess) && !accountOnly) return <Shipping profile={profile} audience={audience} onAccount={() => setAccountOnly(true)} onLogout={logout} />;
   return <main className="account-page">
     <header><strong>ZipcodeXpress<span className="brand-dot">.</span></strong><span>LOCAL DEVELOPMENT</span></header>
     <div className="account-layout">
@@ -74,7 +66,7 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
         <p className="eyebrow">{customer ? 'AUSTIN DELIVERY NETWORK' : 'HUB & OPERATIONS'}</p>
         <h1>{customer ? 'A simpler way to send. A better way to receive.' : 'Every handoff, accounted for.'}</h1>
         <p className="intro">{customer ? 'One account for your ZPX deliveries. Start with your details and verify how we can reach you.' : 'Sign in with your assigned staff account. Your access follows your site and hub responsibilities.'}</p>
-        <div className="journey"><span>01 &nbsp; Your account</span><span>02 &nbsp; Verify contacts</span><span className="future-step">03 &nbsp; Shipping · coming next</span></div>
+        <div className="journey"><span>01 &nbsp; Your account</span><span>02 &nbsp; Verify contacts</span><span className="future-step">03 &nbsp; Send & receive</span></div>
         <p className="local-note">Local preview: verification messages stay in the private development inbox. No email, SMS or physical locker commands are sent.</p>
       </div>
       <section className="account-card" aria-label="Account access">
@@ -95,7 +87,8 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
             await api('/auth/verify-contact', { challenge_id: challenge.challenge_id, code });
             setProfile(await api<Profile>('/me')); setChallenge(null); setNotice('Contact verified.');
           }); }}><label>Six-digit code<input name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength={6} /></label><button type="submit" disabled={busy}>Verify code</button></form>}
-          {profile.email_verified && profile.phone_verified && <p className="notice">Your contacts are verified. Shipping tools are the next development step.</p>}
+          {profile.email_verified && profile.phone_verified && <p className="notice">Your contacts are verified. You can send and receive with this account.</p>}
+          {profile.email_verified && profile.phone_verified && (customer || operationsAccess) && <button onClick={() => setAccountOnly(false)}>Open shipments</button>}
           <button className="secondary" onClick={logout} disabled={busy}>Sign out</button>
         </> : <>
           <h2>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2><p className="card-intro">{mode === 'login' ? 'Sign in to your delivery account.' : 'Your contact details stay private.'}</p>

@@ -19,6 +19,382 @@
     }
   ],
   "paths": {
+    "/packages/{package_id}/label/pdf": {
+      "get": {
+        "operationId": "shipping_label_pdf",
+        "summary": "Download authenticated sender-owned active 4 by 6 inch test PDF label.",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test label PDF, private and no-store",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/{shipment_id}/pending-payment": {
+      "get": {
+        "operationId": "shipping_pending_payment",
+        "summary": "Resume own pending local test checkout.",
+        "parameters": [
+          {
+            "name": "shipment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/development/payments/{payment_id}/confirm": {
+      "post": {
+        "operationId": "shipping_test_payment_confirm",
+        "summary": "Local development/test adapter only; sender-owned synthetic shipment. Never charges a real provider.",
+        "parameters": [
+          {
+            "name": "payment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestPaymentOutcome"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipient-claims": {
+      "post": {
+        "operationId": "shipping_claim",
+        "summary": "Consume shipment-bound proof and grant receiving access; never grants locker access.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyContact"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipient-claims/challenges": {
+      "post": {
+        "operationId": "shipping_claim_challenge",
+        "summary": "Fresh local email proof bound to shipment and authenticated verified customer; neutral response for unknown or mismatched reference.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactChallenge"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipientClaimRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/shipments/{shipment_id}/tracking": {
+      "get": {
+        "operationId": "shipping_operations_tracking",
+        "summary": "Read shipment milestones within current staff assignments.",
+        "parameters": [
+          {
+            "name": "shipment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tracking"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/shipments/{shipment_id}": {
+      "get": {
+        "operationId": "shipping_operations_detail",
+        "summary": "Read a shipment within current staff assignments.",
+        "parameters": [
+          {
+            "name": "shipment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/shipments": {
+      "get": {
+        "operationId": "shipping_operations_list",
+        "summary": "List shipments within current organization and staff site/hub assignments.",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
   "/auth/challenges": {
     "post": {
       "operationId": "delivery_post__auth_challenges",
@@ -1794,6 +2170,54 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "shipping_list",
+        "summary": "List own sent or explicitly claimed received shipments.",
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sending",
+                "receiving"
+              ],
+              "default": "sending"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/shipments/{shipment_id}": {
@@ -2058,7 +2482,7 @@
       "post": {
         "operationId": "delivery_12__shipments_shipment_id_payment_session",
         "summary": "Create provider checkout; payment requires server confirmation.",
-        "description": "Create provider checkout; payment requires server confirmation.",
+        "description": "Current implementation starts a LOCAL_TEST pending checkout for synthetic shipments only. A separate development adapter confirms stored amount/quote eligibility. Live provider not configured.",
         "parameters": [
           {
             "name": "shipment_id",
@@ -2099,16 +2523,6 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaymentSession"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Structured error",
             "content": {
@@ -2185,6 +2599,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSession"
                 }
               }
             }
@@ -2464,7 +2888,7 @@
       "post": {
         "operationId": "delivery_15__packages_package_id_labels",
         "summary": "Issue/retrieve active primary label only after eligibility; not door authority.",
-        "description": "Issue/retrieve active primary label only after eligibility; not door authority.",
+        "description": "Locked issue/retrieve of the active label after payment. Current implementation is synthetic local development only. It never authorizes a door.",
         "parameters": [
           {
             "name": "package_id",
@@ -2486,15 +2910,6 @@
             }
           },
           {
-            "name": "If-Match",
-            "in": "header",
-            "required": true,
-            "description": "Quoted aggregate version; run_revision in body also required for cross-aggregate operations.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -2505,16 +2920,6 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Label"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Structured error",
             "content": {
@@ -2592,6 +2997,27 @@
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Label"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
               }
             }
           }
@@ -6023,6 +6449,56 @@
       }
     },
     "schemas": {
+      "TestPaymentOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "RecipientClaimRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "public_reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "public_reference"
+        ]
+      },
+      "ShipmentList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shipment"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
   "ContactChallengeRequest": {
     "type": "object",
     "additionalProperties": false,
@@ -6697,6 +7173,12 @@
           },
           "longitude": {
             "type": "number"
+          },
+          "draft_eligible": {
+            "type": "boolean"
+          },
+          "development_only": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -6707,7 +7189,9 @@
           "address",
           "eligible",
           "printer_available",
-          "access_instructions"
+          "access_instructions",
+          "draft_eligible",
+          "development_only"
         ]
       },
       "LocationList": {
@@ -6736,19 +7220,23 @@
         "properties": {
           "width_mm": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100000
           },
           "height_mm": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100000
           },
           "depth_mm": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100000
           },
           "weight_g": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100000
           }
         },
         "required": [
@@ -6763,14 +7251,17 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
           },
           "email": {
             "type": "string",
             "format": "email"
           },
           "phone": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{7,14}$"
           }
         },
         "required": [
@@ -6841,6 +7332,36 @@
           "version": {
             "type": "integer",
             "minimum": 0
+          },
+          "public_reference": {
+            "type": "string"
+          },
+          "origin_name": {
+            "type": "string"
+          },
+          "destination_name": {
+            "type": "string"
+          },
+          "service_level": {
+            "type": "string"
+          },
+          "relationship": {
+            "type": "string",
+            "enum": [
+              "SENDER",
+              "RECIPIENT",
+              "OPERATIONS"
+            ]
+          },
+          "package": {
+            "$ref": "#/components/schemas/PackageSpec"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "development_only": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -6851,7 +7372,15 @@
           "order_status",
           "payment_status",
           "package_state",
-          "version"
+          "version",
+          "public_reference",
+          "origin_name",
+          "destination_name",
+          "service_level",
+          "relationship",
+          "package",
+          "created_at",
+          "development_only"
         ]
       },
       "QuoteRequest": {
@@ -6890,6 +7419,9 @@
           },
           "policy_version": {
             "type": "string"
+          },
+          "development_only": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -6897,7 +7429,8 @@
           "amount_cents",
           "currency",
           "expires_at",
-          "policy_version"
+          "policy_version",
+          "development_only"
         ]
       },
       "PaymentRequest": {
@@ -6935,12 +7468,16 @@
               "PAID",
               "FAILED"
             ]
+          },
+          "development_only": {
+            "type": "boolean"
           }
         },
         "required": [
           "payment_id",
           "provider_session_reference",
-          "status"
+          "status",
+          "development_only"
         ]
       },
       "Label": {
@@ -6968,11 +7505,14 @@
           },
           "pdf_url": {
             "type": "string",
-            "format": "uri"
+            "description": "Authenticated same-origin PDF path, with no credential in URL."
           },
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "development_only": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -6982,7 +7522,8 @@
           "label_version",
           "label_payload",
           "pdf_url",
-          "expires_at"
+          "expires_at",
+          "development_only"
         ]
       },
       "ReplaceLabel": {

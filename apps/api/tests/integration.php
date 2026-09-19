@@ -25,6 +25,13 @@ function uuid(): string {
 }
 if (getenv('APP_ENV') !== 'test' || (getenv('DB_NAME') ?: 'zpx_delivery_dev') !== 'zpx_delivery_dev') { throw new RuntimeException('Tests require disposable development database'); }
 $runtime = Connection::fromEnvironment();
+if (($argv[1] ?? '') === '--shipping-race') {
+    $q=$runtime->prepare("SELECT set_config('application_name',?,false)"); $q->execute([$argv[2]]);
+    $args=json_decode((string)fgets(STDIN),true,512,JSON_THROW_ON_ERROR);
+    echo "READY\n"; flush();
+    $result=(new Zpx\Shipping\Service($runtime,new Zpx\Identity\Secrets()))->create($args['user'],$args['input'],$args['key']);
+    echo $result['shipment_id']."\n"; exit(0);
+}
 if (($argv[1] ?? '') === '--refresh-race') {
     $q=$runtime->prepare("SELECT set_config('application_name',?,false)"); $q->execute([$argv[2]]);
     $token=trim((string)fgets(STDIN));
@@ -152,4 +159,5 @@ check($failed[0]===503 && $failed[1]['code']==='DATABASE_NOT_READY','unavailable
 check($kernel->handle('GET','/health/live','test')[0]===200,'liveness independent of database');
 putenv('DB_PASSWORD=' . $password);
 require __DIR__ . '/identity.php';
+require __DIR__ . '/shipping.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
