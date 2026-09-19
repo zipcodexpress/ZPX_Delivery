@@ -6,8 +6,9 @@ Initial development foundation for the Austin hub-and-spoke delivery network.
 ThinkPHP 8.1.4 and React. Synthetic seed loading, ownership identity constraints and
 real competing-compartment tests now pass. See [current progress](docs/PROGRESS.md)
 and [verification](docs/verification/P1.1-seed-framework.md). Earlier MySQL and
-health-bootstrap-only descriptions below are historical. Login and business workflows
-remain the next development slice.
+health-bootstrap-only descriptions below are historical. The [identity increment](docs/verification/P1.2-identity.md) now adds local registration,
+sign-in, contact verification and session management. Real messaging providers and
+shipping workflows remain pending.
 
 **Current database: PostgreSQL.** See [backend and database architecture](docs/BACKEND_DATABASE_ARCHITECTURE.md), [database decision](docs/decisions/0003-postgresql-backend.md) and [P1.1 verification](docs/verification/P1.1-postgresql.md). Use branch `feature/P1.1-postgresql-foundation` for this increment; earlier MySQL foundation notes below are historical. Canonical migrations live in `apps/api/database/migrations`, with checksum tracking and separate migration/runtime credentials. PostgreSQL startup uses a new volume and leaves any previous MySQL volume intact.
 

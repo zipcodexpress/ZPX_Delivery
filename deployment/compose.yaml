@@ -36,6 +36,11 @@ services:
       DB_HOST: postgres
       DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?Run init}
+      AUTH_LOOKUP_KEY: ${AUTH_LOOKUP_KEY:?Run init}
+      ZPX_ORGANIZATION_ID: ${ZPX_ORGANIZATION_ID:-0}
+      AUTH_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
     ports: ["127.0.0.1:8000:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -70,7 +75,7 @@ services:
     image: node:24.19.0-bookworm-slim
     working_dir: /workspace
     command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev --workspace=@zpx/customer-web -- --host 0.0.0.0"]
-    environment: {API_PROXY_TARGET: "http://api:8000"}
+    environment: {API_PROXY_TARGET: "http://api:8000", VITE_USE_POLLING: "1"}
     volumes:
       - .:/workspace
       - customer_modules:/workspace/node_modules
@@ -79,7 +84,7 @@ services:
     image: node:24.19.0-bookworm-slim
     working_dir: /workspace
     command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev --workspace=@zpx/operations-web -- --host 0.0.0.0"]
-    environment: {API_PROXY_TARGET: "http://api:8000"}
+    environment: {API_PROXY_TARGET: "http://api:8000", VITE_USE_POLLING: "1"}
     volumes:
       - .:/workspace
       - operations_modules:/workspace/node_modules

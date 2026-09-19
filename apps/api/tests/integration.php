@@ -25,6 +25,16 @@ function uuid(): string {
 }
 if (getenv('APP_ENV') !== 'test' || (getenv('DB_NAME') ?: 'zpx_delivery_dev') !== 'zpx_delivery_dev') { throw new RuntimeException('Tests require disposable development database'); }
 $runtime = Connection::fromEnvironment();
+if (($argv[1] ?? '') === '--refresh-race') {
+    $q=$runtime->prepare("SELECT set_config('application_name',?,false)"); $q->execute([$argv[2]]);
+    $token=trim((string)fgets(STDIN));
+    echo "READY\n"; flush();
+    try {
+        (new Zpx\Identity\Service($runtime,new Zpx\Identity\Secrets()))->refresh(['refresh_token'=>$token]);
+        echo "200\n";
+    } catch (Zpx\Identity\Failure $e) { echo $e->status."\n"; }
+    exit(0);
+}
 if (($argv[1] ?? '') === '--claim-race') {
     $q=$runtime->prepare("SELECT set_config('application_name',?,false)"); $q->execute([$argv[5]]);
     echo "READY\n"; flush();
@@ -50,7 +60,7 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 74, '73 business tables plus migration ledger');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 75, '73 business tables plus migration ledger and auth limiter');
 require __DIR__ . '/seed.php';
 require __DIR__ . '/ownership.php';
 
@@ -141,4 +151,5 @@ $failed=$kernel->handle('GET','/health/ready','test');
 check($failed[0]===503 && $failed[1]['code']==='DATABASE_NOT_READY','unavailable database returns sanitized 503');
 check($kernel->handle('GET','/health/live','test')[0]===200,'liveness independent of database');
 putenv('DB_PASSWORD=' . $password);
+require __DIR__ . '/identity.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";

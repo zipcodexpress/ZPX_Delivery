@@ -40,8 +40,7 @@ It uses the runtime database role and requires the development database and envi
 Six generated account passwords are printed once after a successful commit; reruns
 preserve data and passwords and do not redisplay them. Keep that output private.
 The prepared local output is stored in the Git-ignored `.local/seed-credentials.txt`
-with owner-only access. These are development identities for upcoming authentication
-work, not an already implemented interactive login.
+with owner-only access. Run `demo-accounts` below to add their synthetic contacts for interactive sign-in.
 
 Local site codes have a `local:` namespace. Twenty locker sites and one hub use
 synthetic addresses; all forty compartments remain frozen and lack commissioned
@@ -52,6 +51,29 @@ API dependencies are pinned in `apps/api/composer.lock`; container builds instal
 Direct PHP development uses `composer install --working-dir=apps/api`. Run
 `php apps/api/tests/http.php` for ThinkPHP routing and error tests without a database.
 `test-db` rebuilds its image before testing so it cannot silently test old source.
+
+### Accounts and verification inbox
+
+`python3 scripts/dev.py init` now adds missing `AUTH_ENCRYPTION_KEY` and
+`AUTH_LOOKUP_KEY` values without rotating existing keys. `ZPX_ORGANIZATION_ID` selects
+the single network organization; this checkout is configured to its synthetic seed.
+Preserve these keys alongside database backups: existing encrypted contacts depend on them.
+
+After `up` and the initial synthetic seed, `python3 scripts/dev.py demo-accounts`
+adds local-only demo contacts without changing passwords or grants. Examples:
+`customer.local@example.invalid` and `admin.local@example.invalid`. Use the corresponding
+identity's existing password in `.local/seed-credentials.txt`. The first command is
+additive and subsequent runs preserve existing contacts. Customer demo phone is
+`+12025550191`; all demo numbers are fictional and no message is sent to a provider.
+
+The customer page supports registration, sign-in and contact verification. Request a
+code on the page, then run `python3 scripts/dev.py inbox` to refresh the owner-only
+`.local/verification-inbox.json` file. The CLI prints only the filename/count, never
+codes. This is a development delivery substitute, not proof of live SMS/email delivery.
+
+`test-db` now uses a fresh uniquely named temporary stack and cleans only that stack's
+volume after completion. It does not add test accounts/audits to the developer database.
+See [identity evidence and limits](verification/P1.2-identity.md).
 
 Current database/setup amendment: use branch `feature/P1.1-postgresql-foundation`. PostgreSQL replaces MySQL. `python3 scripts/dev.py init` preserves existing secrets and adds a missing migration secret; `up` creates a separate PostgreSQL volume and applies tracked migrations. Old MySQL volumes remain untouched. `python3 scripts/dev.py migrate` applies new migrations, and `test-db` now runs PostgreSQL integration tests with synthetic data. Earlier MySQL/empty-volume initialization descriptions below are historical; see [current architecture](BACKEND_DATABASE_ARCHITECTURE.md).
 

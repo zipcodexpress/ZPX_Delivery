@@ -23,7 +23,7 @@
     "post": {
       "operationId": "delivery_post__auth_challenges",
       "summary": "Request rate-limited one-time verification; return neutral response to prevent account enumeration.",
-      "description": "Request rate-limited one-time verification; return neutral response to prevent account enumeration.",
+      "description": "Request rate-limited one-time verification; return neutral response to prevent account enumeration. The initial identity implementation supports REGISTER; other purposes return PURPOSE_UNAVAILABLE until their workflows are implemented. Local delivery uses a private encrypted development inbox; no code is returned by this endpoint.",
       "parameters": [],
       "responses": {
         "200": {
@@ -38,6 +38,16 @@
         },
         "default": {
           "description": "Structured error",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Error"
+              }
+            }
+          }
+        },
+        "500": {
+          "description": "Sanitized unexpected server error",
           "content": {
             "application/json": {
               "schema": {
@@ -786,6 +796,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Sanitized unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "security": [],
@@ -805,7 +825,7 @@
       "post": {
         "operationId": "delivery_2__auth_login",
         "summary": "Login; browser receives secure session cookie, native receives tokens.",
-        "description": "Login; browser receives secure session cookie, native receives tokens.",
+        "description": "Login; browser receives secure session cookie, native receives tokens. Browser cookies are HttpOnly, SameSite=Strict and Secure outside local development; browser responses include csrf_token but no access/refresh tokens. Native access lasts 15 minutes; refresh rotates within a seven-day family lifetime. Replayed refresh credentials revoke the family.",
         "parameters": [],
         "responses": {
           "200": {
@@ -890,6 +910,16 @@
           },
           "503": {
             "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized unexpected server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -1008,6 +1038,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Sanitized unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "security": [],
@@ -1112,6 +1152,16 @@
           },
           "503": {
             "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized unexpected server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -1250,6 +1300,28 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Sanitized unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
           }
         }
       }
@@ -1343,6 +1415,16 @@
           },
           "503": {
             "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized unexpected server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -6410,11 +6492,14 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
           },
           "email": {
             "type": "string",
-            "format": "email"
+            "format": "email",
+            "maxLength": 254
           },
           "phone": {
             "type": "string",
@@ -6422,7 +6507,9 @@
           },
           "password": {
             "type": "string",
-            "minLength": 12
+            "minLength": 12,
+            "maxLength": 72,
+            "description": "12–72 UTF-8 bytes; longer values are rejected, never truncated."
           },
           "address": {
             "$ref": "#/components/schemas/Address"
@@ -6485,6 +6572,10 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "csrf_token": {
+            "type": "string",
+            "description": "Browser-only session-bound token; send in X-CSRF-Token for cookie-authenticated mutations. Never an access token."
           }
         },
         "required": [
@@ -6501,7 +6592,10 @@
             "description": "Opaque identifier; serialize as string."
           },
           "code": {
-            "type": "string"
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "pattern": "^[0-9]{6}$"
           }
         },
         "required": [
@@ -6549,6 +6643,10 @@
             "items": {
               "$ref": "#/components/schemas/Address"
             }
+          },
+          "csrf_token": {
+            "type": "string",
+            "description": "Browser-only session-bound token; send in X-CSRF-Token for cookie-authenticated mutations. Never an access token."
           }
         },
         "required": [
