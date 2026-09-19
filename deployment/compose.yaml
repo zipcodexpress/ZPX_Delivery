@@ -44,13 +44,26 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["php", "tests/integration.php"]
+    command: ["sh", "-c", "php tests/http.php && php tests/integration.php"]
     environment:
       DB_HOST: postgres
       DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
       TEST_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
       APP_ENV: test
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/seed.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
     depends_on:
       migrate: {condition: service_completed_successfully}
   customer-web:

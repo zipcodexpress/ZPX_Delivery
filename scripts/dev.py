@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local development runner. Does not deploy, format disks, or remove data volumes."""
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
@@ -29,7 +30,10 @@ def validate_mac_volume(root, info):
 
 def check_storage():
     if platform.system() == 'Darwin':
-        raw = subprocess.check_output(['diskutil', 'info', '-plist', str(ROOT)])
+        volume = ROOT.resolve()
+        while not volume.is_mount() and volume != volume.parent:
+            volume = volume.parent
+        raw = subprocess.check_output(['diskutil', 'info', '-plist', str(volume)])
         validate_mac_volume(ROOT, plistlib.loads(raw))
         print(f'External APFS checkout: {ROOT}')
         print(f'Mac architecture: {platform.machine()} (M4 should report arm64)')
@@ -57,7 +61,7 @@ def init_env():
 
 def docker():
     if not shutil.which('docker'):
-        raise RuntimeError('Install Docker Desktop for Apple Silicon, open it, then retry.')
+        raise RuntimeError('Install Docker and start Colima or Docker Desktop, then retry.')
     subprocess.run(['docker', 'compose', 'version'], check=True)
     subprocess.run(['docker', 'info'], check=True, stdout=subprocess.DEVNULL)
 
@@ -82,7 +86,7 @@ def smoke(timeout=180):
                 with urllib.request.urlopen(url, timeout=2) as response:
                     if response.status == 200 and marker in response.read():
                         print(f'PASS {name}'); del pending[name]
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.RemoteDisconnected):
                 pass
         if pending: time.sleep(1)
     if pending: raise RuntimeError('Services not ready: ' + ', '.join(pending) + '. Run the logs command.')
@@ -90,18 +94,18 @@ def smoke(timeout=180):
 
 def test_db():
     # Integration tests use synthetic records and roll back their data.
-    compose('run', '--rm', 'db-tests')
+    compose('run', '--rm', '--build', 'db-tests')
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config','migrate'])
+    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config','migrate','seed'])
     args = parser.parse_args()
     if args.command == 'init': return init_env()
     check_storage()
     if args.command == 'smoke': return smoke()
     docker()
     if args.command == 'doctor':
-        print('Docker available. Named volumes use Docker Desktop disk storage, not automatically the repo SSD.'); return
+        print('Docker available. Named volumes use the active container engine disk storage, not automatically the repo SSD.'); return
     if args.command == 'up':
         init_env(); compose('build'); compose('up', '-d', 'postgres'); compose('run', '--rm', 'migrate'); compose('up', '-d'); smoke(); return
     if not (ROOT / '.env').exists(): raise RuntimeError('Run python3 scripts/dev.py init first.')
@@ -110,6 +114,7 @@ def main():
     elif args.command == 'config': compose('config', '--quiet')
     elif args.command == 'test-db': test_db()
     elif args.command == 'migrate': compose('run', '--rm', 'migrate')
+    elif args.command == 'seed': compose('run', '--rm', '--build', 'seed')
 
 if __name__ == '__main__':
     try: main()

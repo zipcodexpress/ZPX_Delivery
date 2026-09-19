@@ -4,6 +4,55 @@ Purpose: run the first development increment locally.
 Audience: Richard and ZPX developers. Status: implemented setup; first physical M4/Docker run pending.
 Owner: unassigned. Last reviewed: 2026-09-18.
 
+## Verified SSD setup (2026-09-19)
+
+The checkout is `/Volumes/Document/Workspace/projects/Development/ZPX_Delivery`,
+on branch `feature/P1.1-postgresql-foundation`. The Document volume is external,
+writable APFS. Colima is the local Docker engine; its existing storage is under
+`/Volumes/Document/Workspace/containers/colima`. Node 24.19.0 is installed through
+the existing SSD-based nvm installation. Existing files and credentials are preserved.
+
+In a new terminal:
+
+```bash
+cd /Volumes/Document/Workspace/projects/Development/ZPX_Delivery
+source "$HOME/.nvm/nvm.sh"
+nvm use
+# If the container engine is stopped:
+colima start
+python3 scripts/dev.py up
+```
+
+Use `python3 scripts/dev.py test-db` for PostgreSQL integration tests and
+`python3 scripts/dev.py smoke` for HTTP readiness. Stop this project's services
+with `python3 scripts/dev.py down`; this retains database volumes. PostgreSQL
+is internal to the Compose network, with no host database port.
+
+The setup runner resolves the actual filesystem mount before calling `diskutil`;
+passing the nested checkout directory directly fails on this Mac.
+The historical setup descriptions below are superseded where they mention MySQL,
+the P0.1 branch, or Docker Desktop as the only available container engine.
+
+### Synthetic development data
+
+Run `python3 scripts/dev.py seed` explicitly to create the local synthetic dataset.
+It uses the runtime database role and requires the development database and environment.
+Six generated account passwords are printed once after a successful commit; reruns
+preserve data and passwords and do not redisplay them. Keep that output private.
+The prepared local output is stored in the Git-ignored `.local/seed-credentials.txt`
+with owner-only access. These are development identities for upcoming authentication
+work, not an already implemented interactive login.
+
+Local site codes have a `local:` namespace. Twenty locker sites and one hub use
+synthetic addresses; all forty compartments remain frozen and lack commissioned
+hardware mappings. Ten draft, unpaid parcels have a 6/4 destination split. No payment,
+shipping label, custody event or physical door operation is simulated as completed.
+
+API dependencies are pinned in `apps/api/composer.lock`; container builds install them.
+Direct PHP development uses `composer install --working-dir=apps/api`. Run
+`php apps/api/tests/http.php` for ThinkPHP routing and error tests without a database.
+`test-db` rebuilds its image before testing so it cannot silently test old source.
+
 Current database/setup amendment: use branch `feature/P1.1-postgresql-foundation`. PostgreSQL replaces MySQL. `python3 scripts/dev.py init` preserves existing secrets and adds a missing migration secret; `up` creates a separate PostgreSQL volume and applies tracked migrations. Old MySQL volumes remain untouched. `python3 scripts/dev.py migrate` applies new migrations, and `test-db` now runs PostgreSQL integration tests with synthetic data. Earlier MySQL/empty-volume initialization descriptions below are historical; see [current architecture](BACKEND_DATABASE_ARCHITECTURE.md).
 
 SSD context recovered from the September 16 “Reformat SSD for development” conversation: proposed name `Development`, path `/Volumes/Development`, APFS, GUID Partition Map. Use `/Volumes/Development/Developer/ZPX_Delivery` as the planned checkout. The retrieved conversation did not confirm formatting was completed; the setup checks actual disk metadata before proceeding. Substitute `Development` for YOUR_SSD_NAME below if that volume is mounted.

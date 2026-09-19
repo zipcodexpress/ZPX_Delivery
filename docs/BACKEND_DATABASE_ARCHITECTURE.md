@@ -2,7 +2,25 @@
 
 Purpose: explain the implemented foundation and structure for Phase 1 business services.
 Audience: Richard, API/frontend/mobile/terminal developers. Status: foundation implemented; business workflows pending.
-Owner: unassigned. Last reviewed: 2026-09-18. Task: [P1.1 issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5).
+Owner: unassigned. Last reviewed: 2026-09-19. Task: [P1.1 issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5).
+
+September 19 update: ThinkPHP 8.1.4 now provides the HTTP lifecycle and explicit
+routes, with Composer-locked dependencies. The existing health/database layer remains
+the handler behind those routes; unexpected framework errors return sanitized JSON.
+Runtime PDO access stays separate from migration credentials. See
+[approved platform baseline](decisions/0004-platform-baseline.md).
+
+Migration 004 binds each ownership projection to its compartment's physical locker
+and its manifest's exact generation using composite foreign keys. The new `locker_id`
+column is required when provisioning ownership. Applied migrations 001–003 are unchanged.
+A two-process integration test observes actual database lock contention and proves
+that only one parcel can claim the final compartment. This verifies the database
+primitive, not a complete authorized reservation service or physical transfer.
+
+The development-only seed command creates namespaced synthetic accounts, twenty
+locker sites, a hub, two drivers and ten unpaid draft parcels. Doors remain frozen;
+no hardware addresses, paid states, labels or verified contacts are fabricated.
+Accounts are groundwork for P1.2; an interactive login API is not yet implemented.
 
 ## Structure and responsibility
 

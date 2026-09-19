@@ -25,6 +25,15 @@ function uuid(): string {
 }
 if (getenv('APP_ENV') !== 'test' || (getenv('DB_NAME') ?: 'zpx_delivery_dev') !== 'zpx_delivery_dev') { throw new RuntimeException('Tests require disposable development database'); }
 $runtime = Connection::fromEnvironment();
+if (($argv[1] ?? '') === '--claim-race') {
+    $q=$runtime->prepare("SELECT set_config('application_name',?,false)"); $q->execute([$argv[5]]);
+    echo "READY\n"; flush();
+    try {
+        $q=$runtime->prepare("INSERT INTO compartment_claims(compartment_id,package_id,session_id,state) VALUES (?,?,?,'HELD')");
+        $q->execute([$argv[2],$argv[3],$argv[4]]);
+        exit(1);
+    } catch (PDOException $e) { echo $e->getCode() . "\n"; exit($e->getCode()==='23505' ? 0 : 1); }
+}
 if (($argv[1] ?? '') === '--race') {
     echo "READY\n"; flush();
     try {
@@ -42,6 +51,8 @@ $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
 check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 74, '73 business tables plus migration ledger');
+require __DIR__ . '/seed.php';
+require __DIR__ . '/ownership.php';
 
 // Checksum drift and failed transactional DDL must not corrupt the schema/ledger.
 $temp = sys_get_temp_dir() . '/zpx-migrations-' . bin2hex(random_bytes(8)); mkdir($temp);
@@ -52,7 +63,7 @@ try {
     try { (new Migrator($owner, $temp))->up(); throw new LogicException('Drift accepted'); }
     catch (RuntimeException $e) { check($e->getMessage() === 'Migration checksum mismatch', 'checksum drift refused'); }
     copy($migrator->files()[0], $first);
-    file_put_contents($temp . '/004_failure_probe.sql', 'CREATE TABLE migration_failure_probe(id INT); SELECT absent_column FROM migration_failure_probe;');
+    file_put_contents($temp . '/999_failure_probe.sql', 'CREATE TABLE migration_failure_probe(id INT); SELECT absent_column FROM migration_failure_probe;');
     try { (new Migrator($owner, $temp))->up(); throw new LogicException('Broken migration accepted'); }
     catch (PDOException $e) { check(in_array($owner->query("SELECT to_regclass('delivery.migration_failure_probe') IS NULL")->fetchColumn(), [true,'t','1'], true), 'failed DDL rolled back'); }
     $migrator->assertCurrent();
