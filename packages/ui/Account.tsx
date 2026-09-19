@@ -67,7 +67,7 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
         <h1>{customer ? 'A simpler way to send. A better way to receive.' : 'Every handoff, accounted for.'}</h1>
         <p className="intro">{customer ? 'One account for your ZPX deliveries. Start with your details and verify how we can reach you.' : 'Sign in with your assigned staff account. Your access follows your site and hub responsibilities.'}</p>
         <div className="journey"><span>01 &nbsp; Your account</span><span>02 &nbsp; Verify contacts</span><span className="future-step">03 &nbsp; Send & receive</span></div>
-        <p className="local-note">Local preview: verification messages stay in the private development inbox. No email, SMS or physical locker commands are sent.</p>
+        <p className="local-note">Development preview: approved test email addresses can receive verification codes. Synthetic email addresses and phone codes use the private development inbox. Physical locker commands are not enabled.</p>
       </div>
       <section className="account-card" aria-label="Account access">
         {loading ? <p role="status">Checking your session…</p> : profile ? <>

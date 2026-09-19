@@ -77,3 +77,7 @@ but automatic sends remain disabled pending the user's explicit opt-in.
 See [provider evidence](verification/P2.2-providers.md) and [decision 0007](decisions/0007-sandbox-payments-mail.md).
 Earlier statements about missing payment/email credentials are superseded by this update.
 No native shipping app, physical deposit, driver pickup or hub receipt is claimed complete.
+
+The user subsequently approved email activation. The local mail profile is now
+running, restricted to the approved recipient, with SMTP authentication and routing
+verified. No old local-only messages were sent; no account was automatically created.

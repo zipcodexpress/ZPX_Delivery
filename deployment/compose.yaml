@@ -53,6 +53,7 @@ services:
       migrate: {condition: service_completed_successfully}
   mail-worker:
     profiles: ["mail"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: apps/api/Dockerfile
