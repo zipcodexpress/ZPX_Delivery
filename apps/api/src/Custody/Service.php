@@ -11,10 +11,16 @@ use Zpx\Infrastructure\Messaging\Outbox;
 final class Service
 {
     private Identity $identity;
+    private ?ScanJournal $journal = null;
 
     public function __construct(private PDO $db, private Secrets $crypto)
     {
         $this->identity = new Identity($db, $crypto);
+    }
+
+    private function journal(): ScanJournal
+    {
+        return $this->journal ??= new ScanJournal($this->db);
     }
 
     private function q(string $sql, array $values = []): \PDOStatement
@@ -263,7 +269,7 @@ final class Service
         $labelToken = Input::text($input['label_token'], 1, 500);
         $driverId = $this->driverId($user);
 
-        return (new Transaction($this->db))->run(function () use ($user, $driverId, $runId, $input, $key, $labelToken) {
+        return $this->journal()->transact(function () use ($user, $driverId, $runId, $input, $key, $labelToken) {
             $scope = 'custody:' . $this->org() . ':' . $user . ':inbound-pickup';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
@@ -428,9 +434,6 @@ final class Service
 
     private function recordRejectedScan(string $user, string $runId, ?string $packageId, string $action, string $resultCode): void
     {
-        $this->q(
-            "INSERT INTO scan_events(operation_uuid,package_id,actor_user_id,run_id,action,result_code,received_at) VALUES (?,?,?,?,?, ?,now())",
-            [Secrets::uuid(), $packageId, $user, $runId, $action, $resultCode]
-        );
+        $this->journal()->stage($user, $runId, $packageId, $action, $resultCode);
     }
 }

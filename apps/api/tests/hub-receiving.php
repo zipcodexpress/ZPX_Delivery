@@ -311,4 +311,15 @@ $finalClose = $hubService->closeSession($staffUser, $session3['receiving_session
 check($finalClose['state'] === 'CLOSED', 'assigned staff can still close their own session');
 check($finalClose['received_count'] === 1, 'assigned staff closed with the one received parcel');
 
+// Test 20: Refused scans are journaled with the staff member who attempted them. The row cannot
+// be written inside the refusing transaction — that rolls back — so this proves the flush works.
+$refused = $runtime->query("SELECT actor_user_id, result_code FROM scan_events WHERE action='HUB_RECEIVE' AND result_code<>'ACCEPTED' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+$codes = array_column($refused, 'result_code');
+check(in_array('ALREADY_RECEIVED', $codes, true), 'refused duplicate receive survives the rollback');
+check(in_array('VERSION_MISMATCH', $codes, true), 'refused stale-version scan survives the rollback');
+check(in_array('NOT_ON_MANIFEST', $codes, true), 'refused off-manifest scan survives the rollback');
+check(in_array('SESSION_NOT_FOUND', $codes, true), 'refused cross-hub scan survives the rollback');
+$crossHub = array_values(array_filter($refused, fn($r) => $r['result_code'] === 'SESSION_NOT_FOUND'));
+check((string)$crossHub[0]['actor_user_id'] === $otherUser, 'cross-hub attempt names the staff member who tried');
+
 echo "\nHub receiving test suite complete.\n";

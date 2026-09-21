@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Zpx\HubReceiving;
 
 use PDO;
+use Zpx\Custody\ScanJournal;
 use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Infrastructure\Database\Transaction;
 use Zpx\Infrastructure\Messaging\Outbox;
@@ -11,10 +12,21 @@ use Zpx\Infrastructure\Messaging\Outbox;
 final class Service
 {
     private Identity $identity;
+    private ?ScanJournal $journal = null;
 
     public function __construct(private PDO $db, private Secrets $crypto)
     {
         $this->identity = new Identity($db, $crypto);
+    }
+
+    private function journal(): ScanJournal
+    {
+        return $this->journal ??= new ScanJournal($this->db);
+    }
+
+    private function recordRejectedScan(string $user, ?string $runId, ?string $packageId, string $resultCode): void
+    {
+        $this->journal()->stage($user, $runId, $packageId, 'HUB_RECEIVE', $resultCode);
     }
 
     private function q(string $sql, array $values = []): \PDOStatement
@@ -122,7 +134,7 @@ final class Service
         $expectedVersion = (int)$input['expected_package_version'];
         Input::text($key, 16, 100);
 
-        return (new Transaction($this->db))->run(function () use ($user, $labelToken, $runId, $sessionId, $expectedVersion, $key) {
+        return $this->journal()->transact(function () use ($user, $labelToken, $runId, $sessionId, $expectedVersion, $key) {
             $scope = 'hub:' . $this->org() . ':' . $user . ':receive';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
@@ -138,12 +150,17 @@ final class Service
                 [$sessionId, $hubId]
             )->fetch(PDO::FETCH_ASSOC);
 
+            // The caller's run id is only trustworthy once it matches the session, so refusals
+            // before that point journal a null run rather than risk a foreign key violation.
             if (!$session) {
+                $this->recordRejectedScan($user, null, null, 'SESSION_NOT_FOUND');
                 throw new Failure(404, 'SESSION_NOT_FOUND', 'Receiving session not found or not open.');
             }
             if ((string)$session['inbound_run_id'] !== $runId) {
+                $this->recordRejectedScan($user, null, null, 'RUN_MISMATCH');
                 throw new Failure(409, 'RUN_MISMATCH', 'Session does not match the specified run.');
             }
+            $scanRunId = $runId;
 
             // Resolve label
             $tokenHash = hash('sha256', $labelToken);
@@ -153,9 +170,11 @@ final class Service
             )->fetch(PDO::FETCH_ASSOC);
 
             if (!$label) {
+                $this->recordRejectedScan($user, $scanRunId, null, 'LABEL_NOT_FOUND');
                 throw new Failure(404, 'LABEL_NOT_FOUND', 'Label not recognized.');
             }
             if ($label['status'] !== 'ACTIVE') {
+                $this->recordRejectedScan($user, $scanRunId, (string)$label['package_id'], 'LABEL_REVOKED');
                 throw new Failure(410, 'LABEL_REVOKED', 'This label is no longer active.');
             }
 
@@ -168,6 +187,7 @@ final class Service
             )->fetchColumn();
 
             if ($alreadyReceived) {
+                $this->recordRejectedScan($user, $scanRunId, $packageId, 'ALREADY_RECEIVED');
                 throw new Failure(409, 'ALREADY_RECEIVED', 'Package already received in this session.');
             }
 
@@ -178,6 +198,7 @@ final class Service
             )->fetchColumn();
 
             if (!$onManifest) {
+                $this->recordRejectedScan($user, $scanRunId, $packageId, 'NOT_ON_MANIFEST');
                 throw new Failure(409, 'NOT_ON_MANIFEST', 'This package is not on the run manifest.');
             }
 
@@ -188,10 +209,12 @@ final class Service
             )->fetch(PDO::FETCH_ASSOC);
 
             if ($package['state'] !== 'INBOUND_CUSTODY') {
+                $this->recordRejectedScan($user, $scanRunId, $packageId, 'WRONG_PACKAGE_STATE');
                 throw new Failure(409, 'WRONG_PACKAGE_STATE', 'Package is not in inbound custody. Current state: ' . $package['state']);
             }
 
             if ((int)$package['version'] !== $expectedVersion) {
+                $this->recordRejectedScan($user, $scanRunId, $packageId, 'VERSION_MISMATCH');
                 throw new Failure(409, 'VERSION_MISMATCH', 'Expected package version ' . $expectedVersion . ' but found ' . $package['version'] . '.');
             }
 
