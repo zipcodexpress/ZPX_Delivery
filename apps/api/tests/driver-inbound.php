@@ -16,7 +16,7 @@ $shipping = new Shipping($runtime, $crypto);
 
 // Create driver user with DRIVER role
 $driverEmail = 'driver.inbound@example.invalid';
-$driverPhone = '+12025550201';
+$driverPhone = '+12025550301';
 $driverInput = [
     'name' => 'Synthetic Driver',
     'email' => $driverEmail,
@@ -63,7 +63,7 @@ $stop2 = insertId($runtime, "INSERT INTO route_run_stops(run_id,location_id,sequ
 
 // Create sender user for shipments
 $senderEmail = 'sender.inbound@example.invalid';
-$senderPhone = '+12025550202';
+$senderPhone = '+12025550302';
 $senderInput = [
     'name' => 'Synthetic Sender',
     'email' => $senderEmail,
@@ -192,7 +192,7 @@ check((int)$loadedItems === 3, 'all manifest items marked LOADED');
 
 // Test 17: Non-driver cannot access driver endpoints
 $customerEmail = 'customer.inbound@example.invalid';
-$customerPhone = '+12025550203';
+$customerPhone = '+12025550303';
 $customerInput = [
     'name' => 'Synthetic Customer',
     'email' => $customerEmail,
@@ -206,7 +206,7 @@ failsIdentity(fn() => $custody->getRun($customerUser, $run), 403, 'customer cann
 
 // Test 18: Driver cannot see another driver's run
 $otherDriverEmail = 'other.driver@example.invalid';
-$otherDriverPhone = '+12025550204';
+$otherDriverPhone = '+12025550304';
 $otherDriverInput = [
     'name' => 'Other Driver',
     'email' => $otherDriverEmail,

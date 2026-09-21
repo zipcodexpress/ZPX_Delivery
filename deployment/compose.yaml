@@ -92,6 +92,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
       TEST_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
       APP_ENV: test
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?Run init}
+      AUTH_LOOKUP_KEY: ${AUTH_LOOKUP_KEY:?Run init}
     depends_on:
       migrate: {condition: service_completed_successfully}
   seed:

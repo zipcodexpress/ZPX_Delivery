@@ -1,7 +1,6 @@
 # Current Development Status
 
 > Shared checkpoint and handoff state for Codex, Qwen Code, and human developers.
->
 > **Hard limit: 200 lines.**
 
 ---
@@ -10,7 +9,7 @@
 
 Date/Time: 2026-09-21
 Agent: Qwen Code
-Checkpoint reason: Milestone — P3.2 driver inbound backend complete
+Checkpoint reason: Milestone — P3.2 driver inbound complete (backend + frontend + seed)
 
 ---
 
@@ -20,48 +19,48 @@ Checkpoint reason: Milestone — P3.2 driver inbound backend complete
 
 ## Last Relevant Commit
 
-`a81bc24` — merge P2.3 customer portal (main baseline)
-
-Uncommitted P3.2 work exists — inspect git status before making changes.
+`d344f3a` — feat(P3.2): add driver workspace frontend and seed data
 
 ---
 
 ## Current Objective
 
-Implement P3.2 driver inbound collection: driver run listing, manifest reading, run acknowledgment, label resolution, and atomic inbound pickup scans with custody transfer.
+P3.2 driver inbound collection is complete. Next: P3.3 hub receiving.
 
 ---
 
 ## Completed
 
-- Migration 010: driver inbound indexes and run/manifest state constraints
+- Migration 010: indexes + run/manifest state constraints
 - `Custody\Service`: listRuns, getRun, acknowledgeRun, resolveScan, inboundPickupScan
-- `Http\DriverController`: route dispatch with auth/CSRF/idempotency
-- Routes added to api.php for driver endpoints
-- 42-test driver-inbound suite integrated into integration.php
-- All tests pass: `npm run check`, `npm run build`, `python3 scripts/dev.py test-db`
+- `DriverController` + 5 API routes
+- `DriverWorkspace.tsx` frontend: run list, manifest, scan interface, progress
+- Account.tsx routes DRIVER role to workspace in operations audience
+- Seed extended: vehicle, shift, inbound run, 5 packages AT_ORIGIN with labels
+- 42 driver-inbound tests + seed test updates — all passing
+- `npm run check`, `npm run build`, `python3 scripts/dev.py test-db` — all green
 
 ---
 
 ## In Progress
 
-- Driver frontend pages (operations-web) — not started
-- Seed data extension for driver runs — not started
+None.
 
 ---
 
 ## Exact Continuation Point
 
-File: `apps/operations-web/src/` (driver workspace pages)
-Next: Add driver run list, manifest detail, and scan interface to operations-web.
+P3.2 is complete. Next milestone: P3.3 hub receiving.
+File: `apps/api/src/Custody/Service.php` — add hub receiving methods.
+Branch: create `feature/P3.3-hub-receiving` from this branch or main.
 
 ---
 
 ## Upcoming
 
-1. Driver frontend pages in operations-web
-2. Update seed data with driver runs/manifests for local dev
-3. P3.3 hub receiving (depends on P3.2)
+1. P3.3: Hub receiving sessions, independent receipt scans, discrepancy workflows
+2. P4.1: Hub sorting, staging slots, waves
+3. P4.2: Outbound load, ordered-stop driver workflow
 
 ---
 
@@ -77,8 +76,12 @@ No known blocking issues.
 - `apps/api/src/Custody/Service.php`
 - `apps/api/src/Http/DriverController.php`
 - `apps/api/route/api.php`
+- `apps/api/src/Development/Seed.php`
 - `apps/api/tests/driver-inbound.php`
-- `apps/api/tests/integration.php`
+- `apps/api/tests/seed.php`
+- `packages/ui/DriverWorkspace.tsx`
+- `packages/ui/driver.css`
+- `packages/ui/Account.tsx`
 
 ---
 
@@ -86,7 +89,7 @@ No known blocking issues.
 
 ### Passing
 
-- `python3 scripts/dev.py test-db` — full integration suite including 42 driver-inbound tests
+- `python3 scripts/dev.py test-db` — full suite including 42 driver-inbound + seed tests
 - `npm run check` — contracts, tsc, simulator/contract tests
 - `npm run build` — customer-web and operations-web
 
@@ -94,50 +97,40 @@ No known blocking issues.
 
 None.
 
-### Still To Run
-
-None — all relevant tests were run.
-
 ---
 
 ## Important Current Decisions
 
-- Label token hash uses `sha256(payload)` matching existing label creation in Shipping\Service
-- Driver scan idempotency uses same pattern as Shipping (advisory lock + idempotency_records)
-- Run states: DRAFT → PUBLISHED → ACKNOWLEDGED → IN_PROGRESS → COMPLETED/CANCELLED
-- Manifest item states: EXPECTED → LOADED → UNLOADED/SHORT/RETURNED
+- Driver frontend uses shared `packages/ui/` pattern (no separate app)
+- DRIVER role in operations audience routes to DriverWorkspace, not Shipping
+- Seed creates 5 AT_ORIGIN packages for local driver testing
+- Label token hash = sha256(payload) matching Shipping\Service
 
 ---
 
 ## API / Database Impact
 
-API changes: 5 new driver endpoints added (GET /driver/runs, GET /runs/{id}, POST /runs/{id}/acknowledgments, GET /scans/resolve, POST /runs/{id}/scans)
-
-Database changes: Migration 010 adds 3 indexes and 2 check constraints (no new tables)
-
-Migration required: Yes (010_driver_inbound.sql)
+API: 5 driver endpoints (GET /driver/runs, GET /runs/{id}, POST /runs/{id}/acknowledgments, GET /scans/resolve, POST /runs/{id}/scans)
+DB: Migration 010 (3 indexes, 2 check constraints, no new tables)
 
 ---
 
 ## Git State
 
-Uncommitted P3.2 changes ready for commit on `feature/P3.2-driver-inbound`.
+Clean on `feature/P3.2-driver-inbound`. Ready for PR.
 
 ---
 
 ## Next Recommended Actions
 
-1. Commit P3.2 backend work
-2. Add driver frontend pages
-3. Update seed with driver run data
-4. Run full test suite
-5. Create PR when stable
+1. Create PR for P3.2
+2. Start P3.3 hub receiving on new branch
+3. Re-seed dev DB (`python3 scripts/dev.py down && python3 scripts/dev.py up`) to get driver run data
 
 ---
 
 ## Handoff Notes
 
-- The Custody\Service follows the same patterns as Shipping\Service (Transaction wrapper, idempotency, outbox events)
-- Driver role check uses `requireRole($user, 'DRIVER')` via scoped_role_grants
-- Label resolution matches Shipping label creation: token_hash = sha256(payload)
-- Test creates its own org/driver/run/manifest to avoid coupling with seed data
+- Driver workspace accessible at http://localhost:5174 with DRIVER-IN account
+- Seed credentials in `.local/seed-credentials.txt` after re-seed
+- DBeaver: use `docker compose exec postgres psql -U postgres -d zpx_delivery_dev` (port not exposed to avoid test conflicts)

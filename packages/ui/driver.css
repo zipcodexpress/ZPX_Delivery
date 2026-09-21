@@ -57,4 +57,23 @@
 .driver-page .eyebrow{font-size:10px;font-weight:700;letter-spacing:1.5px;color:#527e66;text-transform:uppercase;margin:0}
 .driver-page footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5ece6;font-size:12px;color:#607669}
 .small{font-size:12px;padding:6px 12px!important;border:1px solid #ccdacf;background:white;color:#194330;border-radius:6px;cursor:pointer}
+.driver-tabs{display:flex;gap:8px;margin-bottom:24px;border-bottom:1px solid #d7e2d9;padding-bottom:12px}
+.driver-tabs button{background:none;border:1px solid transparent;padding:8px 16px;border-radius:6px;font:inherit;font-size:13px;font-weight:600;color:#536f60;cursor:pointer;transition:all .15s}
+.driver-tabs button:hover{background:#f0f5f1}
+.driver-tabs button.active{background:#e0ede3;border-color:#8bb89a;color:#163c2b}
+.profile-card{background:#f5f9f6;border:1px solid #d7e2d9;border-radius:12px;padding:24px}
+.profile-card h2{font-size:24px;margin:4px 0 20px;letter-spacing:-.5px}
+.profile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.profile-field{display:flex;flex-direction:column;gap:4px}
+.profile-field label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#607669;font-weight:600}
+.profile-field span{font-size:14px;color:#163c2b}
+.wallet-card{background:#f5f9f6;border:1px solid #d7e2d9;border-radius:12px;padding:24px}
+.wallet-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:20px 0;padding:20px;background:white;border-radius:10px;border:1px solid #e5ece6}
+.wallet-stat{display:flex;flex-direction:column;gap:4px}
+.wallet-stat label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#607669;font-weight:600}
+.wallet-stat strong{font-size:28px;color:#163c2b}
+.wallet-stat.pending strong{color:#795623}
+.wallet-shift{margin-top:20px;padding:16px;background:white;border-radius:10px;border:1px solid #e5ece6}
+.wallet-shift h3{font-size:14px;margin:0 0 12px;color:#163c2b}
+.wallet-note{margin-top:16px;font-size:12px;color:#607669;line-height:1.6}
 @media(max-width:800px){.driver-layout{grid-template-columns:1fr}.driver-sidebar{order:2}.run-header{flex-direction:column}.scan-bar{flex-direction:column;align-items:stretch}.scan-bar button{width:100%}}
