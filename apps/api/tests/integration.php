@@ -71,7 +71,7 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 76, '74 business tables plus migration ledger and auth limiter');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 77, '75 business tables plus migration ledger and auth limiter');
 require __DIR__ . '/seed.php';
 require __DIR__ . '/ownership.php';
 
@@ -170,6 +170,7 @@ require __DIR__ . '/providers.php';
 require __DIR__ . '/customer-portal.php';
 require __DIR__ . '/driver-inbound.php';
 require __DIR__ . '/hub-receiving.php';
+require __DIR__ . '/hub-dispatch.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
 $suiteComplete=true;

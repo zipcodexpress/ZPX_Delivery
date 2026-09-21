@@ -30,6 +30,9 @@ foreach (['driver/register'=>'register','driver/profile'=>'profile','driver/prof
 foreach (['hub/receiving-sessions'=>'open','hub/receiving-scans'=>'scan','hub/receiving-sessions/<session_id>/close'=>'close','hub/receiving-sessions/<session_id>'=>'status'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $sessionId='') => Zpx\Http\HubReceivingController::handle($request,$action,$sessionId))->pattern(['session_id'=>'[1-9][0-9]{0,17}']);
 }
+foreach (['hub/stage-scans'=>'stage','hub/dispatch-calls'=>'dispatch','hub/slots'=>'slots','hub/dispatch-calls/available'=>'available-calls','hub/dispatch-calls/<call_id>/accept'=>'accept','hub/dispatch-calls/<call_id>/load'=>'load'] as $path=>$action) {
+    Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $callId='') => Zpx\Http\HubDispatchController::handle($request,$action,$callId))->pattern(['call_id'=>'[1-9][0-9]{0,17}']);
+}
 Route::any('api/delivery/v1/integrations/payments/webhook', static function(Request $request) {
     $id=Zpx\Identity\Secrets::uuid();
     try {
