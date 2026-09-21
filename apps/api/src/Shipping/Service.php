@@ -32,7 +32,10 @@ final class Service
         $rows=$this->q("SELECT * FROM locations WHERE organization_id=? AND kind='LOCKER' AND status='ACTIVE' ORDER BY code",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_values(array_map(function ($r) {
             $policy=json_decode($r['access_policy'] ?? '{}',true);
-            return ['id'=>(string)$r['id'],'code'=>$r['code'],'name'=>$r['name'],'site_mode'=>$r['site_mode'],
+            $position=null;
+            if ($r['latitude']!==null && $r['longitude']!==null) { $position=['latitude'=>(float)$r['latitude'],'longitude'=>(float)$r['longitude'],'illustrative'=>$this->local($r)]; }
+            elseif ($this->local($r)) { $n=(int)substr($r['code'],-3)-1;$position=['latitude'=>30.2672+0.035*sin($n*2.4)*(1+$n/20),'longitude'=>-97.7431+0.045*cos($n*2.4)*(1+$n/20),'illustrative'=>true]; }
+            return ['map_position'=>$position,'id'=>(string)$r['id'],'code'=>$r['code'],'name'=>$r['name'],'site_mode'=>$r['site_mode'],
                 'address'=>['line1'=>$r['address_text'],'city'=>$this->local($r)?'Synthetic fixture':'','region'=>'','postal_code'=>'','country_code'=>'US'],
                 'eligible'=>false,
                 'draft_eligible'=>true,'development_only'=>$this->local($r),'printer_available'=>false,
@@ -102,9 +105,10 @@ final class Service
             'development_only'=>(bool)$r['development_only'],'created_at'=>gmdate('c',strtotime($r['created_at']))];
     }
     public function list(string $user,string $view,string $cursor=''): array {
-        if (!in_array($view,['sending','receiving','operations'],true)) { throw new Failure(422,'INVALID_INPUT','Invalid shipment view.'); }
+        if (!in_array($view,['sending','receiving','history','operations'],true)) { throw new Failure(422,'INVALID_INPUT','Invalid shipment view.'); }
         $values=[$this->org()];
         if ($view==='operations') { $where=$this->operationsWhere($user,$values); }
+        elseif ($view==='history') { $values[]=$user;$values[]=$user;$where="(s.sender_user_id=? OR EXISTS (SELECT 1 FROM shipment_parties sp WHERE sp.shipment_id=s.id AND sp.party_role='RECIPIENT' AND sp.user_id=?))"; }
         elseif ($view==='sending') { $values[]=$user; $where='s.sender_user_id=?'; }
         else { $values[]=$user; $where="EXISTS (SELECT 1 FROM shipment_parties sp WHERE sp.shipment_id=s.id AND sp.party_role='RECIPIENT' AND sp.user_id=?)"; }
         if ($cursor!=='') { self::id($cursor); $where.=' AND s.id<?'; $values[]=$cursor; }
@@ -113,6 +117,11 @@ final class Service
         return ['items'=>array_map(fn($r)=>$this->present($r,$user,$view),$rows),'next_cursor'=>$more?(string)end($rows)['id']:null];
     }
     public function get(string $user,string $id,string $view='customer'): array { return $this->present($this->row($user,$id,$view),$user,$view); }
+    public function lookup(string $user,string $reference): array {
+        $id=$this->q('SELECT id FROM shipments WHERE organization_id=? AND public_reference=?',[$this->org(),Input::text(trim($reference),1,64)])->fetchColumn();
+        if (!$id) { throw new Failure(404,'SHIPMENT_NOT_FOUND','No shipment available for this account and reference.'); }
+        return $this->get($user,(string)$id);
+    }
     public function create(string $user,array $input,string $key): array {
         Input::fields($input,['origin_location_id','destination_location_id','recipient','package','service_level']);
         $origin=self::id($input['origin_location_id']); $destination=self::id($input['destination_location_id']);

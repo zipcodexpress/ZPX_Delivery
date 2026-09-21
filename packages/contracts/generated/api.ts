@@ -1268,6 +1268,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** /me/profile */
+        post: operations["customer__me_profile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** /me/payment-methods */
+        get: operations["customer__me_payment_methods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/payment-methods/manage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** /me/payment-methods/manage */
+        post: operations["customer__me_payment_methods_manage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** /me/payments */
+        get: operations["customer__me_payments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shipments/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** /shipments/lookup */
+        get: operations["customer__shipments_lookup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1448,6 +1533,8 @@ export interface components {
             addresses: components["schemas"]["Address"][];
             /** @description Browser-only session-bound token; send in X-CSRF-Token for cookie-authenticated mutations. Never an access token. */
             csrf_token?: string;
+            email?: string | null;
+            phone?: string | null;
         };
         Location: {
             /** @description Opaque identifier; serialize as string. */
@@ -1464,6 +1551,11 @@ export interface components {
             longitude?: number;
             draft_eligible: boolean;
             development_only: boolean;
+            map_position?: {
+                latitude: number;
+                longitude: number;
+                illustrative: boolean;
+            } | null;
         };
         LocationList: {
             items: components["schemas"]["Location"][];
@@ -1893,6 +1985,39 @@ export interface components {
                 /** Format: date-time */
                 quote_expires_at: string;
             }[];
+        };
+        WalletMethods: {
+            provider: string;
+            configured: boolean;
+            items: {
+                brand: string;
+                last4: string;
+            }[];
+        };
+        WalletForm: {
+            /** Format: uri */
+            checkout_url: string;
+            checkout_token: string;
+        };
+        WalletHistory: {
+            items: {
+                payment_id: string;
+                provider: string;
+                reference: string;
+                transaction_id: string | null;
+                amount_cents: number;
+                currency: string;
+                status: string;
+                /** Format: date-time */
+                created_at: string;
+                shipment_id: string;
+                shipment_reference: string;
+            }[];
+            next_cursor: string | null;
+        };
+        ProfileUpdate: {
+            name: string;
+            address: components["schemas"]["Address"];
         };
     };
     responses: never;
@@ -3465,7 +3590,7 @@ export interface operations {
     shipping_list: {
         parameters: {
             query?: {
-                view?: "sending" | "receiving";
+                view?: "sending" | "receiving" | "history";
                 cursor?: string;
             };
             header?: never;
@@ -6889,6 +7014,171 @@ export interface operations {
                 };
             };
             /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    customer__me_profile: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    customer__me_payment_methods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletMethods"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    customer__me_payment_methods_manage: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletForm"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    customer__me_payments: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletHistory"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    customer__shipments_lookup: {
+        parameters: {
+            query: {
+                reference: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shipment"];
+                };
+            };
+            /** @description Error */
             default: {
                 headers: {
                     [name: string]: unknown;

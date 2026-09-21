@@ -2194,7 +2194,8 @@
               "type": "string",
               "enum": [
                 "sending",
-                "receiving"
+                "receiving",
+                "history"
               ],
               "default": "sending"
             }
@@ -6621,6 +6622,231 @@
           }
         }
       }
+    },
+    "/me/profile": {
+      "post": {
+        "operationId": "customer__me_profile",
+        "summary": "/me/profile",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/payment-methods": {
+      "get": {
+        "operationId": "customer__me_payment_methods",
+        "summary": "/me/payment-methods",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletMethods"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/payment-methods/manage": {
+      "post": {
+        "operationId": "customer__me_payment_methods_manage",
+        "summary": "/me/payment-methods/manage",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletForm"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/payments": {
+      "get": {
+        "operationId": "customer__me_payments",
+        "summary": "/me/payments",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletHistory"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/lookup": {
+      "get": {
+        "operationId": "customer__shipments_lookup",
+        "summary": "/shipments/lookup",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7320,6 +7546,14 @@
           "csrf_token": {
             "type": "string",
             "description": "Browser-only session-bound token; send in X-CSRF-Token for cookie-authenticated mutations. Never an access token."
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -7376,6 +7610,26 @@
           },
           "development_only": {
             "type": "boolean"
+          },
+          "map_position": {
+            "type": "object",
+            "nullable": true,
+            "required": [
+              "latitude",
+              "longitude",
+              "illustrative"
+            ],
+            "properties": {
+              "latitude": {
+                "type": "number"
+              },
+              "longitude": {
+                "type": "number"
+              },
+              "illustrative": {
+                "type": "boolean"
+              }
+            }
           }
         },
         "required": [
@@ -8940,6 +9194,140 @@
     }
   }
 }
+        }
+      },
+      "WalletMethods": {
+        "type": "object",
+        "required": [
+          "items",
+          "provider",
+          "configured"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "brand",
+                "last4"
+              ],
+              "properties": {
+                "brand": {
+                  "type": "string"
+                },
+                "last4": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}$"
+      }
+    }
+  }
+}
+        }
+      },
+      "WalletForm": {
+        "type": "object",
+        "required": [
+          "checkout_url",
+          "checkout_token"
+        ],
+        "properties": {
+          "checkout_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "checkout_token": {
+            "type": "string"
+          }
+        }
+      },
+      "WalletHistory": {
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "payment_id",
+                "provider",
+                "reference",
+                "transaction_id",
+                "amount_cents",
+                "currency",
+                "status",
+                "created_at",
+                "shipment_id",
+                "shipment_reference"
+              ],
+              "properties": {
+                "payment_id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "reference": {
+                  "type": "string"
+                },
+                "transaction_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "amount_cents": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "shipment_id": {
+                  "type": "string"
+                },
+                "shipment_reference": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ProfileUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "address"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "address": {
+            "$ref": "#/components/schemas/Address"
+          }
         }
       }
     }

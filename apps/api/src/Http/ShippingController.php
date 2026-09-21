@@ -14,7 +14,7 @@ final class ShippingController
         $requestId=Secrets::uuid();
         try {
             $method=$request->method(true);
-            $expected=in_array($action,['locations','get','tracking','operations','operations-get','operations-tracking','operations-payments','pdf','pending-payment'],true)?'GET':'POST';
+            $expected=in_array($action,['lookup','wallet-methods','wallet-history','locations','get','tracking','operations','operations-get','operations-tracking','operations-payments','pdf','pending-payment'],true)?'GET':'POST';
             if ($action==='shipments') { $expected=in_array($method,['GET','POST'],true)?$method:'GET, POST'; }
             if ($method!==$expected) { throw new Failure(405,'METHOD_NOT_ALLOWED','Unsupported method.'); }
             $origin=$request->header('origin','');
@@ -45,10 +45,15 @@ final class ShippingController
             if ($action==='pdf') {
                 return Response::create($shipping->pdf($user,$shipment),'html',200)->header(['Content-Type'=>'application/pdf','Content-Disposition'=>'inline; filename="zpx-test-label.pdf"','Cache-Control'=>'no-store','X-Content-Type-Options'=>'nosniff','X-Request-ID'=>$requestId]);
             }
-            if (in_array($action,['labels','hosted-session'],true)) { Input::fields($input,[]); }
+            if (in_array($action,['labels','hosted-session','wallet-manage'],true)) { Input::fields($input,[]); }
             if ($action==='reconcile-payment') { Input::fields($input,[],['transaction_id']); if (isset($input['transaction_id'])) { Input::text($input['transaction_id'],1,20); } }
             $body=match($action) {
                 'locations'=>$shipping->locations(),
+                'profile-update'=>$identity->updateProfile($user,$input),
+                'lookup'=>$shipping->lookup($user,Input::text($request->get('reference',''),1,64)),
+                'wallet-methods'=>(new \Zpx\Payments\Wallet($db,$crypto))->methods($user),
+                'wallet-history'=>(new \Zpx\Payments\Wallet($db,$crypto))->history($user,Input::text($request->get('cursor',''),0,18)),
+                'wallet-manage'=>(new \Zpx\Payments\Wallet($db,$crypto))->manage($user),
                 'shipments'=>$method==='POST'?$shipping->create($user,$input,$key):$shipping->list($user,Input::text($request->get('view','sending'),1,20),Input::text($request->get('cursor',''),0,18)),
                 'operations-payments'=>$shipping->paymentHistory($user,$shipment),
                 'operations'=>$shipping->list($user,'operations',Input::text($request->get('cursor',''),0,18)),

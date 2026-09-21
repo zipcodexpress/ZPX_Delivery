@@ -71,7 +71,7 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 75, '73 business tables plus migration ledger and auth limiter');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 76, '74 business tables plus migration ledger and auth limiter');
 require __DIR__ . '/seed.php';
 require __DIR__ . '/ownership.php';
 
@@ -167,6 +167,7 @@ require __DIR__ . '/shipping.php';
 // ThinkPHP installs a CLI exception handler during HTTP tests; force subsequent failures to fail CI.
 set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, get_class($error).': '.$error->getMessage()."\n"); exit(1); });
 require __DIR__ . '/providers.php';
+require __DIR__ . '/customer-portal.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
 $suiteComplete=true;

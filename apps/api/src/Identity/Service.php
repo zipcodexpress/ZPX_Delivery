@@ -109,7 +109,23 @@ final class Service
         $contacts=$this->query('SELECT kind FROM user_contacts WHERE user_id=? AND verified_at IS NOT NULL',[$user])->fetchAll(PDO::FETCH_COLUMN);
         $roles=$this->query('SELECT DISTINCT r.code FROM scoped_role_grants g JOIN roles r ON r.id=g.role_id WHERE g.user_id=? AND g.organization_id=? AND (g.expires_at IS NULL OR g.expires_at>now()) ORDER BY r.code',[$user,$this->organization()])->fetchAll(PDO::FETCH_COLUMN);
         $addresses=$this->query('SELECT address_ciphertext FROM user_addresses WHERE user_id=? ORDER BY id',[$user])->fetchAll(PDO::FETCH_COLUMN);
-        return ['user_id'=>$user,'name'=>$row['display_name'],'email_verified'=>in_array('EMAIL',$contacts,true),'phone_verified'=>in_array('PHONE',$contacts,true),'roles'=>$roles,'addresses'=>array_map(fn($v)=>json_decode($this->secrets->decrypt($v),true,512,JSON_THROW_ON_ERROR),$addresses)];
+        $contactValues=$this->query('SELECT kind,value_ciphertext FROM user_contacts WHERE user_id=?',[$user])->fetchAll(PDO::FETCH_KEY_PAIR);
+        return ['email'=>isset($contactValues['EMAIL'])?$this->secrets->decrypt($contactValues['EMAIL']):null,'phone'=>isset($contactValues['PHONE'])?$this->secrets->decrypt($contactValues['PHONE']):null,'user_id'=>$user,'name'=>$row['display_name'],'email_verified'=>in_array('EMAIL',$contacts,true),'phone_verified'=>in_array('PHONE',$contacts,true),'roles'=>$roles,'addresses'=>array_map(fn($v)=>json_decode($this->secrets->decrypt($v),true,512,JSON_THROW_ON_ERROR),$addresses)];
+    }
+    public function updateProfile(string $user,array $input): array {
+        Input::fields($input,['name','address']);
+        $name=trim(Input::text($input['name'],1,160));$address=Input::address($input['address']);
+        if ($name==='') { throw new Failure(422,'INVALID_INPUT','Name is required.'); }
+        return $this->atomic(function () use ($user,$name,$address) {
+            $this->requireRole($user,'CUSTOMER');
+            $this->query('SELECT id FROM users WHERE id=? FOR UPDATE',[$user]);
+            $this->query('UPDATE users SET display_name=? WHERE id=?',[$name,$user]);
+            $id=$this->query("SELECT id FROM user_addresses WHERE user_id=? AND kind='PROFILE' ORDER BY id LIMIT 1",[$user])->fetchColumn();
+            $cipher=$this->secrets->encrypt(json_encode($address,JSON_THROW_ON_ERROR));
+            if ($id) { $this->query('UPDATE user_addresses SET address_ciphertext=?,country_code=? WHERE id=?',[$cipher,$address['country_code'],$id]); }
+            else { $this->query("INSERT INTO user_addresses(user_id,kind,address_ciphertext,country_code,key_version) VALUES (?,'PROFILE',?,?,1)",[$user,$cipher,$address['country_code']]); }
+            $this->audit($user,'PROFILE_UPDATED',$user);return $this->profile($user);
+        });
     }
     public function requireRole(string $user, string $role, ?string $location=null): void
     {

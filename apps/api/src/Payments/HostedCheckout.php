@@ -40,7 +40,8 @@ final class HostedCheckout
             $row=$this->row($user,$id);
             if ($row['hosted_token_ciphertext'] || $row['status']!=='PENDING') { return $this->present($row); }
             if (strtotime($row['quote_expires_at'])<=time()) { throw new Failure(409,'QUOTE_EXPIRED','The quote expired before checkout was prepared.'); }
-            $token=$this->gateway->hosted((int)$row['amount_cents'],$row['provider_reference']);
+            $profile=$this->q('SELECT provider_profile_id FROM customer_payment_profiles WHERE user_id=?',[$user])->fetchColumn();
+            $token=$this->gateway->hosted((int)$row['amount_cents'],$row['provider_reference'],$profile?:null);
             $this->q("UPDATE payments SET hosted_token_ciphertext=?,hosted_token_expires_at=now()+interval '15 minutes' WHERE id=? AND status='PENDING'",[$this->crypto->encrypt($token),$id]);
             return $this->status($user,$id);
         } finally { $this->q('SELECT pg_advisory_unlock(hashtextextended(?,0))',[$lock]); }

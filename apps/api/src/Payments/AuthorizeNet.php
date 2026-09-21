@@ -12,7 +12,7 @@ final class AuthorizeNet
     public static function configured(): bool {
         return getenv('AUTHORIZE_NET_ENVIRONMENT')==='sandbox' && (bool)getenv('AUTHORIZE_NET_API_LOGIN_ID') && (bool)getenv('AUTHORIZE_NET_TRANSACTION_KEY');
     }
-    private function call(string $method,array $body=[]): array {
+    private function call(string $method,array $body=[],bool $allowDuplicate=false): array {
         if (!self::configured() || !in_array(getenv('APP_ENV'),['development','test'],true)) { throw new Failure(503,'PAYMENT_NOT_CONFIGURED','Authorize.net sandbox credentials are not configured.'); }
         $request=[$method=>['merchantAuthentication'=>['name'=>getenv('AUTHORIZE_NET_API_LOGIN_ID'),'transactionKey'=>getenv('AUTHORIZE_NET_TRANSACTION_KEY')]]+$body];
         if ($this->transport) { $response=($this->transport)($request); }
@@ -25,22 +25,42 @@ final class AuthorizeNet
         }
         if (!is_array($response) || ($response['messages']['resultCode'] ?? '')!=='Ok') {
             $code=$response['messages']['message'][0]['code'] ?? '';
+            if ($allowDuplicate && $code==='E00039') { return $response; }
             throw new Failure(503,$code==='E00007'?'PAYMENT_AUTH_FAILED':'PAYMENT_PROVIDER_REJECTED',$code==='E00007'?'The sandbox rejected its configured credentials.':'The sandbox could not complete this request.');
         }
         return $response;
     }
     public function authenticate(): void { $this->call('authenticateTestRequest'); }
-    public function hosted(int $amount,string $reference): string {
+    public function hosted(int $amount,string $reference,?string $customerProfile=null): string {
         if ($amount<1 || $amount>1000000 || !preg_match('/^ZP[A-F0-9]{18}$/D',$reference)) { throw new \LogicException('Invalid server checkout details'); }
-        $result=$this->call('getHostedPaymentPageRequest',['refId'=>$reference,'transactionRequest'=>['transactionType'=>'authCaptureTransaction','amount'=>self::dollars($amount),'order'=>['invoiceNumber'=>$reference,'description'=>'ZPX sandbox shipping'], 'transactionSettings'=>['setting'=>[['settingName'=>'duplicateWindow','settingValue'=>'28800']]]],'hostedPaymentSettings'=>['setting'=>[
+        $result=$this->call('getHostedPaymentPageRequest',['refId'=>$reference,'transactionRequest'=>['transactionType'=>'authCaptureTransaction','amount'=>self::dollars($amount),...($customerProfile?['profile'=>['customerProfileId'=>$customerProfile]]:[]),'order'=>['invoiceNumber'=>$reference,'description'=>'ZPX sandbox shipping'], 'transactionSettings'=>['setting'=>[['settingName'=>'duplicateWindow','settingValue'=>'28800']]]],'hostedPaymentSettings'=>['setting'=>[
             ['settingName'=>'hostedPaymentReturnOptions','settingValue'=>json_encode(['showReceipt'=>true])],
-            ['settingName'=>'hostedPaymentPaymentOptions','settingValue'=>json_encode(['showCreditCard'=>true,'showBankAccount'=>false])],
-            ['settingName'=>'hostedPaymentCustomerOptions','settingValue'=>json_encode(['showEmail'=>false,'requiredEmail'=>false,'addPaymentProfile'=>false])],
+            ['settingName'=>'hostedPaymentPaymentOptions','settingValue'=>json_encode(['showCreditCard'=>true,'showBankAccount'=>false,'customerProfileId'=>$customerProfile!==null])],
+            ['settingName'=>'hostedPaymentCustomerOptions','settingValue'=>json_encode(['showEmail'=>false,'requiredEmail'=>false,'addPaymentProfile'=>$customerProfile!==null])],
             ['settingName'=>'hostedPaymentShippingAddressOptions','settingValue'=>json_encode(['show'=>false,'required'=>false])],
             ['settingName'=>'hostedPaymentOrderOptions','settingValue'=>json_encode(['show'=>true,'merchantName'=>'ZPX Sandbox'])],
         ]]]);
         $token=$result['token'] ?? null;
         if (!is_string($token) || strlen($token)<20 || strlen($token)>16000) { throw new Failure(503,'PAYMENT_PROVIDER_UNAVAILABLE','No checkout token was returned.'); }
+        return $token;
+    }
+    public function customerProfile(string $id): array {
+        return $this->call('getCustomerProfileRequest',['customerProfileId'=>$id])['profile'] ?? [];
+    }
+    public function createProfile(string $reference): string {
+        $r=$this->call('createCustomerProfileRequest',['profile'=>['merchantCustomerId'=>$reference,'description'=>'ZPX sandbox customer'],'validationMode'=>'none'],true);
+        $id=(string)($r['customerProfileId'] ?? '');
+        if (!$id && preg_match('/ID ([0-9]+) exists/', $r['messages']['message'][0]['text'] ?? '',$m)) { $id=$m[1]; }
+        if (!preg_match('/^[1-9][0-9]{0,19}$/D',$id) || ($this->customerProfile($id)['merchantCustomerId'] ?? '')!==$reference) { throw new Failure(503,'PAYMENT_PROFILE_UNAVAILABLE','The saved-payment profile could not be verified.'); }
+        return $id;
+    }
+    public function profileForm(string $id): string {
+        $r=$this->call('getHostedProfilePageRequest',['customerProfileId'=>$id,'hostedProfileSettings'=>['setting'=>[
+            ['settingName'=>'hostedProfilePaymentOptions','settingValue'=>'showCreditCard'],
+            ['settingName'=>'hostedProfileValidationMode','settingValue'=>'testMode']
+        ]]]);
+        $token=$r['token'] ?? '';
+        if (!is_string($token) || strlen($token)<20 || strlen($token)>16000) { throw new Failure(503,'PAYMENT_PROFILE_UNAVAILABLE','The card-management form could not be prepared.'); }
         return $token;
     }
     public static function dollars(int $cents): string { return intdiv($cents,100).'.'.str_pad((string)($cents%100),2,'0',STR_PAD_LEFT); }

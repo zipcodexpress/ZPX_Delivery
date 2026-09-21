@@ -6,6 +6,7 @@ type Profile = components['schemas']['Profile'];
 type Challenge = components['schemas']['ContactChallenge'];
 import { api, RequestError } from './api';
 import { Shipping } from './Shipping';
+import { CustomerPortal } from './CustomerPortal';
 
 export function Account({ audience }: { audience: 'customer' | 'operations' }) {
   const customer = audience === 'customer';
@@ -71,7 +72,7 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
     });
   }
   const operationsAccess = profile?.roles.some(role => ['ADMIN', 'DISPATCHER', 'HUB_STAFF', 'HUB_SUPERVISOR'].includes(role));
-  if (profile && profile.email_verified && profile.phone_verified && (customer || operationsAccess) && !accountOnly) return <Shipping profile={profile} audience={audience} onAccount={() => setAccountOnly(true)} onLogout={logout} />;
+  if (profile && profile.email_verified && profile.phone_verified && (customer || operationsAccess) && !accountOnly) return customer && profile.roles.includes('CUSTOMER') ? <CustomerPortal profile={profile} onProfileUpdate={setProfile} onVerification={() => setAccountOnly(true)} onLogout={logout} /> : <Shipping profile={profile} audience={audience} onAccount={() => setAccountOnly(true)} onLogout={logout} />;
   return <main className="account-page">
     <header><strong>ZipcodeXpress<span className="brand-dot">.</span></strong><span>LOCAL DEVELOPMENT</span></header>
     <div className="account-layout">

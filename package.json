@@ -24,11 +24,13 @@
     "test-e2e": "python3 scripts/dev.py smoke"
   },
   "dependencies": {
+    "leaflet": "^1.9.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "13.0.0",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "24.7.0",
     "@types/react": "19.2.0",
     "@types/react-dom": "19.2.0",

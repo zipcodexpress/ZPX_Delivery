@@ -5,8 +5,8 @@ import { validateContract, renderTypes } from '../../scripts/contracts.mjs';
 
 const canonical = JSON.parse(await readFile(new URL('../../docs/handoff/contracts/openapi.json', import.meta.url), 'utf8'));
 
-test('canonical API has 66 validated operations and deterministic generated types', async () => {
-  assert.equal(await validateContract(canonical), 66);
+test('canonical API has 71 validated operations and deterministic generated types', async () => {
+  assert.equal(await validateContract(canonical), 71);
   assert.equal(await renderTypes(canonical), await renderTypes(canonical));
 });
 test('reject broken response schemas and unresolved references', async () => {
