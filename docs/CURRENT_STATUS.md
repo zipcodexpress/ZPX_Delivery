@@ -9,18 +9,18 @@
 
 Date/Time: 2026-09-21
 Agent: Qwen Code
-Checkpoint reason: Milestone — hub authorization gaps fixed; hub management scoped and deferred (ADR 0008)
+Checkpoint reason: Milestone — hub authorization gaps fixed; refused scans now journaled; hub management deferred (ADR 0008)
 
 ---
 
 ## Current Branch
 
-`feature/P3.3-hub-receiving` — carries the P3.3, P4.1 and both fix commits.
+`feature/P3.3-hub-receiving` — carries the P3.3, P4.1 and all fix commits.
 Not pushed. `origin` still has only `feature/P3.2-driver-management`.
 
 ## Last Relevant Commit
 
-`7f09fed` — fix(hub): scope receiving and dispatch to the caller's hub
+`26e4274` — fix(scan): journal refused scans after the rollback, not inside it
 
 ---
 
@@ -49,12 +49,13 @@ then push and open PRs.
 - Fix: hub receiving and dispatch are scoped to the caller's hub. `HUB_STAFF` grants are
   location-scoped (as `Seed.php` creates them) but every hub service called `requireRole` without a
   location, which only matches org-wide grants — so the seeded `HUB-STAFF` account was denied by
-  every hub endpoint despite `profile()` listing the role. `hubId()` now resolves the hub through
-  its location, checks the grant against that location, and is organization scoped.
-  `Custody::requireResolveAccess` had the same defect.
-- Fix: `receiveScan`, `closeSession` and `getSession` filter sessions by the caller's hub and
-  answer 404 rather than 403, so probing does not reveal which sessions exist. `receiveScan` also
-  rejects parcels absent from the session run's manifest with `NOT_ON_MANIFEST`.
+  every hub endpoint. `hubId()` now resolves the hub through its location and checks the grant
+  there; `Custody::requireResolveAccess` had the same defect. Sessions are filtered by the caller's
+  hub and answer 404 not 403, and `receiveScan` rejects off-manifest parcels with `NOT_ON_MANIFEST`.
+- Fix: refused scans are journaled. `Transaction::run` rolls back on any throwable, so the old
+  `recordRejectedScan` row was discarded along with the transaction — refused driver pickups never
+  persisted. `Custody\ScanJournal` stages inside the transaction and writes after the rollback,
+  covering driver pickup and all eight hub receiving refusal paths.
 
 ---
 
@@ -97,9 +98,9 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 - **No admin surface.** `ADMIN` and `DISPATCHER` fall through `Account.tsx` into the `Shipping`
   component, and the five contract-specified `/admin/*` endpoints are unimplemented. Deferred with
   hub management — see ADR `docs/decisions/0008-hub-management-and-asset-custody.md`.
-- **Rejected hub scans are not recorded.** `Custody::recordRejectedScan` logs every refused driver
-  scan, but `HubReceiving` and `HubDispatch` log none — so a refused hub scan, including a
-  cross-hub attempt, leaves no record of who tried. Accepted scans are fully attributed.
+- **Staging is not in the scan journal.** `HubDispatch::stageScan` writes no `scan_events` row even
+  on success, so neither accepted nor refused stage scans appear there. Attribution exists via
+  `staging_assignments.assigned_by`. Add both together if staging is ever journaled (ADR 0008).
 
 ---
 
@@ -108,9 +109,9 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 - `apps/api/database/migrations/014_hub_receiving.sql`, `015_hub_dispatch.sql`
 - `apps/api/src/HubReceiving/Service.php`, `apps/api/src/HubDispatch/Service.php`
 - `apps/api/src/Http/HubReceivingController.php`, `apps/api/src/Http/HubDispatchController.php`
-- `apps/api/src/Custody/Service.php` — `requireResolveAccess` (DRIVER or HUB_STAFF) for `resolveScan`
+- `apps/api/src/Custody/Service.php`, `ScanJournal.php` — resolve access; refused-scan journal
 - `apps/api/route/api.php` — 10 hub endpoints
-- `apps/api/tests/hub-receiving.php`, `apps/api/tests/hub-dispatch.php`
+- `apps/api/tests/hub-receiving.php`, `hub-dispatch.php`, `driver-inbound.php`
 - `packages/ui/HubReceiving.tsx`, `packages/ui/hub-receiving.css`, `packages/ui/Account.tsx`
 
 ---
@@ -119,8 +120,8 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 
 ### Passing
 
-- `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py test-db` — full suite, 365 assertions
-  (hub-receiving 41, hub-dispatch 21). Both hub fixtures grant `HUB_STAFF` scoped to the hub
+- `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py test-db` — full suite, 373 assertions
+  (hub-receiving 46, hub-dispatch 21). Both hub fixtures grant `HUB_STAFF` scoped to the hub
   location, matching `Seed.php`; an org-wide grant would hide the location-scoping regressions.
 - `npm run check` — contracts, tsc, 9 node tests
 - `npm run build` — customer-web and operations-web
@@ -163,9 +164,9 @@ timestamps, slot status).
 
 ## Git State
 
-Clean on `feature/P3.3-hub-receiving`. Five commits ahead of `origin`: P3.3 (`1bc9393`), P4.1
-(`a8088ae`), receiving version fix (`7929b66`), status update (`bbc7bbf`), hub authorization fix
-(`7f09fed`) — plus this update.
+Clean on `feature/P3.3-hub-receiving`, 10 commits ahead of `origin` and none pushed: P3.3
+(`1bc9393`), P4.1 (`a8088ae`), then the receiving version fix (`7929b66`), hub authorization fix
+(`7f09fed`), scan journal fix (`26e4274`) and four documentation commits.
 
 ---
 

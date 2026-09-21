@@ -80,13 +80,23 @@ hardware ownership commissioning; `StaffGrant` requires `user_id`, `role_code`
 and an audited `reason`. Generated clients come from the canonical contract and
 must not be hand-edited.
 
-One asymmetry is known and unresolved. `Custody::recordRejectedScan` writes a
-`scan_events` row for every refused driver scan, but neither `HubReceiving` nor
-`HubDispatch` records a refusal. An accepted hub scan is therefore fully
-attributed, while a rejected one — including a staff member from another hub
-attempting to scan into a session they do not own — leaves no trace of who
-tried. Since the point of this requirement is knowing who did what, recording
-refused hub scans should be settled alongside it rather than left implicit.
+Refused scans are now journaled. `Transaction::run` rolls back on any throwable,
+so the original `Custody::recordRejectedScan` wrote a `scan_events` row that was
+discarded along with the transaction refusing the scan; refused driver pickups
+never actually persisted, and the suite missed it because its only `scan_events`
+assertion checked an accepted row. `Zpx\Custody\ScanJournal` now stages a refusal
+inside the transaction and writes it once the rollback is done. Driver pickup and
+all eight hub receiving refusal paths are covered, so a staff member from another
+hub attempting to scan into a session they do not own is recorded with their user
+id. A refusal staged before the session resolves carries a null `run_id`, because
+the caller-supplied id is untrusted until it matches the session.
+
+`HubDispatch::stageScan` remains uncovered, deliberately. It writes no
+`scan_events` row even on success, so journaling only its failures would produce
+a trail containing nothing but refusals. Staging attribution already exists
+through `staging_assignments.assigned_by` and `audit_events`. If staging is ever
+to appear in the scan journal, accepted and refused stage scans should be added
+together rather than one without the other.
 
 Affected documents: `docs/handoff/docs/11_BACKLOG_AND_ACCEPTANCE.md` (P7.1 scope
 and acceptance), the canonical OpenAPI contract under `/admin/*`,
