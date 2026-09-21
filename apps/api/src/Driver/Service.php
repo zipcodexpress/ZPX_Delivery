@@ -162,12 +162,110 @@ final class Service
             'phone' => $driver['phone'],
             'applied_at' => $driver['applied_at'],
             'approved_at' => $driver['approved_at'],
-            'vehicle' => $vehicle ? [
+            'license' => $driver['license_number'] ? [
+                'number' => $driver['license_number'],
+                'state' => $driver['license_state'],
+                'expiry' => $driver['license_expiry'],
+            ] : null,
+            'date_of_birth' => $driver['date_of_birth'],
+            'address' => $driver['address_line1'] ? [
+                'line1' => $driver['address_line1'],
+                'line2' => $driver['address_line2'],
+                'city' => $driver['address_city'],
+                'state' => $driver['address_state'],
+                'postal_code' => $driver['address_postal_code'],
+                'country_code' => $driver['address_country_code'],
+            ] : null,
+            'emergency_contact' => $driver['emergency_contact_name'] ? [
+                'name' => $driver['emergency_contact_name'],
+                'phone' => $driver['emergency_contact_phone'],
+            ] : null,
+            'vehicle_details' => $driver['vehicle_make'] ? [
+                'make' => $driver['vehicle_make'],
+                'model' => $driver['vehicle_model'],
+                'year' => $driver['vehicle_year'] ? (int)$driver['vehicle_year'] : null,
+                'color' => $driver['vehicle_color'],
+            ] : null,
+            'insurance_reference' => $driver['insurance_reference'],
+            'notes' => $driver['notes'],
+            'assigned_vehicle' => $vehicle ? [
                 'code' => $vehicle['code'],
                 'max_weight_g' => (int)$vehicle['max_weight_g'],
                 'max_packages' => (int)$vehicle['max_packages'],
             ] : null,
         ];
+    }
+
+    public function updateProfile(string $user, array $input, string $key): array
+    {
+        $this->requireDriver($user);
+        Input::text($key, 16, 100);
+
+        $allowed = ['name','email','phone','license_number','license_state','license_expiry',
+            'date_of_birth','address_line1','address_line2','address_city','address_state',
+            'address_postal_code','address_country_code','emergency_contact_name',
+            'emergency_contact_phone','vehicle_make','vehicle_model','vehicle_year',
+            'vehicle_color','insurance_reference','notes'];
+        Input::fields($input, [], $allowed);
+
+        return (new Transaction($this->db))->run(function () use ($user, $input, $key) {
+            $scope = 'driver:' . $this->org() . ':' . $user . ':profile-update';
+            $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
+
+            $driverId = $this->driverId($user);
+
+            // Update user display name if provided
+            if (isset($input['name'])) {
+                $name = Input::text($input['name'], 1, 160);
+                $this->q("UPDATE users SET display_name=? WHERE id=?", [$name, $user]);
+            }
+
+            // Build driver update
+            $sets = ["updated_at=now()"];
+            $args = [];
+            $columnMap = [
+                'email' => 'email', 'phone' => 'phone',
+                'license_number' => 'license_number', 'license_state' => 'license_state',
+                'license_expiry' => 'license_expiry', 'date_of_birth' => 'date_of_birth',
+                'address_line1' => 'address_line1', 'address_line2' => 'address_line2',
+                'address_city' => 'address_city', 'address_state' => 'address_state',
+                'address_postal_code' => 'address_postal_code', 'address_country_code' => 'address_country_code',
+                'emergency_contact_name' => 'emergency_contact_name',
+                'emergency_contact_phone' => 'emergency_contact_phone',
+                'vehicle_make' => 'vehicle_make', 'vehicle_model' => 'vehicle_model',
+                'vehicle_year' => 'vehicle_year', 'vehicle_color' => 'vehicle_color',
+                'insurance_reference' => 'insurance_reference', 'notes' => 'notes',
+            ];
+            foreach ($columnMap as $inputKey => $column) {
+                if (isset($input[$inputKey])) {
+                    $value = $input[$inputKey];
+                    if ($value !== null && $value !== '') {
+                        if (in_array($inputKey, ['address_country_code'])) {
+                            if (!preg_match('/^[A-Z]{2}$/D', $value)) { throw new Failure(422, 'INVALID_INPUT', 'Country code must be two uppercase letters.'); }
+                        } elseif (in_array($inputKey, ['license_state'])) {
+                            if (strlen($value) > 0) { $value = strtoupper($value); }
+                        } elseif ($inputKey === 'vehicle_year') {
+                            $value = (int)$value;
+                        } else {
+                            $value = Input::text($value, 0, 254);
+                        }
+                    } else {
+                        $value = null;
+                    }
+                    $sets[] = "$column=?";
+                    $args[] = $value;
+                }
+            }
+
+            if (count($sets) > 1) {
+                $args[] = $driverId;
+                $this->q("UPDATE drivers SET " . implode(',', $sets) . " WHERE id=?", $args);
+            }
+
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'DRIVER_PROFILE_UPDATED','driver',?)", [$user, $driverId]);
+
+            return $this->profile($user);
+        });
     }
 
     // ── Wallet & Earnings ────────────────────────────────────────────

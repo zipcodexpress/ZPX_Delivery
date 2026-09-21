@@ -16,7 +16,7 @@ final class DriverManagementController
         try {
             $method = $request->method(true);
             $expected = match ($action) {
-                'register' => 'POST',
+                'register', 'update-profile' => 'POST',
                 'approve', 'reject' => 'POST',
                 'profile' => 'GET',
                 'wallet' => 'GET',
@@ -68,6 +68,7 @@ final class DriverManagementController
 
             $body = match ($action) {
                 'register' => $service->register($user, $input, $key),
+                'update-profile' => $service->updateProfile($user, $input, $key),
                 'approve' => $service->approve($user, $id, $key),
                 'reject' => $service->reject($user, $input, $id, $key),
                 'profile' => $service->profile($user),

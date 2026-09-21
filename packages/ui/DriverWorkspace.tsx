@@ -32,7 +32,14 @@ type DriverProfile = {
   driver_id: string; user_id: string; name: string; status: string;
   engagement_type: string; email: string | null; phone: string | null;
   applied_at: string; approved_at: string | null;
-  vehicle: { code: string; max_weight_g: number; max_packages: number } | null;
+  license: { number: string; state: string; expiry: string } | null;
+  date_of_birth: string | null;
+  address: { line1: string; line2: string | null; city: string; state: string; postal_code: string; country_code: string } | null;
+  emergency_contact: { name: string; phone: string } | null;
+  vehicle_details: { make: string; model: string; year: number | null; color: string } | null;
+  insurance_reference: string | null;
+  notes: string | null;
+  assigned_vehicle: { code: string; max_weight_g: number; max_packages: number } | null;
 };
 type Wallet = {
   total_earned_cents: number; total_settled_cents: number; pending_cents: number;
@@ -54,6 +61,112 @@ const badge = (state: string) => {
   return <span className={`badge ${cls}`}>{state.toLowerCase().replace('_', ' ')}</span>;
 };
 const money = (cents: number) => '$' + (cents / 100).toFixed(2);
+
+function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }: {
+  profile: DriverProfile; busy: boolean;
+  onError: (msg: string) => void; onNotice: (msg: string) => void;
+  onSaved: (p: DriverProfile) => void; csrfToken: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: p.name, email: p.email || '', phone: p.phone || '',
+    license_number: p.license?.number || '', license_state: p.license?.state || '', license_expiry: p.license?.expiry?.slice(0, 10) || '',
+    date_of_birth: p.date_of_birth?.slice(0, 10) || '',
+    address_line1: p.address?.line1 || '', address_line2: p.address?.line2 || '', address_city: p.address?.city || '',
+    address_state: p.address?.state || '', address_postal_code: p.address?.postal_code || '', address_country_code: p.address?.country_code || 'US',
+    emergency_contact_name: p.emergency_contact?.name || '', emergency_contact_phone: p.emergency_contact?.phone || '',
+    vehicle_make: p.vehicle_details?.make || '', vehicle_model: p.vehicle_details?.model || '',
+    vehicle_year: p.vehicle_details?.year?.toString() || '', vehicle_color: p.vehicle_details?.color || '',
+    insurance_reference: p.insurance_reference || '', notes: p.notes || '',
+  });
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true); onError(''); onNotice('');
+    try {
+      const body: Record<string, string> = {};
+      for (const [k, v] of Object.entries(form)) { if (v !== '') body[k] = v; }
+      const result = await api<DriverProfile>('/driver/profile/update', body, {
+        'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': csrfToken,
+      });
+      onSaved(result);
+      setEditing(false);
+      onNotice('Profile updated successfully.');
+    } catch (e) { onError(e instanceof Error ? e.message : 'Update failed.'); }
+    finally { setSaving(false); }
+  }
+
+  const field = (label: string, key: keyof typeof form, type = 'text', placeholder = '') => (
+    <label className="profile-input"><span>{label}</span>
+      <input type={type} value={form[key]} placeholder={placeholder} disabled={!editing || saving}
+        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))} />
+    </label>
+  );
+
+  return <div className="profile-card">
+    <div className="profile-header">
+      <div><p className="eyebrow">DRIVER PROFILE</p><h2>{p.name}</h2></div>
+      <div className="profile-actions">
+        {badge(p.status)}
+        {!editing ? <button onClick={() => setEditing(true)}>Edit Profile</button>
+          : <><button className="secondary" onClick={() => setEditing(false)}>Cancel</button></>}
+      </div>
+    </div>
+    <form onSubmit={save}>
+      <fieldset><legend>Personal Information</legend>
+        <div className="profile-form-grid">
+          {field('Full Name', 'name')}
+          {field('Email', 'email', 'email')}
+          {field('Phone', 'phone', 'tel', '+12025550100')}
+          {field('Date of Birth', 'date_of_birth', 'date')}
+        </div>
+      </fieldset>
+      <fieldset><legend>Driver's License</legend>
+        <div className="profile-form-grid">
+          {field('License Number', 'license_number', 'text', 'D1234567')}
+          {field('State', 'license_state', 'text', 'TX')}
+          {field('Expiry Date', 'license_expiry', 'date')}
+        </div>
+      </fieldset>
+      <fieldset><legend>Address</legend>
+        <div className="profile-form-grid full-first">
+          {field('Street Address', 'address_line1')}
+          {field('Apt / Suite', 'address_line2')}
+          {field('City', 'address_city')}
+          {field('State', 'address_state', 'text', 'TX')}
+          {field('ZIP Code', 'address_postal_code', 'text', '73301')}
+          {field('Country', 'address_country_code', 'text', 'US')}
+        </div>
+      </fieldset>
+      <fieldset><legend>Emergency Contact</legend>
+        <div className="profile-form-grid">
+          {field('Contact Name', 'emergency_contact_name')}
+          {field('Contact Phone', 'emergency_contact_phone', 'tel')}
+        </div>
+      </fieldset>
+      <fieldset><legend>Vehicle Details</legend>
+        <div className="profile-form-grid">
+          {field('Make', 'vehicle_make', 'text', 'Ford')}
+          {field('Model', 'vehicle_model', 'text', 'Transit')}
+          {field('Year', 'vehicle_year', 'number', '2024')}
+          {field('Color', 'vehicle_color', 'text', 'White')}
+        </div>
+      </fieldset>
+      <fieldset><legend>Insurance & Notes</legend>
+        <div className="profile-form-grid">
+          {field('Insurance Reference', 'insurance_reference')}
+        </div>
+        <label className="profile-input full-width"><span>Notes</span>
+          <textarea value={form.notes} disabled={!editing || saving} rows={3}
+            onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} />
+        </label>
+      </fieldset>
+      {editing && <div className="profile-save-bar"><button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button></div>}
+    </form>
+    {p.assigned_vehicle && <div className="profile-shift-info"><h3>Assigned Vehicle</h3><p>{p.assigned_vehicle.code} · Max {(p.assigned_vehicle.max_weight_g / 1000).toFixed(0)}kg · {p.assigned_vehicle.max_packages} packages</p></div>}
+  </div>;
+}
 
 export function DriverWorkspace({ profile, onLogout }: { profile: components['schemas']['Profile']; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('runs');
@@ -204,21 +317,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     </div>}
 
     {tab === 'profile' && <section className="driver-main">
-      {loading ? <p role="status">Loading…</p> : driverProfile ? <div className="profile-card">
-        <p className="eyebrow">DRIVER PROFILE</p>
-        <h2>{driverProfile.name}</h2>
-        <div className="profile-grid">
-          <div className="profile-field"><label>Status</label>{badge(driverProfile.status)}</div>
-          <div className="profile-field"><label>Engagement</label><span>{driverProfile.engagement_type}</span></div>
-          <div className="profile-field"><label>Email</label><span>{driverProfile.email || '—'}</span></div>
-          <div className="profile-field"><label>Phone</label><span>{driverProfile.phone || '—'}</span></div>
-          <div className="profile-field"><label>Applied</label><span>{new Date(driverProfile.applied_at).toLocaleDateString()}</span></div>
-          <div className="profile-field"><label>Approved</label><span>{driverProfile.approved_at ? new Date(driverProfile.approved_at).toLocaleDateString() : 'Pending'}</span></div>
-          {driverProfile.vehicle && <><div className="profile-field"><label>Vehicle</label><span>{driverProfile.vehicle.code}</span></div>
-          <div className="profile-field"><label>Max Weight</label><span>{(driverProfile.vehicle.max_weight_g / 1000).toFixed(0)} kg</span></div>
-          <div className="profile-field"><label>Max Packages</label><span>{driverProfile.vehicle.max_packages}</span></div></>}
-        </div>
-      </div> : <p className="muted">No driver profile found.</p>}
+      {loading ? <p role="status">Loading…</p> : driverProfile ? <ProfileForm profile={driverProfile} busy={busy} onError={setError} onNotice={setNotice} onSaved={setDriverProfile} csrfToken={profile.csrf_token || ''} /> : <p className="muted">No driver profile found.</p>}
     </section>}
 
     {tab === 'wallet' && <section className="driver-main">
