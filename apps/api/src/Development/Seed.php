@@ -48,7 +48,15 @@ final class Seed
             $password = bin2hex(random_bytes(24));
             $q = $this->db->prepare('INSERT INTO auth_credentials(user_id,password_hash,password_changed_at) VALUES (?,?,now())');
             $q->execute([$user, password_hash($password, PASSWORD_DEFAULT)]);
-            $credentials[] = ['identity' => $login, 'password' => $password];
+            // Add verified email and phone for all accounts so browser login works
+            $email = strtolower(str_replace([':', '-'], ['.', ''], $login)) . '@synthetic.local';
+            $phone = '+1202555' . str_pad((string)(array_search($account, array_keys($accounts)) + 200), 4, '0', STR_PAD_LEFT);
+            $crypto = new \Zpx\Identity\Secrets();
+            $emailLookup = $crypto->digest('contact:EMAIL', $email);
+            $phoneLookup = $crypto->digest('contact:PHONE', $phone);
+            $this->db->prepare("INSERT INTO user_contacts(user_id,kind,value_ciphertext,lookup_hmac,key_version,verified_at) VALUES (?,'EMAIL',?,decode(?,'hex'),1,now())")->execute([$user, $crypto->encrypt($email), $emailLookup]);
+            $this->db->prepare("INSERT INTO user_contacts(user_id,kind,value_ciphertext,lookup_hmac,key_version,verified_at) VALUES (?,'PHONE',?,decode(?,'hex'),1,now())")->execute([$user, $crypto->encrypt($phone), $phoneLookup]);
+            $credentials[] = ['identity' => $login, 'password' => $password, 'email' => $email, 'phone' => $phone];
         }
         $hubLocation = $this->location($org, $fixture['hub']['id'], 'HUB', 'DELIVERY_ONLY');
         $hub = $this->insert("INSERT INTO hubs(location_id,status) VALUES (?,'ACTIVE')", [$hubLocation]);
