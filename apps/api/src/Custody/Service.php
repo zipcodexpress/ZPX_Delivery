@@ -34,6 +34,16 @@ final class Service
         $this->identity->requireRole($user, 'DRIVER');
     }
 
+    /** Resolution precedes a scan for driver pickup and for independent hub receiving. */
+    private function requireResolveAccess(string $user): void
+    {
+        foreach (['DRIVER', 'HUB_STAFF'] as $role) {
+            try { $this->identity->requireRole($user, $role); return; }
+            catch (Failure) {}
+        }
+        throw new Failure(403, 'ACCESS_DENIED', 'Access denied.');
+    }
+
     private function driverId(string $userId): string
     {
         $id = $this->q('SELECT id FROM drivers WHERE user_id=?', [$userId])->fetchColumn();
@@ -206,7 +216,7 @@ final class Service
 
     public function resolveScan(string $user, string $labelToken): array
     {
-        $this->requireDriver($user);
+        $this->requireResolveAccess($user);
         Input::text($labelToken, 1, 500);
 
         $tokenHash = hash('sha256', $labelToken);

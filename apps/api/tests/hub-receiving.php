@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+use Zpx\Custody\Service as Custody;
 use Zpx\HubReceiving\Service as HubReceiving;
 use Zpx\Identity\{Failure,Secrets,Service as Identity};
 
@@ -9,6 +10,7 @@ putenv('ZPX_ORGANIZATION_ID=' . $hubOrg);
 $crypto = new Secrets();
 $identity = new Identity($runtime, $crypto);
 $hubService = new HubReceiving($runtime, $crypto);
+$custody = new Custody($runtime, $crypto);
 
 // Create hub staff user
 $staffEmail = 'hub.receive@example.invalid';
@@ -214,5 +216,50 @@ check($closeResult2['short_count'] === 1, 'shortage: one short');
 // Test 12: Short manifest item marked SHORT
 $shortItem = $runtime->query("SELECT state FROM manifest_items WHERE package_id={$shortPkgIds[2]}")->fetchColumn();
 check($shortItem === 'SHORT', 'unreceived manifest item marked SHORT');
+
+// Test 13: Receive a package that reached the hub through a real driver pickup.
+// Origin parcels start at version 1 and pickup increments, so the version a receiver
+// sends is only knowable by resolving the label first — it is not a constant.
+$run3 = insertId($runtime, "INSERT INTO route_runs(organization_id,hub_id,driver_id,vehicle_id,kind,state,revision,planned_start,planned_end) VALUES ($hubOrg,$hub,$driverId,$vehicle,'INBOUND','ACKNOWLEDGED',1,now(),now()+interval '6 hours')");
+$stop3 = insertId($runtime, "INSERT INTO route_run_stops(run_id,location_id,sequence_no,state) VALUES ($run3,$hubLocation,1,'EXPECTED')");
+$manifest3 = insertId($runtime, "INSERT INTO manifests(run_id,revision,state) VALUES ($run3,1,'ACTIVE')");
+$originLoc = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($hubOrg,'ORIGIN-RCV','Origin locker','LOCKER','Origin addr','DELIVERY_ONLY','ACTIVE','{}')");
+$destLoc3 = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($hubOrg,'DEST-RCV-FLOW','Flow dest','LOCKER','Dest addr','DELIVERY_ONLY','ACTIVE','{}')");
+$ship3 = insertId($runtime, "INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status) VALUES ($hubOrg,$senderUser,'HUB-RCV-FLOW',$originLoc,$destLoc3,'STANDARD','READY','PAID')");
+$pkg3 = insertId($runtime, "INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,state,custodian_type,custodian_ref,current_location_id,version) VALUES ($ship3,'" . uuid() . "',1,100,100,100,500,'AT_ORIGIN','LOCKER','origin',$originLoc,1)");
+$token3 = 'ZPX1:L:FLOW-TOKEN-' . bin2hex(random_bytes(8));
+$runtime->exec("INSERT INTO package_labels(package_id,label_version,token_hash,status,expires_at) VALUES ($pkg3,1,decode('" . hash('sha256', $token3) . "','hex'),'ACTIVE',now()+interval '30 days')");
+insertId($runtime, "INSERT INTO manifest_items(manifest_id,run_id,package_id,stop_id,state) VALUES ($manifest3,$run3,$pkg3,$stop3,'EXPECTED')");
+
+$pickup = $custody->inboundPickupScan($driverUser, $run3, ['label_token' => $token3], Secrets::uuid());
+check($pickup['package_version'] === 2, 'driver pickup increments the package past its origin version');
+
+// Test 14: Hub staff may resolve a label to learn the current version
+$resolvedByHub = $custody->resolveScan($staffUser, $token3);
+check($resolvedByHub['package_id'] === $pkg3, 'hub staff resolve returns the scanned package');
+check($resolvedByHub['package_state'] === 'INBOUND_CUSTODY', 'hub staff resolve reports inbound custody');
+check($resolvedByHub['package_version'] === 2, 'hub staff resolve reports the current package version');
+
+// Test 15: A stale version is rejected; the resolved version is accepted
+$session3 = $hubService->openSession($staffUser, ['hub_id' => $hub, 'inbound_run_id' => $run3], Secrets::uuid());
+failsIdentity(fn() => $hubService->receiveScan($staffUser, [
+    'label_payload' => $token3,
+    'inbound_run_id' => $run3,
+    'receiving_session_id' => $session3['receiving_session_id'],
+    'expected_package_version' => 1,
+], Secrets::uuid()), 409, 'stale expected package version rejected');
+
+$flowScan = $hubService->receiveScan($staffUser, [
+    'label_payload' => $token3,
+    'inbound_run_id' => $run3,
+    'receiving_session_id' => $session3['receiving_session_id'],
+    'expected_package_version' => $resolvedByHub['package_version'],
+], Secrets::uuid());
+check($flowScan['state'] === 'AT_HUB', 'package received using the resolved version');
+check($flowScan['package_version'] === 3, 'hub receive increments the package version');
+
+// Test 16: Resolution stays open to drivers and closed to customers
+check($custody->resolveScan($driverUser, $token3)['package_version'] === 3, 'driver resolve still works after hub receive');
+failsIdentity(fn() => $custody->resolveScan($customerUser, $token3), 403, 'customer cannot resolve label');
 
 echo "\nHub receiving test suite complete.\n";

@@ -12,6 +12,7 @@ type ScanResult = {
   package_id: string; package_version: number; state: string;
   result_code: string; received_count: number; expected_count: number;
 };
+type ResolvedLabel = { package_id: string; package_state: string; package_version: number };
 
 export function HubReceiving({ profile, onLogout }: { profile: components['schemas']['Profile']; onLogout: () => void }) {
   const [session, setSession] = useState<ReceivingSession | null>(null);
@@ -40,13 +41,15 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
   async function scanPackage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session || !scanInput.trim() || busy) return;
+    const labelPayload = scanInput.trim();
     setBusy(true); setError(''); setNotice('');
     try {
+      const resolved = await api<ResolvedLabel>(`/scans/resolve?label=${encodeURIComponent(labelPayload)}`);
       const result = await api<ScanResult>('/hub/receiving-scans', {
-        label_payload: scanInput.trim(),
+        label_payload: labelPayload,
         inbound_run_id: session.inbound_run_id,
         receiving_session_id: session.receiving_session_id,
-        expected_package_version: 1,
+        expected_package_version: resolved.package_version,
       }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       setScanResult(result);
       setScanInput('');
