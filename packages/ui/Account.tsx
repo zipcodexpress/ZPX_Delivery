@@ -7,6 +7,7 @@ type Challenge = components['schemas']['ContactChallenge'];
 import { api, RequestError } from './api';
 import { Shipping } from './Shipping';
 import { CustomerPortal } from './CustomerPortal';
+import { DriverWorkspace } from './DriverWorkspace';
 
 export function Account({ audience }: { audience: 'customer' | 'operations' }) {
   const customer = audience === 'customer';
@@ -71,8 +72,9 @@ export function Account({ audience }: { audience: 'customer' | 'operations' }) {
       setProfile(null); setChallenge(null); setMode('login');
     });
   }
-  const operationsAccess = profile?.roles.some(role => ['ADMIN', 'DISPATCHER', 'HUB_STAFF', 'HUB_SUPERVISOR'].includes(role));
-  if (profile && profile.email_verified && profile.phone_verified && (customer || operationsAccess) && !accountOnly) return customer && profile.roles.includes('CUSTOMER') ? <CustomerPortal profile={profile} onProfileUpdate={setProfile} onVerification={() => setAccountOnly(true)} onLogout={logout} /> : <Shipping profile={profile} audience={audience} onAccount={() => setAccountOnly(true)} onLogout={logout} />;
+  const operationsAccess = profile?.roles.some(role => ['ADMIN', 'DISPATCHER', 'HUB_STAFF', 'HUB_SUPERVISOR', 'DRIVER'].includes(role));
+  const isDriver = profile?.roles.includes('DRIVER') && !customer;
+  if (profile && profile.email_verified && profile.phone_verified && (customer || operationsAccess) && !accountOnly) return isDriver ? <DriverWorkspace profile={profile} onLogout={logout} /> : customer && profile.roles.includes('CUSTOMER') ? <CustomerPortal profile={profile} onProfileUpdate={setProfile} onVerification={() => setAccountOnly(true)} onLogout={logout} /> : <Shipping profile={profile} audience={audience} onAccount={() => setAccountOnly(true)} onLogout={logout} />;
   return <main className="account-page">
     <header><strong>ZipcodeXpress<span className="brand-dot">.</span></strong><span>LOCAL DEVELOPMENT</span></header>
     <div className="account-layout">
