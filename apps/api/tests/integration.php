@@ -169,6 +169,7 @@ set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, 
 require __DIR__ . '/providers.php';
 require __DIR__ . '/customer-portal.php';
 require __DIR__ . '/driver-inbound.php';
+require __DIR__ . '/hub-receiving.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
 $suiteComplete=true;

@@ -1,0 +1,47 @@
+.hub-page{max-width:800px;margin:0 auto;padding:24px 20px}
+.hub-page header{display:flex;gap:16px;align-items:center;padding-bottom:20px;border-bottom:1px solid #d7e2d9;margin-bottom:24px}
+.hub-page header strong{font-size:18px;letter-spacing:-.5px}
+.hub-page header span{flex:1;font-size:11px;letter-spacing:1px;color:#527e66;font-weight:700}
+.hub-page header .secondary{margin-left:auto}
+.hub-card{background:#f5f9f6;border:1px solid #d7e2d9;border-radius:12px;padding:24px}
+.hub-card h2{font-size:24px;margin:4px 0 12px;letter-spacing:-.5px}
+.hub-intro{font-size:13px;color:#536f60;line-height:1.7;margin-bottom:20px}
+.hub-card label{display:flex;flex-direction:column;font-size:13px;font-weight:600;gap:6px;margin:12px 0}
+.hub-card input{min-height:44px;padding:10px 12px;border:1px solid #cbd9cf;border-radius:7px;font:inherit;font-size:14px;background:white}
+.hub-card input:focus{outline:3px solid #9fc4b3;outline-offset:2px}
+.hub-card input:disabled{background:#eef3ef;color:#607669}
+.hub-card button[type=submit],.hub-card>button{background:#174d39;color:white;border:none;padding:12px 24px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer;margin-top:12px}
+.hub-card button:disabled{opacity:.5;cursor:wait}
+.session-header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:20px}
+.session-header h2{font-size:24px;margin:4px 0 8px}
+.session-meta{font-size:13px;color:#536f60}
+.session-progress{text-align:right}
+.progress-count{display:block;font-size:36px;font-weight:700;color:#174d39;line-height:1}
+.progress-label{font-size:11px;color:#607669;text-transform:uppercase;letter-spacing:.5px}
+.scan-bar{display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;padding:16px;background:white;border:1px solid #e5ece6;border-radius:10px}
+.scan-bar label{flex:1;font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:6px;margin:0}
+.scan-bar input{min-height:44px;padding:10px 12px;border:1px solid #cbd9cf;border-radius:7px;font:inherit;font-size:14px;background:white}
+.scan-bar input:focus{outline:3px solid #9fc4b3;outline-offset:2px}
+.scan-bar button{background:#174d39;color:white;border:none;padding:12px 24px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap;margin:0}
+.scan-bar button:disabled{opacity:.5;cursor:wait}
+.scan-result{display:flex;gap:16px;align-items:center;padding:12px 16px;background:#eef5ed;border-radius:8px;margin-bottom:16px;font-size:13px}
+.scan-ok{color:#174d39;font-weight:700}
+.scan-fail{color:#8c3026;font-weight:700}
+.session-actions{margin-top:16px;padding-top:16px;border-top:1px solid #e5ece6}
+.close-btn{background:#8c3026;color:white;border:none;padding:12px 24px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer}
+.close-btn:disabled{opacity:.5;cursor:wait}
+.session-summary{margin-top:20px;padding:20px;background:white;border-radius:10px;border:1px solid #e5ece6}
+.session-summary h3{font-size:15px;margin:0 0 16px;color:#163c2b}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.summary-stat{display:flex;flex-direction:column;gap:4px;text-align:center}
+.summary-stat label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#607669;font-weight:600}
+.summary-stat strong{font-size:28px;color:#163c2b}
+.summary-stat strong.ok{color:#174d39}
+.summary-stat strong.warn{color:#8c3026}
+.session-summary button{background:#174d39;color:white;border:none;padding:10px 20px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer}
+.hub-page .error{padding:12px 16px;border-radius:8px;font-size:14px;color:#8c3026;background:#fff0ed;margin-bottom:12px}
+.hub-page .notice{padding:12px 16px;border-radius:8px;font-size:14px;background:#e7f0e7;color:#214d33;margin-bottom:12px}
+.hub-page .eyebrow{font-size:10px;font-weight:700;letter-spacing:1.5px;color:#527e66;text-transform:uppercase;margin:0}
+.hub-page footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5ece6;font-size:12px;color:#607669}
+.small{font-size:12px;padding:6px 12px!important;border:1px solid #ccdacf;background:white;color:#194330;border-radius:6px;cursor:pointer}
+@media(max-width:600px){.session-header{flex-direction:column}.scan-bar{flex-direction:column;align-items:stretch}.scan-bar button{width:100%}.summary-grid{grid-template-columns:1fr}}
