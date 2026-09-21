@@ -21,6 +21,9 @@ foreach (['me/profile'=>'profile-update','me/payment-methods'=>'wallet-methods',
 foreach (['payments/<shipment>/hosted-session'=>'hosted-session','payments/<shipment>/reconcile'=>'reconcile-payment','shipments/<shipment>/payment-session'=>'payment','shipments/<shipment>/pending-payment'=>'pending-payment','development/payments/<shipment>/confirm'=>'confirm-payment','packages/<shipment>/labels'=>'labels','packages/<shipment>/label/pdf'=>'pdf','shipments/<shipment>'=>'get','shipments/<shipment>/tracking'=>'tracking','shipments/<shipment>/quotes'=>'quotes','shipments/<shipment>/cancel'=>'cancel','operations/shipments/<shipment>'=>'operations-get','operations/shipments/<shipment>/tracking'=>'operations-tracking','operations/shipments/<shipment>/payments'=>'operations-payments'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,$action,$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
 }
+foreach (['driver/runs'=>'runs','runs/<run_id>'=>'run-detail','runs/<run_id>/acknowledgments'=>'acknowledge','scans/resolve'=>'resolve','runs/<run_id>/scans'=>'scan'] as $path=>$action) {
+    Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $runId='') => Zpx\Http\DriverController::handle($request,$action,$runId))->pattern(['run_id'=>'[1-9][0-9]{0,17}']);
+}
 Route::any('api/delivery/v1/integrations/payments/webhook', static function(Request $request) {
     $id=Zpx\Identity\Secrets::uuid();
     try {

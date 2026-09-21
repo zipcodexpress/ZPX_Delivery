@@ -168,6 +168,7 @@ require __DIR__ . '/shipping.php';
 set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, get_class($error).': '.$error->getMessage()."\n"); exit(1); });
 require __DIR__ . '/providers.php';
 require __DIR__ . '/customer-portal.php';
+require __DIR__ . '/driver-inbound.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
 $suiteComplete=true;
