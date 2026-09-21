@@ -1,0 +1,39 @@
+{
+  "name": "zpx-delivery",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "apps/customer-web",
+    "apps/operations-web"
+  ],
+  "scripts": {
+    "check": "npm run contracts:check && tsc --noEmit && npm test",
+    "contracts:generate": "node scripts/contracts.mjs generate",
+    "contracts:check": "node scripts/contracts.mjs check && tsc -p packages/contracts/tsconfig.json",
+    "test": "node --test tests/simulator/*.test.mjs tests/contracts/*.test.mjs",
+    "test-simulator": "node --test tests/simulator/*.test.mjs",
+    "build": "npm run build --workspaces",
+    "dev:customer": "npm run dev --workspace=@zpx/customer-web",
+    "dev:operations": "npm run dev --workspace=@zpx/operations-web",
+    "dev:simulator": "node --env-file=.env simulators/locker/server.mjs",
+    "test-db": "python3 scripts/dev.py test-db",
+    "test-e2e": "python3 scripts/dev.py smoke"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "13.0.0",
+    "@types/node": "24.7.0",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.0"
+  }
+}

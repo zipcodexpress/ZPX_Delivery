@@ -1,0 +1,64 @@
+name: zpx-delivery-dev
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: zpx_delivery_dev
+      MYSQL_USER: zpx_dev
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Run python3 scripts/dev.py init}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Run python3 scripts/dev.py init}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docs/handoff/sql/001_delivery_core.sql:/docker-entrypoint-initdb.d/001_delivery_core.sql:ro
+      - ./docs/handoff/sql/002_application_and_coexistence.sql:/docker-entrypoint-initdb.d/002_application_and_coexistence.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -uzpx_dev zpx_delivery_dev -e 'SELECT COUNT(*) FROM ownership_acknowledgments' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DB_HOST: mysql
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      mysql: {condition: service_healthy}
+  customer-web:
+    image: node:24.19.0-bookworm-slim
+    working_dir: /workspace
+    command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev --workspace=@zpx/customer-web -- --host 0.0.0.0"]
+    environment: {API_PROXY_TARGET: "http://api:8000"}
+    volumes:
+      - .:/workspace
+      - customer_modules:/workspace/node_modules
+    ports: ["127.0.0.1:5173:5173"]
+  operations-web:
+    image: node:24.19.0-bookworm-slim
+    working_dir: /workspace
+    command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev --workspace=@zpx/operations-web -- --host 0.0.0.0"]
+    environment: {API_PROXY_TARGET: "http://api:8000"}
+    volumes:
+      - .:/workspace
+      - operations_modules:/workspace/node_modules
+    ports: ["127.0.0.1:5174:5174"]
+  simulator:
+    image: node:24.19.0-bookworm-slim
+    working_dir: /workspace
+    command: ["node", "simulators/locker/server.mjs"]
+    environment:
+      SIMULATOR_TOKEN: ${SIMULATOR_TOKEN:?Run init}
+      SIMULATOR_HOST: 0.0.0.0
+      SIMULATOR_STATE_PATH: /state/state.json
+    volumes:
+      - ./simulators:/workspace/simulators:ro
+      - simulator_data:/state
+    ports: ["127.0.0.1:8090:8090"]
+volumes:
+  mysql_data:
+  simulator_data:
+  customer_modules:
+  operations_modules:
