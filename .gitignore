@@ -14,12 +14,15 @@ vendor/
 dist/
 build/
 bin/
+!apps/api/bin/
+!apps/api/bin/*.php
 obj/
 coverage/
 __pycache__/
 *.py[cod]
 .venv/
 .local/
+apps/api/runtime/
 
 # Local editor and OS files
 .vs/

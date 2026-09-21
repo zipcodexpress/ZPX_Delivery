@@ -19,7 +19,7 @@ jobs:
       - run: npm run build
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: python3 docs/handoff/tests/validate_handoff.py
-      - run: php -l apps/api/public/index.php
+      - run: find apps/api -name '*.php' -print0 | xargs -0 -n1 php -l
   local-stack:
     runs-on: ubuntu-latest
     steps:

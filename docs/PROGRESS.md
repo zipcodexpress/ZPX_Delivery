@@ -2,49 +2,52 @@
 
 Purpose: milestone/session summary; task status belongs in GitHub Issues/Projects.
 Audience: ZPX owner, developers and Codex.
-Status: Development started; M0 incomplete. Owner: unassigned. Last reviewed: 2026-09-18.
+Status: local PostgreSQL foundation verified; M0/M1 remain incomplete.
+Owner: unassigned. Last reviewed: 2026-09-19.
 
-## Current stage
+## Current development
 
-[P0.1/P0.2 foundation issue 3](https://github.com/zipcodexpress/ZPX_Delivery/issues/3): IN_PROGRESS.
-Planning remains in [PR 2](https://github.com/zipcodexpress/ZPX_Delivery/pull/2).
-Implementation branch: feature/P0.1-m4-foundation, stacked on the planning branch.
-Implementation review: [draft PR 4](https://github.com/zipcodexpress/ZPX_Delivery/pull/4). Code and staged notes are committed; no merge or deployment has occurred.
+Branch `feature/P1.1-postgresql-foundation`, [PR 6](https://github.com/zipcodexpress/ZPX_Delivery/pull/6),
+[P1.1 issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5).
+Richard approved PostgreSQL + ThinkPHP + React; Fleetbase evaluation is no longer a prerequisite.
+See [platform decision](decisions/0004-platform-baseline.md).
 
-## Implemented this increment
+## Implemented and verified locally
 
-- Moved the authoritative Phase 1 handoff to docs/handoff without changing original ZIP archives.
-- Created an application workspace, locked Node/web dependencies and added customer/operations React shells.
-- Added local-only API health bootstrap, MySQL draft-schema initialization and Docker configuration.
-- Implemented synthetic door command/evidence service with durable state, authentication, idempotency, ownership checks and fault scenarios.
-- Added M4 external APFS checkout validation and local startup scripts that preserve existing configuration/data.
-- Added automated tests and CI; actual results are in [M0 verification](verification/M0-foundation.md).
-- Added external OpenAPI schema/reference validation and generated TypeScript definitions for the 54-operation canonical API; CI checks consistency and compiles the definitions. Four additional tests reject malformed contracts. See [contract verification](verification/M0-contracts.md).
+- Authenticated shell Git/GitHub CLI checkout on the external writable APFS Document SSD.
+- Colima with SSD storage, Node 24.19.0, PostgreSQL 17.11 and PHP 8.3.33 arm64 containers.
+- ThinkPHP 8.1.4 HTTP lifecycle, explicit routes, safe JSON failures and locked Composer dependencies.
+- Canonical 73-table PostgreSQL schema plus checksum ledger and separate migration/runtime credentials.
+- Additive ownership migration binds compartments to the correct locker and manifest generation.
+- Development-only transactional seed loader: six synthetic identities, twenty locker sites,
+  one hub, two drivers, forty frozen compartments and ten unpaid draft parcels.
+- Repeat seed preserves edited records and credentials. Failures roll back all seeded records.
+- Two-process last-compartment contention test proves one winner without overwriting its claim.
+- React customer/operations foundation shells and authenticated durable synthetic locker simulator.
+- Contract/type checks, web builds, Python setup tests, ThinkPHP routing/error tests,
+  PostgreSQL constraints/permissions/rollback/concurrency tests and six HTTP readiness checks.
 
-## Remaining work and owner inputs
+See [local setup](LOCAL_DEVELOPMENT_MAC.md), [Mac environment evidence](verification/P1.1-mac-local-2026-09-19.md)
+and [backend architecture](BACKEND_DATABASE_ARCHITECTURE.md).
+Local generated credentials remain in Git-ignored `.local/seed-credentials.txt` with owner-only access.
+The web pages still report readiness; seed accounts do not yet have an interactive login API.
 
-See [Phase 1 remaining work](PHASE1_REMAINING_WORK.md) for the application-by-application status, dependency order and information requested from Richard. No user decision blocks contract/migration/software work. Hardware commissioning does require terminal/controller details, missing source, deployed-writer inventory and selected test sites. Local setup requires the actual external SSD mount path and an M4 test run.
+## Next dependency
 
-User local preference: M4 Mac, external SSD. The September 16 SSD conversation proposed `Development`, mounted at `/Volumes/Development`, formatted APFS with GUID Partition Map. Completion was not confirmed in the retrieved conversation. Planned checkout: `/Volumes/Development/Developer/ZPX_Delivery`; the setup script will validate the actual volume. No files have been written to the user's Mac by this cloud session. Native shell Git authentication here remains unavailable; connector commits preserve the work remotely.
+Confirm whether the pilot is one ZPX-operated network (customers may use eligible public
+sites; staff access is scoped by site/hub) or separate operator organizations. That decision
+sets account provisioning and authorization boundaries for P1.2. The question is pending
+with Richard; do not silently infer tenant registration or cross-operator access policies.
 
-Richard clarified that the entire old terminal is reference-only for locker/API behavior and door protocols. Build a new terminal, with Android as the preferred direction. Zippora.exe, ZipporaService, Windows screenshots and legacy build dependencies are not requested. [Decision 0002](decisions/0002-new-terminal-platform.md) supersedes previous Windows migration/testing assumptions; hardware adapter and physical coexistence validation remain necessary.
+Then implement P1.2 identity/contact verification/session management and P1.3 authorized
+network topology/reservations, followed by shipment/payment/labels and custody workflows.
+The database reservation test is not a completed reservation service or physical door test.
+Native mobile/Android kiosk apps, protocol fixtures, providers and hardware commissioning
+remain outstanding. Use synthetic data/fake providers until actual configuration is approved.
 
-## Current evidence
+## Historical evidence
 
-Latest increment: [CI run 35403370288](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35403370288) passed code and Docker jobs for commit `3847544`. Contract/type checks, 9 Node tests, 3 Python tests, web builds, database initialization and HTTP readiness passed. Remaining-work and owner-input notes are committed alongside code.
-
-Node/TypeScript check, both web production builds, 5 simulator tests, 3 setup tests and static handoff validation pass. [GitHub Actions run 35401756927](https://github.com/zipcodexpress/ZPX_Delivery/actions/runs/35401756927) also passed PHP lint, Docker startup, initialization of all 73 draft tables and service/proxy HTTP readiness. Physical M4 and locker validation remain pending. The PHP endpoint is health-only, not a completed business API.
-
-## Next dependencies
-
-1. Get the first M4 startup results and lock tested image digests; Linux Docker/MySQL CI now passes.
-2. Finish P0.1 reuse decision and real ThinkPHP/application scaffolding; add request transport/runtime validation around the now-generated API types.
-3. Add mobile/native build lanes and terminal protocol fixtures.
-4. Convert draft schema into tracked migrations and enforce/test P1.1 constraints and runtime roles.
-5. Implement P1.2/P1.3 identity/topology before shipping/payment/label workflows.
-
-## Hardware and business gates
-
-P0.3 deployed-writer inventory and physical protocol evidence remain needed before shared-locker commissioning. ZipporaService is a watchdog per Richard's clarification, not a required delivery module. Actual sites, providers and service policies remain launch decisions.
-
-No application has been deployed, no production data accessed and no physical door commanded.
+Earlier MySQL and P0.1 results are retained in [M0 evidence](verification/M0-foundation.md)
+and [contract evidence](verification/M0-contracts.md). They are not PostgreSQL results.
+The old terminal is reference-only per [decision 0002](decisions/0002-new-terminal-platform.md).
+No production access, physical door commands, PR merge or production deployment occurred.

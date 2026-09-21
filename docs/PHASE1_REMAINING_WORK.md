@@ -8,6 +8,8 @@ Task status remains in GitHub Issues; this document explains dependencies. See [
 
 Terminal scope correction: [decision 0002](decisions/0002-new-terminal-platform.md) supersedes old Windows migration/build requirements. The old terminal is reference-only; develop a new kiosk with Android as the preferred direction.
 
+Database update: Richard selected PostgreSQL. [Decision 0003](decisions/0003-postgresql-backend.md) and [backend architecture](BACKEND_DATABASE_ARCHITECTURE.md) supersede earlier MySQL directions. Tracked migrations, migration/runtime role separation and initial database constraint/transaction tests are now implemented; P1.1 still requires the seed command and broader domain tests. Current evidence is in [P1.1 verification](verification/P1.1-postgresql.md).
+
 ## What works today
 
 Customer and operations web shells, PHP health endpoints, local Docker/MySQL setup and a persistent normalized locker simulator exist. Linux CI verified startup, initialization of 73 draft tables and HTTP readiness. The next increment adds OpenAPI structural validation, deterministic shared TypeScript definitions and a stale-output check in CI. These are development foundations, not usable shipping or driver products. The schema still needs tracked migrations, permission constraints and transactional tests.

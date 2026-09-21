@@ -1,32 +1,71 @@
 name: zpx-delivery-dev
 services:
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:17-bookworm
     environment:
-      MYSQL_DATABASE: zpx_delivery_dev
-      MYSQL_USER: zpx_dev
-      MYSQL_PASSWORD: ${DB_PASSWORD:?Run python3 scripts/dev.py init}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Run python3 scripts/dev.py init}
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs"]
+      POSTGRES_DB: zpx_delivery_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD:?Run python3 scripts/dev.py init}
+      DB_PASSWORD: ${DB_PASSWORD:?Run python3 scripts/dev.py init}
+      DB_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run python3 scripts/dev.py init}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./docs/handoff/sql/001_delivery_core.sql:/docker-entrypoint-initdb.d/001_delivery_core.sql:ro
-      - ./docs/handoff/sql/002_application_and_coexistence.sql:/docker-entrypoint-initdb.d/002_application_and_coexistence.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./deployment/postgres/init-roles.sh:/docker-entrypoint-initdb.d/010-roles.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -uzpx_dev zpx_delivery_dev -e 'SELECT COUNT(*) FROM ownership_acknowledgments' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zpx_delivery_dev"]
       interval: 5s
       timeout: 5s
       retries: 60
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/migrate.php", "up"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_migrator
+      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
+    depends_on:
+      postgres: {condition: service_healthy}
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DB_HOST: mysql
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
     ports: ["127.0.0.1:8000:8000"]
     depends_on:
-      mysql: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+  db-tests:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["sh", "-c", "php tests/http.php && php tests/integration.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      TEST_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
+      APP_ENV: test
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/seed.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
+    depends_on:
+      migrate: {condition: service_completed_successfully}
   customer-web:
     image: node:24.19.0-bookworm-slim
     working_dir: /workspace
@@ -58,7 +97,7 @@ services:
       - simulator_data:/state
     ports: ["127.0.0.1:8090:8090"]
 volumes:
-  mysql_data:
+  postgres_data:
   simulator_data:
   customer_modules:
   operations_modules:

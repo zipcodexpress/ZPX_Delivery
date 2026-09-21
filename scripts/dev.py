@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local development runner. Does not deploy, format disks, or remove data volumes."""
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
@@ -29,7 +30,10 @@ def validate_mac_volume(root, info):
 
 def check_storage():
     if platform.system() == 'Darwin':
-        raw = subprocess.check_output(['diskutil', 'info', '-plist', str(ROOT)])
+        volume = ROOT.resolve()
+        while not volume.is_mount() and volume != volume.parent:
+            volume = volume.parent
+        raw = subprocess.check_output(['diskutil', 'info', '-plist', str(volume)])
         validate_mac_volume(ROOT, plistlib.loads(raw))
         print(f'External APFS checkout: {ROOT}')
         print(f'Mac architecture: {platform.machine()} (M4 should report arm64)')
@@ -40,17 +44,24 @@ def init_env():
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        print('Existing .env preserved.')
+        # Add new keys without rotating credentials already used by persistent volumes.
+        existing = {line.split('=', 1)[0].strip() for line in path.read_text().splitlines() if '=' in line}
+        if 'DB_MIGRATION_PASSWORD' not in existing:
+            with path.open('a') as file:
+                file.write('\nDB_MIGRATION_PASSWORD=' + secrets.token_hex(32) + '\n')
+            print('Added missing migration credential; existing credentials preserved.')
+        else:
+            print('Existing .env preserved.')
         return
     with os.fdopen(fd, 'w') as file:
         file.write('# Local development only; generated credentials.\n')
-        for key in ('DB_PASSWORD', 'DB_ROOT_PASSWORD', 'SIMULATOR_TOKEN'):
+        for key in ('DB_PASSWORD', 'DB_ROOT_PASSWORD', 'DB_MIGRATION_PASSWORD', 'SIMULATOR_TOKEN'):
             file.write(f'{key}={secrets.token_hex(32)}\n')
     print('Created .env with random local credentials (not displayed).')
 
 def docker():
     if not shutil.which('docker'):
-        raise RuntimeError('Install Docker Desktop for Apple Silicon, open it, then retry.')
+        raise RuntimeError('Install Docker and start Colima or Docker Desktop, then retry.')
     subprocess.run(['docker', 'compose', 'version'], check=True)
     subprocess.run(['docker', 'info'], check=True, stdout=subprocess.DEVNULL)
 
@@ -75,37 +86,35 @@ def smoke(timeout=180):
                 with urllib.request.urlopen(url, timeout=2) as response:
                     if response.status == 200 and marker in response.read():
                         print(f'PASS {name}'); del pending[name]
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.RemoteDisconnected):
                 pass
         if pending: time.sleep(1)
     if pending: raise RuntimeError('Services not ready: ' + ', '.join(pending) + '. Run the logs command.')
     print('Foundation smoke passed; this is not a parcel-delivery end-to-end test.')
 
 def test_db():
-    # Read-only check of the disposable DB. No production host/DB is accepted here.
-    query = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='zpx_delivery_dev' AND table_type='BASE TABLE';"
-    result = compose('exec', '-T', 'mysql', 'sh', '-c', 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -N -B -uzpx_dev zpx_delivery_dev -e "$1"', 'sh', query, capture=True)
-    if result.stdout.strip() != '73':
-        raise RuntimeError('Expected all 73 draft tables to initialize; got ' + result.stdout.strip())
-    print('PASS: both draft SQL files initialized 73 tables. Domain/concurrency tests remain P1.1 work.')
+    # Integration tests use synthetic records and roll back their data.
+    compose('run', '--rm', '--build', 'db-tests')
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config'])
+    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config','migrate','seed'])
     args = parser.parse_args()
     if args.command == 'init': return init_env()
     check_storage()
     if args.command == 'smoke': return smoke()
     docker()
     if args.command == 'doctor':
-        print('Docker available. Named volumes use Docker Desktop disk storage, not automatically the repo SSD.'); return
+        print('Docker available. Named volumes use the active container engine disk storage, not automatically the repo SSD.'); return
     if args.command == 'up':
-        init_env(); compose('up', '-d', '--build'); smoke(); return
+        init_env(); compose('build'); compose('up', '-d', 'postgres'); compose('run', '--rm', 'migrate'); compose('up', '-d'); smoke(); return
     if not (ROOT / '.env').exists(): raise RuntimeError('Run python3 scripts/dev.py init first.')
     if args.command == 'down': compose('down'); print('Stopped. Database and simulator volumes retained.')
     elif args.command == 'logs': compose('logs', '--tail', '100')
     elif args.command == 'config': compose('config', '--quiet')
     elif args.command == 'test-db': test_db()
+    elif args.command == 'migrate': compose('run', '--rm', 'migrate')
+    elif args.command == 'seed': compose('run', '--rm', '--build', 'seed')
 
 if __name__ == '__main__':
     try: main()
