@@ -2,17 +2,16 @@
 
 Initial development foundation for the Austin hub-and-spoke delivery network.
 
-**September 19 development update:** the SSD environment is running with PostgreSQL,
-ThinkPHP 8.1.4 and React. Synthetic seed loading, ownership identity constraints and
-real competing-compartment tests now pass. See [current progress](docs/PROGRESS.md)
-and [verification](docs/verification/P1.1-seed-framework.md). Earlier MySQL and
-health-bootstrap-only descriptions below are historical. The [identity increment](docs/verification/P1.2-identity.md) now adds local registration,
-sign-in, contact verification and session management. Real messaging providers and
-shipping workflows remain pending.
+**Current status:** PostgreSQL + ThinkPHP + React are running on the external SSD.
+Local identity, customer sending/receiving, operator shipment inspection, test quotes,
+simulated checkout and printable test labels are implemented. See [current progress](docs/PROGRESS.md)
+and [shipping verification](docs/verification/P2.1-shipping.md). Authorize.net is the
+selected payment provider; its adapter/sandbox validation, real messaging, driver/hub
+handoffs, native apps and physical terminal control remain incomplete.
 
-**Current database: PostgreSQL.** See [backend and database architecture](docs/BACKEND_DATABASE_ARCHITECTURE.md), [database decision](docs/decisions/0003-postgresql-backend.md) and [P1.1 verification](docs/verification/P1.1-postgresql.md). Use branch `feature/P1.1-postgresql-foundation` for this increment; earlier MySQL foundation notes below are historical. Canonical migrations live in `apps/api/database/migrations`, with checksum tracking and separate migration/runtime credentials. PostgreSQL startup uses a new volume and leaves any previous MySQL volume intact.
-
-**Status:** P0.1/P0.2 in progress. Customer and operations web shells, local service configuration, API health bootstrap and a tested synthetic locker simulator are implemented. Shipping, authentication, native apps and physical terminal control are not yet implemented.
+**Database:** PostgreSQL 17. Canonical migrations live in `apps/api/database/migrations`,
+with checksum tracking and separate migration/runtime credentials. Earlier MySQL
+handoff SQL remains historical input; do not execute it for this application.
 
 ## Run on your M4 Mac
 
@@ -20,9 +19,9 @@ Keep your checkout on the external APFS SSD:
 
 `/Volumes/<your SSD name>/Developer/ZPX_Delivery`
 
-Follow [Mac local setup](docs/LOCAL_DEVELOPMENT_MAC.md) for cloning, prerequisites and troubleshooting. The SSD name is a parameter; no script formats or erases the disk. While this PR is unmerged, use branch `feature/P0.1-m4-foundation`.
+Follow [Mac local setup](docs/LOCAL_DEVELOPMENT_MAC.md) for cloning, prerequisites and troubleshooting. The SSD name is a parameter; no script formats or erases the disk. The shipping increment is on `feature/P2.1-shipping`, stacked on the identity and database foundation branches.
 
-From your checkout with Docker Desktop running:
+From your checkout with Colima or Docker Desktop running:
 
 ```bash
 python3 scripts/dev.py up
@@ -30,15 +29,15 @@ python3 scripts/dev.py up
 
 Customer: http://localhost:5173 · Operations: http://localhost:5174
 
-Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the physical M4 run remains pending. See [actual evidence and limits](docs/verification/M0-foundation.md). The current pages report environment readiness; they are not simulated completed shipping products.
+Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the physical M4 run remains pending. See [actual evidence and limits](docs/verification/M0-foundation.md). The current pages implement the local flows described in the shipping verification notes; they do not claim a completed physical delivery.
 
 ## Project map
 
 | Path | Responsibility |
 |---|---|
-| apps/api | Local PHP health bootstrap; ThinkPHP business implementation pending |
-| apps/customer-web | React customer shell |
-| apps/operations-web | React hub/admin shell |
+| apps/api | ThinkPHP identity and local shipping services |
+| apps/customer-web | Customer account, sending/receiving and local shipping |
+| apps/operations-web | Staff accounts and scoped shipment inspection |
 | packages/ui | Shared web foundation components |
 | packages/contracts | Generated shared API types and contract compilation gate |
 | simulators/locker | Persistent authenticated normalized door-event simulator |
@@ -60,7 +59,7 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 python3 docs/handoff/tests/validate_handoff.py
 ```
 
-`npm run test-db` and `npm run test-e2e` require the local Docker stack. They currently verify draft-table initialization and foundation HTTP readiness, respectively. They do not claim transactional domain coverage or the complete parcel journey.
+`npm run test-db` and `npm run test-e2e` require the local Docker stack. They verify disposable PostgreSQL domain/security/concurrency checks and live HTTP readiness, respectively. The complete physical parcel journey remains unimplemented.
 
 ## Design and collaboration
 
@@ -68,6 +67,15 @@ Start with [the handoff](docs/handoff/README.md), [execution contract](docs/hand
 
 The canonical API remains [OpenAPI](docs/handoff/contracts/openapi.json). The handoff was moved in a dedicated commit; no competing editable copy is maintained. The older ZPX_Delivery_Codex_Implementation_Package remains future-routing reference. Root ZIP files remain historical inputs.
 
-Use feature branches and pull requests. Keep code, tests, affected design and milestone evidence together. GitHub Issues/Projects owns task status. Never commit credentials, real customer records or production configuration. The development Compose database user is not the final restricted production role.
+Use feature branches and pull requests. Keep code, tests, affected design and milestone evidence together. GitHub Issues/Projects owns task status. Never commit credentials, real customer records or production configuration. The runtime database role is restricted separately from the migrator; production deployment hardening remains outstanding.
 
 See [remaining Phase 1 work and owner inputs](docs/PHASE1_REMAINING_WORK.md) for what comes next. API contract edits require `npm run contracts:generate`; `npm run check` rejects invalid contracts or stale generated definitions. Generated types do not imply the business API endpoints are implemented.
+
+## Local shipping preview
+
+Verified customer accounts can send **and** receive. Open the customer portal to
+create a draft, request a test quote, simulate checkout, and print a watermarked
+test label. Use Receiving to claim a shipment reference with matching verified
+contacts and a fresh code from `python3 scripts/dev.py inbox`. Operators can inspect
+the queue within their staff assignments. All sites, prices and payments are synthetic;
+no drop-off or charge occurs. See [shipping evidence and remaining scope](docs/verification/P2.1-shipping.md).

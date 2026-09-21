@@ -156,3 +156,34 @@ The business API remains the planned ThinkPHP 8 application; the current PHP hea
 ## Updating your checkout
 
 Commit or stash your local work first. Fetch the current development branch, or pull main after the implementation PR is merged. Rebuild with `python3 scripts/dev.py up` and follow migration notes from each PR. Never assume local changes or running services automatically sync back to GitHub.
+
+## Shipping test flow
+
+Sign in as `customer.local@example.invalid`. Sending includes a paid-test demo with
+a printable test label; Receiving includes an explicitly claimed incoming draft.
+The second customer is `recipient.local@example.invalid`; both can send and receive.
+Passwords remain in the private seed credential file.
+
+New shipment → choose different synthetic lockers → recipient details → parcel
+measurements → save → test quote → test checkout → simulate success/failure.
+After success, generate/reprint the 4×6 PDF. Test labels cannot authorize locker
+access. Admin sees the same committed order history on the operations portal.
+Hub staff only see parcels actually held by their assigned hub.
+
+These two localhost ports share browser cookies. Signing into another role switches
+the local session; use separate browser profiles if you want simultaneous accounts.
+The customer portal explains when a staff-only account is signed in.
+
+Authorize.net was selected for the provider integration. Its adapter is not active.
+Do not put production keys or card details into this local test checkout.
+
+## Private environment files
+
+The local runner prefers `.env.dev` when present and otherwise uses `.env`. It never
+automatically loads `.env.prod`. The prepared `.env.dev` puts existing local database
+credentials first, then Authorize.net sandbox and SMTP email fields, then existing
+application keys. Existing `.env` and `.local/authorize-net.env` remain preserved;
+enter new provider credentials in `.env.dev`. These private files are Git-ignored.
+Provider placeholders are configuration storage, not an active email/payment adapter.
+A future `.env.prod` can use the same layout with separate production credentials and
+an explicit deployment configuration; do not reuse development encryption or DB secrets.

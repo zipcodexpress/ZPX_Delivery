@@ -1,5 +1,141 @@
 // Generated from docs/handoff/contracts/openapi.json. Do not edit.
 export interface paths {
+    "/packages/{package_id}/label/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download authenticated sender-owned active 4 by 6 inch test PDF label. */
+        get: operations["shipping_label_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shipments/{shipment_id}/pending-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume own pending local test checkout. */
+        get: operations["shipping_pending_payment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/development/payments/{payment_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Local development/test adapter only; sender-owned synthetic shipment. Never charges a real provider. */
+        post: operations["shipping_test_payment_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipient-claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Consume shipment-bound proof and grant receiving access; never grants locker access. */
+        post: operations["shipping_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipient-claims/challenges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fresh local email proof bound to shipment and authenticated verified customer; neutral response for unknown or mismatched reference. */
+        post: operations["shipping_claim_challenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/shipments/{shipment_id}/tracking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read shipment milestones within current staff assignments. */
+        get: operations["shipping_operations_tracking"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/shipments/{shipment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a shipment within current staff assignments. */
+        get: operations["shipping_operations_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/shipments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List shipments within current organization and staff site/hub assignments. */
+        get: operations["shipping_operations_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/challenges": {
         parameters: {
             query?: never;
@@ -427,7 +563,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List own sent or explicitly claimed received shipments. */
+        get: operations["shipping_list"];
         put?: never;
         /**
          * Verified customer creates one-package draft.
@@ -491,7 +628,7 @@ export interface paths {
         put?: never;
         /**
          * Create provider checkout; payment requires server confirmation.
-         * @description Create provider checkout; payment requires server confirmation.
+         * @description Current implementation starts a LOCAL_TEST pending checkout for synthetic shipments only. A separate development adapter confirms stored amount/quote eligibility. Live provider not configured.
          */
         post: operations["delivery_12__shipments_shipment_id_payment_session"];
         delete?: never;
@@ -551,7 +688,7 @@ export interface paths {
         put?: never;
         /**
          * Issue/retrieve active primary label only after eligibility; not door authority.
-         * @description Issue/retrieve active primary label only after eligibility; not door authority.
+         * @description Locked issue/retrieve of the active label after payment. Current implementation is synthetic local development only. It never authorizes a door.
          */
         post: operations["delivery_15__packages_package_id_labels"];
         delete?: never;
@@ -1084,6 +1221,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        TestPaymentOutcome: {
+            /** @enum {string} */
+            outcome: "SUCCEEDED" | "FAILED";
+        };
+        RecipientClaimRequest: {
+            public_reference: string;
+        };
+        ShipmentList: {
+            items: components["schemas"]["Shipment"][];
+            next_cursor: string | null;
+        };
         ContactChallengeRequest: {
             /** @enum {string} */
             kind: "EMAIL" | "PHONE";
@@ -1263,6 +1411,8 @@ export interface components {
             access_instructions: string;
             latitude?: number;
             longitude?: number;
+            draft_eligible: boolean;
+            development_only: boolean;
         };
         LocationList: {
             items: components["schemas"]["Location"][];
@@ -1302,6 +1452,16 @@ export interface components {
             payment_status: string;
             package_state: string;
             version: number;
+            public_reference: string;
+            origin_name: string;
+            destination_name: string;
+            service_level: string;
+            /** @enum {string} */
+            relationship: "SENDER" | "RECIPIENT" | "OPERATIONS";
+            package: components["schemas"]["PackageSpec"];
+            /** Format: date-time */
+            created_at: string;
+            development_only: boolean;
         };
         QuoteRequest: {
             service_level: string;
@@ -1315,6 +1475,7 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             policy_version: string;
+            development_only: boolean;
         };
         PaymentRequest: {
             /** @description Opaque identifier; serialize as string. */
@@ -1328,6 +1489,7 @@ export interface components {
             checkout_url?: string;
             /** @enum {string} */
             status: "PENDING" | "PAID" | "FAILED";
+            development_only: boolean;
         };
         Label: {
             /** @description Opaque identifier; serialize as string. */
@@ -1337,10 +1499,11 @@ export interface components {
             label_id: string;
             label_version: number;
             label_payload: string;
-            /** Format: uri */
+            /** @description Authenticated same-origin PDF path, with no credential in URL. */
             pdf_url: string;
             /** Format: date-time */
             expires_at: string;
+            development_only: boolean;
         };
         ReplaceLabel: {
             reason: string;
@@ -1669,6 +1832,274 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    shipping_label_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test label PDF, private and no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_pending_payment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shipment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_test_payment_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPaymentOutcome"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_claim: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyContact"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shipment"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_claim_challenge: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipientClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactChallenge"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_operations_tracking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shipment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tracking"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_operations_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shipment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shipment"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_operations_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentList"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     delivery_post__auth_challenges: {
         parameters: {
             query?: never;
@@ -2957,6 +3388,38 @@ export interface operations {
             };
         };
     };
+    shipping_list: {
+        parameters: {
+            query?: {
+                view?: "sending" | "receiving";
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentList"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     delivery_9__shipments: {
         parameters: {
             query?: never;
@@ -3277,7 +3740,7 @@ export interface operations {
         };
         responses: {
             /** @description Successful result */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3562,8 +4025,6 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                /** @description Quoted aggregate version; run_revision in body also required for cross-aggregate operations. */
-                "If-Match": string;
                 /** @description Required when authenticated by browser cookie; not needed for native bearer. */
                 "X-CSRF-Token"?: string;
             };
@@ -3572,10 +4033,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
             /** @description Successful result */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

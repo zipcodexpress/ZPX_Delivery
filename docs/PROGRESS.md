@@ -2,7 +2,7 @@
 
 Purpose: milestone/session summary; task status belongs in GitHub Issues/Projects.
 Audience: ZPX owner, developers and Codex.
-Status: PostgreSQL foundation and local identity slice verified; M0/M1 remain incomplete.
+Status: PostgreSQL, local identity and customer/operator shipping slices verified; M0/M1 remain incomplete.
 Owner: unassigned. Last reviewed: 2026-09-19.
 
 ## Current development
@@ -56,3 +56,12 @@ Earlier MySQL and P0.1 results are retained in [M0 evidence](verification/M0-fou
 and [contract evidence](verification/M0-contracts.md). They are not PostgreSQL results.
 The old terminal is reference-only per [decision 0002](decisions/0002-new-terminal-platform.md).
 No production access, physical door commands, PR merge or production deployment occurred.
+
+## P2.1/P2.2 shipping increment
+
+Branch `feature/P2.1-shipping` adds Sending/Receiving under one CUSTOMER account,
+shipment-bound recipient proof, operator scope inspection, local test checkout and
+authenticated printable labels. See [decision 0006](decisions/0006-customer-shipping-and-test-checkout.md)
+and [shipping evidence](verification/P2.1-shipping.md). No real charge or physical
+transfer occurs. Authorize.net is selected; its adapter and sandbox validation remain.
+Driver pickup and hub receiving remain distinct P3 work, with no new broad staff permissions.

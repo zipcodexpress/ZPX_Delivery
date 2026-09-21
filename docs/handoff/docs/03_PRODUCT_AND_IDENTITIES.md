@@ -6,6 +6,10 @@ Approximately 20 locations: planning fixture uses 3 downtown and 17 satellites, 
 
 ## Registration and access
 
+Accepted clarification (2026-09-19): CUSTOMER is one account/role for both sending
+and receiving. Recipient is a shipment relationship, not a separate account type.
+See [decision 0006](../../decisions/0006-customer-shipping-and-test-checkout.md).
+
 New account records name, verified primary email and phone, and address (address_type PROFILE/RETURN/BILLING; the profile address is not the selected destination locker). Both contact channels are collected; shipping requires verified phone and email in the pilot. Driver/staff elevation is an approved role assignment, never self-selected. Visitor access to apartment lockers is denied unless the property explicitly enables it; resident access can be proved through an optional link to an existing resident record.
 
 Account linking: authenticate new account; separately authenticate old account or complete a legacy-side verification challenge; bridge returns short-lived signed subject assertion with legacy_member_id and scoped property membership; new API consumes nonce once and stores link. Matching phone/email alone never grants the link. No shared password database. A property membership expiring does not erase outstanding packages; operations arranges authorized collection.
