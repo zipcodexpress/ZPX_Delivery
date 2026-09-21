@@ -16,6 +16,6 @@ final class ExceptionHandler extends Handle
     public function render(Request $request, Throwable $e): Response
     {
         $id = bin2hex(random_bytes(16));
-        return Reply::json(500, ['code' => 'INTERNAL_ERROR', 'message' => 'Request could not be completed.', 'request_id' => $id, 'retryable' => false], $id);
+        return Reply::json(500, ['code' => 'INTERNAL_ERROR', 'message' => 'Request could not be completed.', 'correlation_id' => $id, 'retryable' => false], $id);
     }
 }

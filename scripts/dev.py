@@ -16,6 +16,7 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
+SECRET_KEYS = ('DB_PASSWORD', 'DB_ROOT_PASSWORD', 'DB_MIGRATION_PASSWORD', 'SIMULATOR_TOKEN', 'AUTH_ENCRYPTION_KEY', 'AUTH_LOOKUP_KEY')
 
 def validate_mac_volume(root, info):
     parts = Path(root).resolve().parts
@@ -46,16 +47,18 @@ def init_env():
     except FileExistsError:
         # Add new keys without rotating credentials already used by persistent volumes.
         existing = {line.split('=', 1)[0].strip() for line in path.read_text().splitlines() if '=' in line}
-        if 'DB_MIGRATION_PASSWORD' not in existing:
+        missing = [key for key in SECRET_KEYS if key not in existing]
+        if missing:
             with path.open('a') as file:
-                file.write('\nDB_MIGRATION_PASSWORD=' + secrets.token_hex(32) + '\n')
-            print('Added missing migration credential; existing credentials preserved.')
+                for key in missing:
+                    file.write('\n' + key + '=' + secrets.token_hex(32) + '\n')
+            print('Added missing local secrets; existing credentials preserved.')
         else:
             print('Existing .env preserved.')
         return
     with os.fdopen(fd, 'w') as file:
         file.write('# Local development only; generated credentials.\n')
-        for key in ('DB_PASSWORD', 'DB_ROOT_PASSWORD', 'DB_MIGRATION_PASSWORD', 'SIMULATOR_TOKEN'):
+        for key in SECRET_KEYS:
             file.write(f'{key}={secrets.token_hex(32)}\n')
     print('Created .env with random local credentials (not displayed).')
 
@@ -93,12 +96,32 @@ def smoke(timeout=180):
     print('Foundation smoke passed; this is not a parcel-delivery end-to-end test.')
 
 def test_db():
-    # Integration tests use synthetic records and roll back their data.
-    compose('run', '--rm', '--build', 'db-tests')
+    # Fresh, uniquely named test stack; never remove the developer's data volumes.
+    project = 'zpx-delivery-tests-' + secrets.token_hex(6)
+    try:
+        compose('-p', project, 'build', 'migrate', 'db-tests')
+        compose('-p', project, 'run', '--rm', 'db-tests')
+    finally:
+        compose('-p', project, 'down', '--volumes', '--remove-orphans')
+
+def inbox():
+    result = compose('exec', '-T', 'api', 'php', 'bin/messages.php', capture=True)
+    messages = json.loads(result.stdout)
+    if not isinstance(messages, list):
+        raise RuntimeError('Unexpected development inbox response.')
+    directory = ROOT / '.local'
+    directory.mkdir(mode=0o700, exist_ok=True)
+    path = directory / 'verification-inbox.json'
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as file:
+        os.fchmod(file.fileno(), 0o600)
+        json.dump(messages, file, indent=2)
+        file.write('\n')
+    print(f'Saved {len(messages)} local verification messages privately to {path}.')
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config','migrate','seed'])
+    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config','migrate','seed','demo-accounts','inbox'])
     args = parser.parse_args()
     if args.command == 'init': return init_env()
     check_storage()
@@ -115,6 +138,8 @@ def main():
     elif args.command == 'test-db': test_db()
     elif args.command == 'migrate': compose('run', '--rm', 'migrate')
     elif args.command == 'seed': compose('run', '--rm', '--build', 'seed')
+    elif args.command == 'demo-accounts': compose('exec', '-T', 'api', 'php', 'bin/identity-demo.php')
+    elif args.command == 'inbox': inbox()
 
 if __name__ == '__main__':
     try: main()

@@ -11,7 +11,7 @@ export interface paths {
         put?: never;
         /**
          * Request rate-limited one-time verification; return neutral response to prevent account enumeration.
-         * @description Request rate-limited one-time verification; return neutral response to prevent account enumeration.
+         * @description Request rate-limited one-time verification; return neutral response to prevent account enumeration. The initial identity implementation supports REGISTER; other purposes return PURPOSE_UNAVAILABLE until their workflows are implemented. Local delivery uses a private encrypted development inbox; no code is returned by this endpoint.
          */
         post: operations["delivery_post__auth_challenges"];
         delete?: never;
@@ -291,7 +291,7 @@ export interface paths {
         put?: never;
         /**
          * Login; browser receives secure session cookie, native receives tokens.
-         * @description Login; browser receives secure session cookie, native receives tokens.
+         * @description Login; browser receives secure session cookie, native receives tokens. Browser cookies are HttpOnly, SameSite=Strict and Secure outside local development; browser responses include csrf_token but no access/refresh tokens. Native access lasts 15 minutes; refresh rotates within a seven-day family lifetime. Replayed refresh credentials revoke the family.
          */
         post: operations["delivery_2__auth_login"];
         delete?: never;
@@ -1208,6 +1208,7 @@ export interface components {
             email: string;
             /** @description E.164 */
             phone: string;
+            /** @description 12–72 UTF-8 bytes; longer values are rejected, never truncated. */
             password: string;
             address: components["schemas"]["Address"];
         };
@@ -1227,6 +1228,8 @@ export interface components {
             refresh_token?: string;
             /** Format: date-time */
             expires_at?: string;
+            /** @description Browser-only session-bound token; send in X-CSRF-Token for cookie-authenticated mutations. Never an access token. */
+            csrf_token?: string;
         };
         VerifyContact: {
             /** @description Opaque identifier; serialize as string. */
@@ -1244,6 +1247,8 @@ export interface components {
             phone_verified: boolean;
             roles: string[];
             addresses: components["schemas"]["Address"][];
+            /** @description Browser-only session-bound token; send in X-CSRF-Token for cookie-authenticated mutations. Never an access token. */
+            csrf_token?: string;
         };
         Location: {
             /** @description Opaque identifier; serialize as string. */
@@ -1684,6 +1689,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactChallenge"];
+                };
+            };
+            /** @description Sanitized unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Structured error */
@@ -2206,6 +2220,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Sanitized unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Structured error */
             503: {
                 headers: {
@@ -2295,6 +2318,15 @@ export interface operations {
             };
             /** @description Structured error */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Sanitized unexpected server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2398,6 +2430,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Sanitized unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Structured error */
             503: {
                 headers: {
@@ -2494,6 +2535,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Sanitized unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Structured error */
             503: {
                 headers: {
@@ -2516,7 +2566,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
             /** @description Successful result */
             200: {
@@ -2583,6 +2637,15 @@ export interface operations {
             };
             /** @description Structured error */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Sanitized unexpected server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2675,6 +2738,15 @@ export interface operations {
             };
             /** @description Structured error */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Sanitized unexpected server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -2,12 +2,12 @@
 
 Purpose: milestone/session summary; task status belongs in GitHub Issues/Projects.
 Audience: ZPX owner, developers and Codex.
-Status: local PostgreSQL foundation verified; M0/M1 remain incomplete.
+Status: PostgreSQL foundation and local identity slice verified; M0/M1 remain incomplete.
 Owner: unassigned. Last reviewed: 2026-09-19.
 
 ## Current development
 
-Branch `feature/P1.1-postgresql-foundation`, [PR 6](https://github.com/zipcodexpress/ZPX_Delivery/pull/6),
+Foundation: branch `feature/P1.1-postgresql-foundation`, [PR 6](https://github.com/zipcodexpress/ZPX_Delivery/pull/6),
 [P1.1 issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5).
 Richard approved PostgreSQL + ThinkPHP + React; Fleetbase evaluation is no longer a prerequisite.
 See [platform decision](decisions/0004-platform-baseline.md).
@@ -30,17 +30,22 @@ See [platform decision](decisions/0004-platform-baseline.md).
 See [local setup](LOCAL_DEVELOPMENT_MAC.md), [Mac environment evidence](verification/P1.1-mac-local-2026-09-19.md)
 and [backend architecture](BACKEND_DATABASE_ARCHITECTURE.md).
 Local generated credentials remain in Git-ignored `.local/seed-credentials.txt` with owner-only access.
-The web pages still report readiness; seed accounts do not yet have an interactive login API.
+The customer page now supports registration, sign-in and contact verification; operations has staff sign-in.
+See [identity evidence](verification/P1.2-identity.md). Synthetic demo contacts are added
+with `python3 scripts/dev.py demo-accounts`, preserving their generated passwords.
 
 ## Next dependency
 
-Confirm whether the pilot is one ZPX-operated network (customers may use eligible public
-sites; staff access is scoped by site/hub) or separate operator organizations. That decision
-sets account provisioning and authorization boundaries for P1.2. The question is pending
-with Richard; do not silently infer tenant registration or cross-operator access policies.
+Richard confirmed one ZPX-operated network: customers may use eligible public
+sites; staff access is scoped by site/hub. Identity work continues on
+`feature/P1.2-identity`, based on the verified foundation. No customer may choose
+an organization or staff role during public registration.
 
-Then implement P1.2 identity/contact verification/session management and P1.3 authorized
-network topology/reservations, followed by shipment/payment/labels and custody workflows.
+P1.2 now includes registration, encrypted contacts, local verification, cookie/native sessions,
+CSRF, refresh replay protection and scoped-role primitives. Real verification delivery awaits
+Richard's email/SMS provider decision. Password recovery, device enrollment and legacy
+account linking remain P1.2 work. Next comes P1.3 authorized topology/reservations,
+then shipment/payment/labels and custody workflows.
 The database reservation test is not a completed reservation service or physical door test.
 Native mobile/Android kiosk apps, protocol fixtures, providers and hardware commissioning
 remain outstanding. Use synthetic data/fake providers until actual configuration is approved.
