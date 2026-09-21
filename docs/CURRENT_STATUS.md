@@ -9,7 +9,7 @@
 
 Date/Time: 2026-09-21
 Agent: Qwen Code
-Checkpoint reason: Milestone — P3.3/P4.1 committed locally; receiving version bug and hub authorization gaps fixed
+Checkpoint reason: Milestone — hub authorization gaps fixed; hub management scoped and deferred (ADR 0008)
 
 ---
 
@@ -94,6 +94,9 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 - **Re-opened sessions.** `openSession` only blocks a second *open* session, and `expected_count`
   counts every manifest item regardless of state. A session opened after a close that wrote parcels
   off as SHORT will still report those parcels as expected.
+- **No admin surface.** `ADMIN` and `DISPATCHER` fall through `Account.tsx` into the `Shipping`
+  component, and the five contract-specified `/admin/*` endpoints are unimplemented. Deferred with
+  hub management — see ADR `docs/decisions/0008-hub-management-and-asset-custody.md`.
 
 ---
 
@@ -135,6 +138,10 @@ None.
   rejects every location-scoped grant, which is the shape `Seed.php` creates.
 - Cross-hub probes answer 404 rather than 403, so session ids cannot be enumerated. `openSession`
   is the exception: it answers 403 when the payload itself names a hub the caller is not assigned to.
+- Hub management (locations, staff, assets, asset in/out ledger) is **deferred to P7.1** in backlog
+  order — do not build it before P4.2 → P5.1 → P5.2. The design is already fixed by ADR
+  `docs/decisions/0008-hub-management-and-asset-custody.md`: custody-chain-only asset ledger,
+  separate tables with no changes to `scan_events`/`label_print_jobs`, admin area in operations-web.
 - P4.1 was committed onto the P3.3 branch rather than a branch of its own.
 - Compensation: fixed shift/route rate per design docs (no per-minute formulas).
 - Driver approval: PENDING → ACTIVE workflow via admin endpoints.
