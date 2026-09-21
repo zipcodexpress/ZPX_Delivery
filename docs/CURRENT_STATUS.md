@@ -9,25 +9,26 @@
 
 Date/Time: 2026-09-21
 Agent: Qwen Code
-Checkpoint reason: Milestone — P3.3 hub receiving and P4.1 hub dispatch committed locally; receiving version bug fixed
+Checkpoint reason: Milestone — P3.3/P4.1 committed locally; receiving version bug and hub authorization gaps fixed
 
 ---
 
 ## Current Branch
 
-`feature/P3.3-hub-receiving` — carries the P3.3, P4.1 and receiving-fix commits.
+`feature/P3.3-hub-receiving` — carries the P3.3, P4.1 and both fix commits.
 Not pushed. `origin` still has only `feature/P3.2-driver-management`.
 
 ## Last Relevant Commit
 
-`7929b66` — fix(hub-receiving): resolve label version instead of assuming version 1
+`7f09fed` — fix(hub): scope receiving and dispatch to the caller's hub
 
 ---
 
 ## Current Objective
 
-P3.3 hub receiving and P4.1 hub sorting/dispatch are implemented and passing tests locally.
-Next: close the P3.3 gaps listed below, build the missing P4.1 frontend, then push and open PRs.
+P3.3 hub receiving and P4.1 hub sorting/dispatch are implemented, authorization-hardened and
+passing tests locally. Next: build the missing P4.1 frontend, close the remaining P3.3 gaps,
+then push and open PRs.
 
 ---
 
@@ -45,6 +46,15 @@ Next: close the P3.3 gaps listed below, build the missing P4.1 frontend, then pu
   hardcoding `expected_package_version: 1`. Seeded origin parcels are version 1 and driver pickup
   increments them to 2, so every UI scan previously failed with 409 VERSION_MISMATCH.
 - `/scans/resolve` now accepts HUB_STAFF as well as DRIVER.
+- Fix: hub receiving and dispatch are scoped to the caller's hub. `HUB_STAFF` grants are
+  location-scoped (as `Seed.php` creates them) but every hub service called `requireRole` without a
+  location, which only matches org-wide grants — so the seeded `HUB-STAFF` account was denied by
+  every hub endpoint despite `profile()` listing the role. `hubId()` now resolves the hub through
+  its location, checks the grant against that location, and is organization scoped.
+  `Custody::requireResolveAccess` had the same defect.
+- Fix: `receiveScan`, `closeSession` and `getSession` filter sessions by the caller's hub and
+  answer 404 rather than 403, so probing does not reveal which sessions exist. `receiveScan` also
+  rejects parcels absent from the session run's manifest with `NOT_ON_MANIFEST`.
 
 ---
 
@@ -64,25 +74,10 @@ Pick up with either the P4.1 hub workspace UI, or the P3.3 gaps below.
 
 ---
 
-## Upcoming
-
-1. P4.1 frontend: hub staging and dispatch workspace for HUB_STAFF
-2. P3.3 gap closure (authorization scoping, manifest membership, discrepancy workbench)
-3. P4.2: outbound load, ordered-stop driver workflow
-
----
-
 ## Blockers / Known Issues
 
 No blockers, and no failing tests. The following gaps are known and unaddressed:
 
-- **P3.3 authorization scoping.** `openSession` verifies the caller's `hub_staff.hub_id` matches the
-  target hub; `receiveScan`, `closeSession` and `getSession` do not. Any HUB_STAFF user can scan
-  into, close, or read another hub's session. Organization scoping is applied only to the `users`
-  row, not to sessions, packages or runs.
-- **P3.3 manifest membership.** `receiveScan` never checks that the scanned package belongs to the
-  session's run. A parcel in INBOUND_CUSTODY from a different run can be received into the session,
-  and the `manifest_items` update then silently affects zero rows.
 - **P3.3 discrepancy workbench is missing.** The backlog defines P3.3 as "hub receiving and
   discrepancy workbench". Migration 014 permits `DAMAGED` and `EXTRA` dispositions but nothing ever
   writes them. Short parcels remain INBOUND_CUSTODY under DRIVER custody by omission only — no
@@ -93,6 +88,12 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
   the specified `state`/`version`/`allowed_actions`, and ignores the `action` and `run_id` request
   fields. The `Receive` schema also requires `client_event_id`, which hub receiving neither sends
   nor validates. Correcting resolve affects the driver flow too, so it was left alone.
+- **Duplicated hub-location lookup.** `HubReceiving::hubId()`, `HubDispatch::hubId()` and
+  `Custody::requireResolveAccess()` each carry the same `hub_staff → hubs → locations` query.
+  Extract it if a fourth caller appears.
+- **Re-opened sessions.** `openSession` only blocks a second *open* session, and `expected_count`
+  counts every manifest item regardless of state. A session opened after a close that wrote parcels
+  off as SHORT will still report those parcels as expected.
 
 ---
 
@@ -112,7 +113,9 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 
 ### Passing
 
-- `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py test-db` — full suite (hub-receiving 33, hub-dispatch 21)
+- `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py test-db` — full suite, 365 assertions
+  (hub-receiving 41, hub-dispatch 21). Both hub fixtures grant `HUB_STAFF` scoped to the hub
+  location, matching `Seed.php`; an org-wide grant would hide the location-scoping regressions.
 - `npm run check` — contracts, tsc, 9 node tests
 - `npm run build` — customer-web and operations-web
 
@@ -127,6 +130,11 @@ None.
 - Resolve-then-scan: clients learn `expected_package_version` from `/scans/resolve`. A package
   version is never assumed or hardcoded — it changes at every custody transfer.
 - `/scans/resolve` is shared by DRIVER and HUB_STAFF; all other Custody methods remain driver-only.
+- Authorization: hub services resolve the caller's hub through `hub_staff → hubs → locations` and
+  check `HUB_STAFF` against that hub's location. A bare `requireRole($user,'HUB_STAFF')` silently
+  rejects every location-scoped grant, which is the shape `Seed.php` creates.
+- Cross-hub probes answer 404 rather than 403, so session ids cannot be enumerated. `openSession`
+  is the exception: it answers 403 when the payload itself names a hub the caller is not assigned to.
 - P4.1 was committed onto the P3.3 branch rather than a branch of its own.
 - Compensation: fixed shift/route rate per design docs (no per-minute formulas).
 - Driver approval: PENDING → ACTIVE workflow via admin endpoints.
@@ -145,18 +153,19 @@ timestamps, slot status).
 
 ## Git State
 
-Clean on `feature/P3.3-hub-receiving` at the status-update commit. Four commits ahead of `origin`:
-P3.3 (`1bc9393`), P4.1 (`a8088ae`), the receiving fix (`7929b66`), and this status update.
+Clean on `feature/P3.3-hub-receiving`. Five commits ahead of `origin`: P3.3 (`1bc9393`), P4.1
+(`a8088ae`), receiving version fix (`7929b66`), status update (`bbc7bbf`), hub authorization fix
+(`7f09fed`) — plus this update.
 
 ---
 
 ## Next Recommended Actions
 
 1. Push the branch and open PR(s) covering P3.3 + P4.1
-2. Add hub-scoping checks to `receiveScan`, `closeSession` and `getSession`
-3. Verify the scanned package is on the session run's manifest before transferring custody
-4. Build the P4.1 hub staging/dispatch workspace UI
-5. Build the P3.3 discrepancy workbench (DAMAGED/EXTRA dispositions, exception records)
+2. Build the P4.1 hub staging/dispatch workspace UI — P4.1 is backend-only today
+3. Build the P3.3 discrepancy workbench (DAMAGED/EXTRA dispositions, exception records)
+4. Advance the route run and its hub stop when a receiving session closes
+5. P4.2: outbound load, ordered-stop driver workflow
 
 ---
 
