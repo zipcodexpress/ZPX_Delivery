@@ -37,11 +37,19 @@ final class Service
     /** Resolution precedes a scan for driver pickup and for independent hub receiving. */
     private function requireResolveAccess(string $user): void
     {
-        foreach (['DRIVER', 'HUB_STAFF'] as $role) {
-            try { $this->identity->requireRole($user, $role); return; }
-            catch (Failure) {}
-        }
-        throw new Failure(403, 'ACCESS_DENIED', 'Access denied.');
+        try { $this->identity->requireRole($user, 'DRIVER'); return; }
+        catch (Failure) {}
+
+        // HUB_STAFF grants are scoped to a hub location, so the grant must be matched there.
+        $location = $this->q(
+            'SELECT h.location_id FROM hub_staff hs
+             JOIN hubs h ON h.id=hs.hub_id
+             JOIN locations l ON l.id=h.location_id
+             WHERE hs.user_id=? AND l.organization_id=?',
+            [$user, $this->org()]
+        )->fetchColumn();
+        if (!$location) { throw new Failure(403, 'ACCESS_DENIED', 'Access denied.'); }
+        $this->identity->requireRole($user, 'HUB_STAFF', (string)$location);
     }
 
     private function driverId(string $userId): string

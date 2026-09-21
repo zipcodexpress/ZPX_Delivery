@@ -29,23 +29,25 @@ final class Service
         return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0');
     }
 
-    private function requireHubStaff(string $user): void
-    {
-        $this->identity->requireRole($user, 'HUB_STAFF');
-    }
-
+    /** HUB_STAFF grants are scoped to a hub location, so requireRole must be given that location to match. */
     private function hubId(string $userId): string
     {
-        $id = $this->q('SELECT hub_id FROM hub_staff WHERE user_id=?', [$userId])->fetchColumn();
-        if (!$id) { throw new Failure(403, 'ACCESS_DENIED', 'No hub assignment found.'); }
-        return (string)$id;
+        $hub = $this->q(
+            'SELECT hs.hub_id, h.location_id FROM hub_staff hs
+             JOIN hubs h ON h.id=hs.hub_id
+             JOIN locations l ON l.id=h.location_id
+             WHERE hs.user_id=? AND l.organization_id=?',
+            [$userId, $this->org()]
+        )->fetch(PDO::FETCH_ASSOC);
+        if (!$hub) { throw new Failure(403, 'ACCESS_DENIED', 'No hub assignment found.'); }
+        $this->identity->requireRole($userId, 'HUB_STAFF', (string)$hub['location_id']);
+        return (string)$hub['hub_id'];
     }
 
     // ── Open Receiving Session ───────────────────────────────────────
 
     public function openSession(string $user, array $input, string $key): array
     {
-        $this->requireHubStaff($user);
         Input::fields($input, ['hub_id', 'inbound_run_id']);
         $hubId = Input::text($input['hub_id'], 1, 18);
         $runId = Input::text($input['inbound_run_id'], 1, 18);
@@ -113,7 +115,6 @@ final class Service
 
     public function receiveScan(string $user, array $input, string $key): array
     {
-        $this->requireHubStaff($user);
         Input::fields($input, ['label_payload', 'inbound_run_id', 'receiving_session_id', 'expected_package_version']);
         $labelToken = Input::text($input['label_payload'], 1, 500);
         $runId = Input::text($input['inbound_run_id'], 1, 18);
@@ -129,10 +130,12 @@ final class Service
                 throw new Failure(403, 'ACCESS_DENIED', 'Access denied.');
             }
 
-            // Verify session is open
+            $hubId = $this->hubId($user);
+
+            // Verify session is open and belongs to this hub
             $session = $this->q(
-                "SELECT * FROM receiving_sessions WHERE id=? AND status='OPEN' FOR UPDATE",
-                [$sessionId]
+                "SELECT * FROM receiving_sessions WHERE id=? AND hub_id=? AND status='OPEN' FOR UPDATE",
+                [$sessionId, $hubId]
             )->fetch(PDO::FETCH_ASSOC);
 
             if (!$session) {
@@ -168,6 +171,16 @@ final class Service
                 throw new Failure(409, 'ALREADY_RECEIVED', 'Package already received in this session.');
             }
 
+            // A parcel must belong to this run, not merely be in inbound custody somewhere.
+            $onManifest = $this->q(
+                "SELECT id FROM manifest_items WHERE run_id=? AND package_id=?",
+                [$runId, $packageId]
+            )->fetchColumn();
+
+            if (!$onManifest) {
+                throw new Failure(409, 'NOT_ON_MANIFEST', 'This package is not on the run manifest.');
+            }
+
             // Lock package and check state
             $package = $this->q(
                 "SELECT p.id, p.state, p.version, p.custodian_type, p.custodian_ref FROM packages p WHERE p.id=? FOR UPDATE",
@@ -185,7 +198,6 @@ final class Service
             // Perform custody transfer: driver → hub
             $operationUuid = Secrets::uuid();
             $newVersion = (int)$package['version'] + 1;
-            $hubId = (string)$session['hub_id'];
 
             // Get hub location
             $hubLocation = $this->q("SELECT location_id FROM hubs WHERE id=?", [$hubId])->fetchColumn();
@@ -266,7 +278,6 @@ final class Service
 
     public function closeSession(string $user, string $sessionId, string $key): array
     {
-        $this->requireHubStaff($user);
         Input::text($sessionId, 1, 18);
         Input::text($key, 16, 100);
 
@@ -274,9 +285,11 @@ final class Service
             $scope = 'hub:' . $this->org() . ':' . $user . ':close-session';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
+            $hubId = $this->hubId($user);
+
             $session = $this->q(
-                "SELECT * FROM receiving_sessions WHERE id=? AND status='OPEN' FOR UPDATE",
-                [$sessionId]
+                "SELECT * FROM receiving_sessions WHERE id=? AND hub_id=? AND status='OPEN' FOR UPDATE",
+                [$sessionId, $hubId]
             )->fetch(PDO::FETCH_ASSOC);
 
             if (!$session) {
@@ -284,7 +297,6 @@ final class Service
             }
 
             $runId = (string)$session['inbound_run_id'];
-            $hubId = (string)$session['hub_id'];
 
             // Mark unreceived manifest items as SHORT
             $this->q(
@@ -324,12 +336,12 @@ final class Service
 
     public function getSession(string $user, string $sessionId): array
     {
-        $this->requireHubStaff($user);
         Input::text($sessionId, 1, 18);
+        $hubId = $this->hubId($user);
 
         $session = $this->q(
-            "SELECT * FROM receiving_sessions WHERE id=?",
-            [$sessionId]
+            "SELECT * FROM receiving_sessions WHERE id=? AND hub_id=?",
+            [$sessionId, $hubId]
         )->fetch(PDO::FETCH_ASSOC);
 
         if (!$session) {

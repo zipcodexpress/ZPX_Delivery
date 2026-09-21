@@ -23,13 +23,16 @@ foreach (['EMAIL' => $staffEmail, 'PHONE' => $staffPhone] as $kind => $value) {
     $message = json_decode($crypto->decrypt(json_decode($q->fetchColumn(), true)['encrypted_message']), true);
     $identity->verify(['challenge_id' => $c['challenge_id'], 'code' => $message['code']]);
 }
-$hubStaffRole = $runtime->query("SELECT id FROM roles WHERE code='HUB_STAFF'")->fetchColumn();
-$runtime->exec("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,granted_by) VALUES ($staffUser,$hubStaffRole,$dispOrg,$staffUser)");
 
 // Create hub
 $hubLocation = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($dispOrg,'HUB-DISP','Dispatch Hub','HUB','Hub addr','DELIVERY_ONLY','ACTIVE','{}')");
 $hub = insertId($runtime, "INSERT INTO hubs(location_id,status) VALUES ($hubLocation,'ACTIVE')");
 $runtime->exec("INSERT INTO hub_staff(hub_id,user_id) VALUES ($hub,$staffUser)");
+
+// Grant HUB_STAFF scoped to the hub location, exactly as Seed.php does. An org-wide grant
+// would hide the location scoping, so this fixture must match the seeded shape.
+$hubStaffRole = $runtime->query("SELECT id FROM roles WHERE code='HUB_STAFF'")->fetchColumn();
+$runtime->exec("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,location_id,granted_by) VALUES ($staffUser,$hubStaffRole,$dispOrg,$hubLocation,$staffUser)");
 
 // Create destination location and slot
 $destLocation = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($dispOrg,'DEST-DISP','Dest Locker','LOCKER','Dest addr','DELIVERY_ONLY','ACTIVE','{}')");

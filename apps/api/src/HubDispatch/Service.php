@@ -34,7 +34,6 @@ final class Service
 
     public function stageScan(string $user, array $input, string $key): array
     {
-        $this->identity->requireRole($user, 'HUB_STAFF');
         Input::fields($input, ['label_payload', 'slot_code']);
         $labelToken = Input::text($input['label_payload'], 1, 500);
         $slotCode = Input::text($input['slot_code'], 1, 40);
@@ -119,7 +118,6 @@ final class Service
 
     public function createDispatchCall(string $user, array $input, string $key): array
     {
-        $this->identity->requireRole($user, 'HUB_STAFF');
         Input::fields($input, ['slot_id', 'minutes_to_pickup']);
         $slotId = Input::text($input['slot_id'], 1, 18);
         $minutesToPickup = (int)($input['minutes_to_pickup'] ?? 30);
@@ -381,7 +379,6 @@ final class Service
 
     public function listSlots(string $user): array
     {
-        $this->identity->requireRole($user, 'HUB_STAFF');
         $hubId = $this->hubId($user);
 
         $rows = $this->q(
@@ -407,11 +404,19 @@ final class Service
 
     // ── Helpers ──────────────────────────────────────────────────────
 
+    /** HUB_STAFF grants are scoped to a hub location, so requireRole must be given that location to match. */
     private function hubId(string $userId): string
     {
-        $id = $this->q('SELECT hub_id FROM hub_staff WHERE user_id=?', [$userId])->fetchColumn();
-        if (!$id) { throw new Failure(403, 'ACCESS_DENIED', 'No hub assignment found.'); }
-        return (string)$id;
+        $hub = $this->q(
+            'SELECT hs.hub_id, h.location_id FROM hub_staff hs
+             JOIN hubs h ON h.id=hs.hub_id
+             JOIN locations l ON l.id=h.location_id
+             WHERE hs.user_id=? AND l.organization_id=?',
+            [$userId, $this->org()]
+        )->fetch(PDO::FETCH_ASSOC);
+        if (!$hub) { throw new Failure(403, 'ACCESS_DENIED', 'No hub assignment found.'); }
+        $this->identity->requireRole($userId, 'HUB_STAFF', (string)$hub['location_id']);
+        return (string)$hub['hub_id'];
     }
 
     private function driverId(string $userId): string

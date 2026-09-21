@@ -31,14 +31,15 @@ foreach (['EMAIL' => $staffEmail, 'PHONE' => $staffPhone] as $kind => $value) {
     $identity->verify(['challenge_id' => $c['challenge_id'], 'code' => $message['code']]);
 }
 
-// Grant HUB_STAFF role
-$hubStaffRole = $runtime->query("SELECT id FROM roles WHERE code='HUB_STAFF'")->fetchColumn();
-$runtime->exec("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,granted_by) VALUES ($staffUser,$hubStaffRole,$hubOrg,$staffUser)");
-
 // Create hub and location
 $hubLocation = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($hubOrg,'HUB-RCV','Receive Hub','HUB','Hub addr','DELIVERY_ONLY','ACTIVE','{}')");
 $hub = insertId($runtime, "INSERT INTO hubs(location_id,status) VALUES ($hubLocation,'ACTIVE')");
 $runtime->exec("INSERT INTO hub_staff(hub_id,user_id) VALUES ($hub,$staffUser)");
+
+// Grant HUB_STAFF scoped to the hub location, exactly as Seed.php does. An org-wide grant
+// would hide the location scoping, so this fixture must match the seeded shape.
+$hubStaffRole = $runtime->query("SELECT id FROM roles WHERE code='HUB_STAFF'")->fetchColumn();
+$runtime->exec("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,location_id,granted_by) VALUES ($staffUser,$hubStaffRole,$hubOrg,$hubLocation,$staffUser)");
 
 // Create driver with INBOUND_CUSTODY packages
 $driverEmail = 'driver.receive@example.invalid';
@@ -261,5 +262,53 @@ check($flowScan['package_version'] === 3, 'hub receive increments the package ve
 // Test 16: Resolution stays open to drivers and closed to customers
 check($custody->resolveScan($driverUser, $token3)['package_version'] === 3, 'driver resolve still works after hub receive');
 failsIdentity(fn() => $custody->resolveScan($customerUser, $token3), 403, 'customer cannot resolve label');
+
+// Test 17: A parcel that is not on this run's manifest cannot be received into the session.
+// $shortTokens[2] was never received, so it is still in inbound custody on run 2.
+failsIdentity(fn() => $hubService->receiveScan($staffUser, [
+    'label_payload' => $shortTokens[2],
+    'inbound_run_id' => $run3,
+    'receiving_session_id' => $session3['receiving_session_id'],
+    'expected_package_version' => 1,
+], Secrets::uuid()), 409, 'parcel from another run cannot be received into this session');
+check($runtime->query("SELECT state FROM packages WHERE id={$shortPkgIds[2]}")->fetchColumn() === 'INBOUND_CUSTODY', 'rejected parcel keeps driver custody');
+
+// Test 18: Staff assigned to a different hub are denied every operation on this hub's session
+$otherLocation = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($hubOrg,'HUB-OTHER','Other Hub','HUB','Other addr','DELIVERY_ONLY','ACTIVE','{}')");
+$otherHub = insertId($runtime, "INSERT INTO hubs(location_id,status) VALUES ($otherLocation,'ACTIVE')");
+$otherEmail = 'hub.other@example.invalid';
+$otherPhone = '+12025550405';
+$otherInput = [
+    'name' => 'Synthetic Other Receiver',
+    'email' => $otherEmail,
+    'phone' => $otherPhone,
+    'password' => Secrets::token(),
+    'address' => ['line1' => 'Other hub addr', 'city' => 'Austin', 'region' => 'TX', 'postal_code' => '73301', 'country_code' => 'US'],
+];
+$otherUser = $identity->register($otherInput)['user_id'];
+foreach (['EMAIL' => $otherEmail, 'PHONE' => $otherPhone] as $kind => $value) {
+    $c = $identity->challenge(['kind' => $kind, 'contact_value' => $value, 'purpose' => 'REGISTER']);
+    $q = $runtime->prepare("SELECT payload FROM outbox_events WHERE aggregate_id=(SELECT id FROM verification_challenges WHERE public_id=?) AND event_type='identity.contact_verification'");
+    $q->execute([$c['challenge_id']]);
+    $message = json_decode($crypto->decrypt(json_decode($q->fetchColumn(), true)['encrypted_message']), true);
+    $identity->verify(['challenge_id' => $c['challenge_id'], 'code' => $message['code']]);
+}
+$runtime->exec("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,location_id,granted_by) VALUES ($otherUser,$hubStaffRole,$hubOrg,$otherLocation,$otherUser)");
+$runtime->exec("INSERT INTO hub_staff(hub_id,user_id) VALUES ($otherHub,$otherUser)");
+
+failsIdentity(fn() => $hubService->openSession($otherUser, ['hub_id' => $hub, 'inbound_run_id' => $run3], Secrets::uuid()), 403, 'staff from another hub cannot open a session for this hub');
+failsIdentity(fn() => $hubService->receiveScan($otherUser, [
+    'label_payload' => $token3,
+    'inbound_run_id' => $run3,
+    'receiving_session_id' => $session3['receiving_session_id'],
+    'expected_package_version' => 3,
+], Secrets::uuid()), 404, 'staff from another hub cannot scan into this session');
+failsIdentity(fn() => $hubService->getSession($otherUser, $session3['receiving_session_id']), 404, 'staff from another hub cannot read this session');
+failsIdentity(fn() => $hubService->closeSession($otherUser, $session3['receiving_session_id'], Secrets::uuid()), 404, 'staff from another hub cannot close this session');
+
+// Test 19: The rightful hub can still close the session after the denied attempts
+$finalClose = $hubService->closeSession($staffUser, $session3['receiving_session_id'], Secrets::uuid());
+check($finalClose['state'] === 'CLOSED', 'assigned staff can still close their own session');
+check($finalClose['received_count'] === 1, 'assigned staff closed with the one received parcel');
 
 echo "\nHub receiving test suite complete.\n";
