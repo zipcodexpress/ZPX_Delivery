@@ -65,3 +65,19 @@ authenticated printable labels. See [decision 0006](decisions/0006-customer-ship
 and [shipping evidence](verification/P2.1-shipping.md). No real charge or physical
 transfer occurs. Authorize.net is selected; its adapter and sandbox validation remain.
 Driver pickup and hub receiving remain distinct P3 work, with no new broad staff permissions.
+
+## Provider integration update — 2026-09-19
+
+P2.1/P2.2 remain IN_PROGRESS on `feature/P2.2-providers-operations`.
+Authorize.net sandbox authentication, hosted form token creation, transaction reporting,
+a real sandbox test-card capture, server verification and PDF generation passed.
+Operations now shows scoped payment history. SMTP authentication and the single
+user-authorized diagnostic email passed. The mail worker is implemented and tested,
+but automatic sends remain disabled pending the user's explicit opt-in.
+See [provider evidence](verification/P2.2-providers.md) and [decision 0007](decisions/0007-sandbox-payments-mail.md).
+Earlier statements about missing payment/email credentials are superseded by this update.
+No native shipping app, physical deposit, driver pickup or hub receipt is claimed complete.
+
+The user subsequently approved email activation. The local mail profile is now
+running, restricted to the approved recipient, with SMTP authentication and routing
+verified. No old local-only messages were sent; no account was automatically created.

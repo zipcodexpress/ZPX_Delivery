@@ -24,7 +24,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Resume own pending local test checkout. */
+        /** Resume own pending checkout. */
         get: operations["shipping_pending_payment"];
         put?: never;
         post?: never;
@@ -387,7 +387,7 @@ export interface paths {
         put?: never;
         /**
          * Payment provider callback records signature-verified event.
-         * @description Payment provider callback records signature-verified event. Signature header name/algorithm configured by selected provider adapter. Verify raw HTTP body before parsing.
+         * @description Verify Authorize.net SHA-512 HMAC over the raw body, then fetch transaction details and validate the stored invoice, amount and capture status. Only sandbox capture notifications supported. Localhost requires authenticated reconciliation instead of public delivery.
          */
         post: operations["delivery_post__integrations_payments_webhook"];
         delete?: never;
@@ -628,7 +628,7 @@ export interface paths {
         put?: never;
         /**
          * Create provider checkout; payment requires server confirmation.
-         * @description Current implementation starts a LOCAL_TEST pending checkout for synthetic shipments only. A separate development adapter confirms stored amount/quote eligibility. Live provider not configured.
+         * @description Creates a synthetic-shipment checkout with the configured LOCAL_TEST or AUTHORIZE_NET_SANDBOX adapter. Sandbox form tokens are encrypted at rest; payment requires server verification. No live charges.
          */
         post: operations["delivery_12__shipments_shipment_id_payment_session"];
         delete?: never;
@@ -1217,6 +1217,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/payments/{payment_id}/hosted-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare sandbox hosted form. */
+        post: operations["shipping_hosted_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/payments/{payment_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify sandbox transaction against stored invoice and amount before enabling label. */
+        post: operations["shipping_reconcile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/shipments/{shipment_id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read scoped shipment payment attempts; no hosted token or card details. */
+        get: operations["operations_payment_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1490,6 +1541,11 @@ export interface components {
             /** @enum {string} */
             status: "PENDING" | "PAID" | "FAILED";
             development_only: boolean;
+            /** @enum {string} */
+            provider?: "LOCAL_TEST" | "AUTHORIZE_NET_SANDBOX";
+            /** @description Sensitive short-lived hosted form token. POST to checkout_url; never put in a URL or persist in browser storage. */
+            checkout_token?: string;
+            checkout_expired?: boolean;
         };
         Label: {
             /** @description Opaque identifier; serialize as string. */
@@ -1822,6 +1878,21 @@ export interface components {
             status: "ACCEPTED" | "COMPLETED" | "PENDING";
             /** @description Opaque identifier; serialize as string. */
             resource_id?: string;
+        };
+        PaymentHistory: {
+            items: {
+                payment_id: string;
+                provider: string;
+                reference: string;
+                transaction_id: string | null;
+                amount_cents: number;
+                currency: string;
+                status: string;
+                /** Format: date-time */
+                created_at: string;
+                /** Format: date-time */
+                quote_expires_at: string;
+            }[];
         };
     };
     responses: never;
@@ -2552,7 +2623,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RefundWebhookResult"];
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "ACCEPTED" | "IGNORED";
+                    };
                 };
             };
             /** @description Structured error */
@@ -6705,6 +6779,117 @@ export interface operations {
             };
             /** @description Structured error */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_hosted_session: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_reconcile: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    transaction_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    operations_payment_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shipment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentHistory"];
+                };
+            };
+            /** @description Structured error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };

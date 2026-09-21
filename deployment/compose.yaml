@@ -40,8 +40,44 @@ services:
       AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?Run init}
       AUTH_LOOKUP_KEY: ${AUTH_LOOKUP_KEY:?Run init}
       ZPX_ORGANIZATION_ID: ${ZPX_ORGANIZATION_ID:-0}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-LOCAL_TEST}
+      AUTHORIZE_NET_ENVIRONMENT: ${AUTHORIZE_NET_ENVIRONMENT:-sandbox}
+      AUTHORIZE_NET_API_LOGIN_ID: ${AUTHORIZE_NET_API_LOGIN_ID:-}
+      AUTHORIZE_NET_TRANSACTION_KEY: ${AUTHORIZE_NET_TRANSACTION_KEY:-}
+      AUTHORIZE_NET_SIGNATURE_KEY: ${AUTHORIZE_NET_SIGNATURE_KEY:-}
+      MAIL_DELIVERY_MODE: ${MAIL_DELIVERY_MODE:-local}
+      MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
       AUTH_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
     ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  mail-worker:
+    profiles: ["mail"]
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/mail-worker.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?Run init}
+      AUTH_LOOKUP_KEY: ${AUTH_LOOKUP_KEY:?Run init}
+      MAIL_DELIVERY_MODE: ${MAIL_DELIVERY_MODE:-}
+      MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      SMTP_SERVER: ${SMTP_SERVER:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER_EMAIL: ${SMTP_USER_EMAIL:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PWD: ${SMTP_PWD:-}
     depends_on:
       migrate: {condition: service_completed_successfully}
   db-tests:

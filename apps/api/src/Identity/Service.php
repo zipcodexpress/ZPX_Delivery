@@ -171,7 +171,7 @@ final class Service
             $row=$this->query("INSERT INTO verification_challenges(user_id,purpose,target_hmac,secret_hash,expires_at,public_id,contact_kind) VALUES (?,'REGISTER',decode(?,'hex'),decode(?,'hex'),now()+interval '10 minutes',?,?) RETURNING id,expires_at",[$user?:null,$target,$this->secrets->digest('challenge:'.$id,$code),$id,$input['kind']])->fetch(PDO::FETCH_ASSOC);
             if ($user) {
                 $message=$this->secrets->encrypt(json_encode(['challenge_id'=>$id,'kind'=>$input['kind'],'to'=>$value,'code'=>$code],JSON_THROW_ON_ERROR));
-                (new Outbox($this->db))->append(Secrets::uuid(),'verification_challenge',$row['id'],'identity.contact_verification',['encrypted_message'=>$message,'delivery'=>'LOCAL_ONLY']);
+                (new Outbox($this->db))->append(Secrets::uuid(),'verification_challenge',$row['id'],'identity.contact_verification',['encrypted_message'=>$message,'delivery'=>\Zpx\Mail\Delivery::channel($input['kind'],$value)]);
             }
             return ['challenge_id'=>$id,'expires_at'=>gmdate('c',strtotime($row['expires_at'])),'delivery_status'=>'QUEUED'];
         });

@@ -61,7 +61,7 @@
     "/shipments/{shipment_id}/pending-payment": {
       "get": {
         "operationId": "shipping_pending_payment",
-        "summary": "Resume own pending local test checkout.",
+        "summary": "Resume own pending checkout.",
         "parameters": [
           {
             "name": "shipment_id",
@@ -1035,7 +1035,7 @@
     "post": {
       "operationId": "delivery_post__integrations_payments_webhook",
       "summary": "Payment provider callback records signature-verified event.",
-      "description": "Payment provider callback records signature-verified event. Signature header name/algorithm configured by selected provider adapter. Verify raw HTTP body before parsing.",
+        "description": "Verify Authorize.net SHA-512 HMAC over the raw body, then fetch transaction details and validate the stored invoice, amount and capture status. Only sandbox capture notifications supported. Localhost requires authenticated reconciliation instead of public delivery.",
       "parameters": [],
       "responses": {
         "200": {
@@ -1043,7 +1043,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RefundWebhookResult"
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ACCEPTED",
+                        "IGNORED"
+                      ]
+                    }
+                  }
               }
             }
           }
@@ -2482,7 +2494,7 @@
       "post": {
         "operationId": "delivery_12__shipments_shipment_id_payment_session",
         "summary": "Create provider checkout; payment requires server confirmation.",
-        "description": "Current implementation starts a LOCAL_TEST pending checkout for synthetic shipments only. A separate development adapter confirms stored amount/quote eligibility. Live provider not configured.",
+        "description": "Creates a synthetic-shipment checkout with the configured LOCAL_TEST or AUTHORIZE_NET_SANDBOX adapter. Sandbox form tokens are encrypted at rest; payment requires server verification. No live charges.",
         "parameters": [
           {
             "name": "shipment_id",
@@ -6428,11 +6440,196 @@
           }
         }
       }
+    },
+    "/payments/{payment_id}/hosted-session": {
+      "post": {
+        "operationId": "shipping_hosted_session",
+        "summary": "Prepare sandbox hosted form.",
+        "parameters": [
+          {
+            "name": "payment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{payment_id}/reconcile": {
+      "post": {
+        "operationId": "shipping_reconcile",
+        "summary": "Verify sandbox transaction against stored invoice and amount before enabling label.",
+        "parameters": [
+          {
+            "name": "payment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "transaction_id": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]{0,19}$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/shipments/{shipment_id}/payments": {
+      "get": {
+        "operationId": "operations_payment_history",
+        "summary": "Read scoped shipment payment attempts; no hosted token or card details.",
+        "parameters": [
+          {
+            "name": "shipment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentHistory"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "securitySchemes": {
-      "ProviderSignature": {"type":"apiKey","in":"header","name":"X-Provider-Signature","description":"Logical header; provider adapter maps actual provider signature header and validates original body."},
+      "ProviderSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-ANET-Signature"
+      },
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer"
@@ -6985,7 +7182,7 @@
             "type": "string",
             "minLength": 12,
             "maxLength": 72,
-            "description": "12–72 UTF-8 bytes; longer values are rejected, never truncated."
+            "description": "12\u201372 UTF-8 bytes; longer values are rejected, never truncated."
           },
           "address": {
             "$ref": "#/components/schemas/Address"
@@ -7470,6 +7667,20 @@
             ]
           },
           "development_only": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "LOCAL_TEST",
+              "AUTHORIZE_NET_SANDBOX"
+            ]
+          },
+          "checkout_token": {
+            "type": "string",
+            "description": "Sensitive short-lived hosted form token. POST to checkout_url; never put in a URL or persist in browser storage."
+          },
+          "checkout_expired": {
             "type": "boolean"
           }
         },
@@ -8673,6 +8884,63 @@
           "operation_id",
           "status"
         ]
+      },
+      "PaymentHistory": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "payment_id",
+                "provider",
+                "reference",
+                "transaction_id",
+                "amount_cents",
+                "currency",
+                "status",
+                "created_at",
+                "quote_expires_at"
+              ],
+              "properties": {
+                "payment_id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "reference": {
+                  "type": "string"
+                },
+                "transaction_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "amount_cents": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "quote_expires_at": {
+                  "type": "string",
+                  "format": "date-time"
+      }
+    }
+  }
+}
+        }
       }
     }
   }
