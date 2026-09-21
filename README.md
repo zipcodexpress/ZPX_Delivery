@@ -1,40 +1,82 @@
 # ZPX Delivery
 
-Project documentation and implementation starting point for the ZPX locker-to-locker delivery application.
+Initial development foundation for the Austin hub-and-spoke delivery network.
 
-**Status:** specification handoff; application implementation has not started. Simulator-based development is permitted by the handoff; live hardware rollout has separate commissioning gates.
+**Current status:** PostgreSQL + ThinkPHP + React are running on the external SSD.
+Local identity, customer sending/receiving, operator shipment inspection, test quotes,
+local/sandbox checkout and printable test labels are implemented. See [current progress](docs/PROGRESS.md)
+and [shipping verification](docs/verification/P2.1-shipping.md). Authorize.net sandbox authentication, hosted token issuance, test capture and label generation passed.
+See [provider evidence](docs/verification/P2.2-providers.md). SMTP authentication and one
+authorized test email passed; automatic mail delivery remains opt-in. Driver/hub handoffs,
+native apps and physical terminal control remain incomplete.
 
-## Start here
+**Database:** PostgreSQL 17. Canonical migrations live in `apps/api/database/migrations`,
+with checksum tracking and separate migration/runtime credentials. Earlier MySQL
+handoff SQL remains historical input; do not execute it for this application.
 
-1. Read the [current Phase 1 handoff](ZPX_Phase1_Codex_Package/README.md), revision 4 dated 2026-09-17.
-2. Follow its [development entry point](ZPX_Phase1_Codex_Package/CODEX_START_HERE.md) and [implementation execution contract](ZPX_Phase1_Codex_Package/docs/13_IMPLEMENTATION_EXECUTION.md).
-3. Use the [backlog and acceptance criteria](ZPX_Phase1_Codex_Package/docs/11_BACKLOG_AND_ACCEPTANCE.md) and [open items](ZPX_Phase1_Codex_Package/docs/12_READINESS_AND_OPEN_ITEMS.md).
-4. Follow the [documentation workflow](docs/DOCUMENTATION_GUIDE.md) when changing requirements or implementation.
+## Run on your M4 Mac
 
-## Source material
+Keep your checkout on the external APFS SSD:
 
-| Location | Purpose |
-| --- | --- |
-| `ZPX_Phase1_Codex_Package/` | Current Phase 1 baseline, domain rules, API contract, draft SQL and verification tooling |
-| `ZPX_Delivery_Codex_Implementation_Package/` | Earlier design and broader routing reference; reconcile differences against the current baseline before implementation |
-| Root ZIP files | Original handoff archives, retained unchanged for provenance; do not edit or regenerate for routine updates |
-| `docs/decisions/` | Project decisions and reasons |
-| `docs/verification/` | Commands actually run, results and limitations |
+`/Volumes/<your SSD name>/Developer/ZPX_Delivery`
 
-Original package paths are preserved for this initial import. Before application scaffolding, perform the handoff's requested move to `docs/handoff/` as a dedicated change, updating all links and validation paths. Move files rather than creating competing editable copies.
+Follow [Mac local setup](docs/LOCAL_DEVELOPMENT_MAC.md) for cloning, prerequisites and troubleshooting. The SSD name is a parameter; no script formats or erases the disk. The shipping increment is on `feature/P2.1-shipping`, stacked on the identity and database foundation branches.
 
-The canonical API input for now is [contracts/openapi.json](ZPX_Phase1_Codex_Package/contracts/openapi.json). The earlier API outline is reference material. Draft SQL must be reviewed and tested against a disposable delivery database before adoption as application migrations.
+From your checkout with Colima or Docker Desktop running:
 
-## Package validation
-
-With Python 3 installed:
-
-```powershell
-python -X utf8 ZPX_Phase1_Codex_Package/tests/validate_handoff.py
+```bash
+python3 scripts/dev.py up
 ```
 
-This checks handoff consistency, not application correctness, executable database migrations or hardware readiness.
+Customer: http://localhost:5173 · Operations: http://localhost:5174
 
-## Development updates
+Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the physical M4 run remains pending. See [actual evidence and limits](docs/verification/M0-foundation.md). The current pages implement the local flows described in the shipping verification notes; they do not claim a completed physical delivery.
 
-Use a feature branch and pull request for each reviewable task. Include the backlog task ID, update affected documentation alongside code, and record actual verification results. See [CONTRIBUTING.md](CONTRIBUTING.md).
+## Project map
+
+| Path | Responsibility |
+|---|---|
+| apps/api | ThinkPHP identity and local shipping services |
+| apps/customer-web | Customer account, sending/receiving and local shipping |
+| apps/operations-web | Staff accounts and scoped shipment inspection |
+| packages/ui | Shared web foundation components |
+| packages/contracts | Generated shared API types and contract compilation gate |
+| simulators/locker | Persistent authenticated normalized door-event simulator |
+| scripts | Mac external-SSD checkout and local development commands |
+| deployment | Local-only Docker Compose services |
+| docs/handoff | Canonical Phase 1 revision 4 handoff, draft SQL and OpenAPI |
+| docs/DEVELOPMENT_PLAN.md | Cross-application milestones and next sprint |
+| docs/PROGRESS.md | Current stage and session handoff |
+
+Native mobile and a new kiosk terminal are still required. Android is the preferred terminal direction; the old Windows terminal is reference-only, per [decision 0002](docs/decisions/0002-new-terminal-platform.md). Neither application has been scaffolded or built in this increment.
+
+## Checks
+
+```bash
+npm ci --ignore-scripts
+npm run check
+npm run build
+python3 -m unittest discover -s tests -p 'test_*.py'
+python3 docs/handoff/tests/validate_handoff.py
+```
+
+`npm run test-db` and `npm run test-e2e` require the local Docker stack. They verify disposable PostgreSQL domain/security/concurrency checks and live HTTP readiness, respectively. The complete physical parcel journey remains unimplemented.
+
+## Design and collaboration
+
+Start with [the handoff](docs/handoff/README.md), [execution contract](docs/handoff/docs/13_IMPLEMENTATION_EXECUTION.md), [development plan](docs/DEVELOPMENT_PLAN.md), [documentation workflow](docs/DOCUMENTATION_GUIDE.md) and [CONTRIBUTING](CONTRIBUTING.md).
+
+The canonical API remains [OpenAPI](docs/handoff/contracts/openapi.json). The handoff was moved in a dedicated commit; no competing editable copy is maintained. The older ZPX_Delivery_Codex_Implementation_Package remains future-routing reference. Root ZIP files remain historical inputs.
+
+Use feature branches and pull requests. Keep code, tests, affected design and milestone evidence together. GitHub Issues/Projects owns task status. Never commit credentials, real customer records or production configuration. The runtime database role is restricted separately from the migrator; production deployment hardening remains outstanding.
+
+See [remaining Phase 1 work and owner inputs](docs/PHASE1_REMAINING_WORK.md) for what comes next. API contract edits require `npm run contracts:generate`; `npm run check` rejects invalid contracts or stale generated definitions. Generated types do not imply the business API endpoints are implemented.
+
+## Local shipping preview
+
+Verified customer accounts can send **and** receive. Open the customer portal to
+create a draft, request a test quote, simulate checkout, and print a watermarked
+test label. Use Receiving to claim a shipment reference with matching verified
+contacts and a fresh code from `python3 scripts/dev.py inbox`. Operators can inspect
+the queue within their staff assignments. All sites, prices and payments are synthetic;
+no drop-off or charge occurs. See [shipping evidence and remaining scope](docs/verification/P2.1-shipping.md).

@@ -1,35 +1,83 @@
 # Development progress
 
-Purpose: milestone summary and session handoff; task status belongs in GitHub Issues/Projects.
+Purpose: milestone/session summary; task status belongs in GitHub Issues/Projects.
 Audience: ZPX owner, developers and Codex.
-Status: Draft planning baseline.
-Owner: Unassigned.
-Last reviewed: 2026-09-18.
+Status: PostgreSQL, local identity and customer/operator shipping slices verified; M0/M1 remain incomplete.
+Owner: unassigned. Last reviewed: 2026-09-19.
 
-## Current stage
+## Current development
 
-P0.1 planning subtask: IN_PROGRESS, pending review of [issue 1](https://github.com/zipcodexpress/ZPX_Delivery/issues/1) and the associated documentation PR. Application implementation has not started. See [development plan](DEVELOPMENT_PLAN.md).
+Foundation: branch `feature/P1.1-postgresql-foundation`, [PR 6](https://github.com/zipcodexpress/ZPX_Delivery/pull/6),
+[P1.1 issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5).
+Richard approved PostgreSQL + ThinkPHP + React; Fleetbase evaluation is no longer a prerequisite.
+See [platform decision](decisions/0004-platform-baseline.md).
 
-The current authority is Phase 1 revision 4. The older relay/matchmaking package remains reference material. Customer/driver share a mobile codebase with role navigation; hub/admin share operations web.
+## Implemented and verified locally
 
-## Work completed in this session
+- Authenticated shell Git/GitHub CLI checkout on the external writable APFS Document SSD.
+- Colima with SSD storage, Node 24.19.0, PostgreSQL 17.11 and PHP 8.3.33 arm64 containers.
+- ThinkPHP 8.1.4 HTTP lifecycle, explicit routes, safe JSON failures and locked Composer dependencies.
+- Canonical 73-table PostgreSQL schema plus checksum ledger and separate migration/runtime credentials.
+- Additive ownership migration binds compartments to the correct locker and manifest generation.
+- Development-only transactional seed loader: six synthetic identities, twenty locker sites,
+  one hub, two drivers, forty frozen compartments and ten unpaid draft parcels.
+- Repeat seed preserves edited records and credentials. Failures roll back all seeded records.
+- Two-process last-compartment contention test proves one winner without overwriting its claim.
+- React customer/operations foundation shells and authenticated durable synthetic locker simulator.
+- Contract/type checks, web builds, Python setup tests, ThinkPHP routing/error tests,
+  PostgreSQL constraints/permissions/rollback/concurrency tests and six HTTP readiness checks.
 
-- Verified private repository access through the connected GitHub app.
-- Materialized 66 text files at reviewed commit 8b58ee5913bddd43335207a70e15f8afb8d8f1ba; ZIP archives were not downloaded or changed.
-- Read root instructions and current design, with targeted comparison to older routing scope.
-- Prepared comprehensive milestones, application boundaries, first sprint, reuse decision and rollout criteria.
-- Reran static handoff validation and checked plan links; see [verification](verification/development-plan-review.md).
+See [local setup](LOCAL_DEVELOPMENT_MAC.md), [Mac environment evidence](verification/P1.1-mac-local-2026-09-19.md)
+and [backend architecture](BACKEND_DATABASE_ARCHITECTURE.md).
+Local generated credentials remain in Git-ignored `.local/seed-credentials.txt` with owner-only access.
+The customer page now supports registration, sign-in and contact verification; operations has staff sign-in.
+See [identity evidence](verification/P1.2-identity.md). Synthetic demo contacts are added
+with `python3 scripts/dev.py demo-accounts`, preserving their generated passwords.
 
 ## Next dependency
 
-Begin P0.1 with documentation reorganization and a bounded platform-reuse decision, then lock toolchains and scaffold applications. Start P0.2 simulator and P0.3 hardware/deployed-writer discovery alongside the foundation work.
+Richard confirmed one ZPX-operated network: customers may use eligible public
+sites; staff access is scoped by site/hub. Identity work continues on
+`feature/P1.2-identity`, based on the verified foundation. No customer may choose
+an organization or staff role during public registration.
 
-## Blockers and open decisions
+P1.2 now includes registration, encrypted contacts, local verification, cookie/native sessions,
+CSRF, refresh replay protection and scoped-role primitives. Real verification delivery awaits
+Richard's email/SMS provider decision. Password recovery, device enrollment and legacy
+account linking remain P1.2 work. Next comes P1.3 authorized topology/reservations,
+then shipment/payment/labels and custody workflows.
+The database reservation test is not a completed reservation service or physical door test.
+Native mobile/Android kiosk apps, protocol fixtures, providers and hardware commissioning
+remain outstanding. Use synthetic data/fake providers until actual configuration is approved.
 
-- Native shell git clone lacks credentials. GitHub connector reads and branch/file writes work. Establish a repository-enabled development environment before build work; do not mistake this text snapshot for a full clone.
-- Fleetbase adoption is unselected; current ThinkPHP/React baseline remains in force.
-- Resolve requested_size prose/schema mismatch and delegated terminal API gaps before corresponding UI paths.
-- Physical rollout needs missing terminal dependency resolution, actual hardware inventory and legacy writer/schema evidence.
-- Assign engineering/operations owners and confirm actual pilot sites, rates and provider choices before launch.
+## Historical evidence
 
-No database migration, application build, physical door operation or deployment was performed.
+Earlier MySQL and P0.1 results are retained in [M0 evidence](verification/M0-foundation.md)
+and [contract evidence](verification/M0-contracts.md). They are not PostgreSQL results.
+The old terminal is reference-only per [decision 0002](decisions/0002-new-terminal-platform.md).
+No production access, physical door commands, PR merge or production deployment occurred.
+
+## P2.1/P2.2 shipping increment
+
+Branch `feature/P2.1-shipping` adds Sending/Receiving under one CUSTOMER account,
+shipment-bound recipient proof, operator scope inspection, local test checkout and
+authenticated printable labels. See [decision 0006](decisions/0006-customer-shipping-and-test-checkout.md)
+and [shipping evidence](verification/P2.1-shipping.md). No real charge or physical
+transfer occurs. Authorize.net is selected; its adapter and sandbox validation remain.
+Driver pickup and hub receiving remain distinct P3 work, with no new broad staff permissions.
+
+## Provider integration update — 2026-09-19
+
+P2.1/P2.2 remain IN_PROGRESS on `feature/P2.2-providers-operations`.
+Authorize.net sandbox authentication, hosted form token creation, transaction reporting,
+a real sandbox test-card capture, server verification and PDF generation passed.
+Operations now shows scoped payment history. SMTP authentication and the single
+user-authorized diagnostic email passed. The mail worker is implemented and tested,
+but automatic sends remain disabled pending the user's explicit opt-in.
+See [provider evidence](verification/P2.2-providers.md) and [decision 0007](decisions/0007-sandbox-payments-mail.md).
+Earlier statements about missing payment/email credentials are superseded by this update.
+No native shipping app, physical deposit, driver pickup or hub receipt is claimed complete.
+
+The user subsequently approved email activation. The local mail profile is now
+running, restricted to the approved recipient, with SMTP authentication and routing
+verified. No old local-only messages were sent; no account was automatically created.

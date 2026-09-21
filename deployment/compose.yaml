@@ -1,0 +1,144 @@
+name: zpx-delivery-dev
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: zpx_delivery_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD:?Run python3 scripts/dev.py init}
+      DB_PASSWORD: ${DB_PASSWORD:?Run python3 scripts/dev.py init}
+      DB_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run python3 scripts/dev.py init}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deployment/postgres/init-roles.sh:/docker-entrypoint-initdb.d/010-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zpx_delivery_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/migrate.php", "up"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_migrator
+      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?Run init}
+      AUTH_LOOKUP_KEY: ${AUTH_LOOKUP_KEY:?Run init}
+      ZPX_ORGANIZATION_ID: ${ZPX_ORGANIZATION_ID:-0}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-LOCAL_TEST}
+      AUTHORIZE_NET_ENVIRONMENT: ${AUTHORIZE_NET_ENVIRONMENT:-sandbox}
+      AUTHORIZE_NET_API_LOGIN_ID: ${AUTHORIZE_NET_API_LOGIN_ID:-}
+      AUTHORIZE_NET_TRANSACTION_KEY: ${AUTHORIZE_NET_TRANSACTION_KEY:-}
+      AUTHORIZE_NET_SIGNATURE_KEY: ${AUTHORIZE_NET_SIGNATURE_KEY:-}
+      MAIL_DELIVERY_MODE: ${MAIL_DELIVERY_MODE:-local}
+      MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
+      AUTH_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  mail-worker:
+    profiles: ["mail"]
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/mail-worker.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?Run init}
+      AUTH_LOOKUP_KEY: ${AUTH_LOOKUP_KEY:?Run init}
+      MAIL_DELIVERY_MODE: ${MAIL_DELIVERY_MODE:-}
+      MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      SMTP_SERVER: ${SMTP_SERVER:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER_EMAIL: ${SMTP_USER_EMAIL:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PWD: ${SMTP_PWD:-}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  db-tests:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["sh", "-c", "php tests/http.php && php tests/integration.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      TEST_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
+      APP_ENV: test
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["php", "bin/seed.php"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: zpx_runtime
+      DB_PASSWORD: ${DB_PASSWORD:?Run init}
+      APP_ENV: development
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  customer-web:
+    image: node:24.19.0-bookworm-slim
+    working_dir: /workspace
+    command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev --workspace=@zpx/customer-web -- --host 0.0.0.0"]
+    environment: {API_PROXY_TARGET: "http://api:8000", VITE_USE_POLLING: "1"}
+    volumes:
+      - .:/workspace
+      - customer_modules:/workspace/node_modules
+    ports: ["127.0.0.1:5173:5173"]
+  operations-web:
+    image: node:24.19.0-bookworm-slim
+    working_dir: /workspace
+    command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev --workspace=@zpx/operations-web -- --host 0.0.0.0"]
+    environment: {API_PROXY_TARGET: "http://api:8000", VITE_USE_POLLING: "1"}
+    volumes:
+      - .:/workspace
+      - operations_modules:/workspace/node_modules
+    ports: ["127.0.0.1:5174:5174"]
+  simulator:
+    image: node:24.19.0-bookworm-slim
+    working_dir: /workspace
+    command: ["node", "simulators/locker/server.mjs"]
+    environment:
+      SIMULATOR_TOKEN: ${SIMULATOR_TOKEN:?Run init}
+      SIMULATOR_HOST: 0.0.0.0
+      SIMULATOR_STATE_PATH: /state/state.json
+    volumes:
+      - ./simulators:/workspace/simulators:ro
+      - simulator_data:/state
+    ports: ["127.0.0.1:8090:8090"]
+volumes:
+  postgres_data:
+  simulator_data:
+  customer_modules:
+  operations_modules:

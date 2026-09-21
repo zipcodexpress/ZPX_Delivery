@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/vendor
+.env
+.env.*
+**/*.zip
+**/__pycache__
+.local
+**/runtime

@@ -1,10 +1,14 @@
 # Repository instruction entry point
 
-The current handoff is in ZPX_Phase1_Codex_Package/. References below to CODEX_START_HERE.md and docs/13_IMPLEMENTATION_EXECUTION.md refer to paths within that package. Read the root README.md and docs/DOCUMENTATION_GUIDE.md for repository navigation and documentation workflow.
+The current handoff is in docs/handoff/. References below to CODEX_START_HERE.md and docs/13_IMPLEMENTATION_EXECUTION.md refer to paths within that package. Read the root README.md and docs/DOCUMENTATION_GUIDE.md for repository navigation and documentation workflow.
 
 # Instructions for implementation in the new ZPX delivery project
 
 Scope: this handoff and the new delivery project. These instructions do not grant production access or override instructions in separately checked-out reference repositories.
+
+Database override: Richard selected PostgreSQL. `apps/api/database/migrations` is canonical; MySQL handoff SQL and MySQL-specific gates are superseded by equivalent PostgreSQL gates. Read docs/decisions/0003-postgresql-backend.md and docs/BACKEND_DATABASE_ARCHITECTURE.md. Never change applied migration checksums or give runtime services migration credentials.
+
+User clarification superseding historical terminal platform requirements: the old terminal is reference-only for locker/API behavior and door-control/status protocols. Build a new terminal; Android is the preferred direction, with device/SDK selection pending. Do not port, rebuild or depend on Zippora.exe/ZipporaService, legacy Windows DLLs or a Windows compatibility lane unless separately requested. Read docs/decisions/0002-new-terminal-platform.md. Shared physical locker coexistence rules still apply where existing sites participate.
 
 - Read CODEX_START_HERE.md and docs/13_IMPLEMENTATION_EXECUTION.md first. The handoff contains specifications and draft migrations, not an existing implementation.
 - Keep new delivery data and authentication separate from legacy apartment records. Shared hardware requires fixed compartment ownership and one command gate before any physical pilot.
