@@ -37,12 +37,24 @@ usage metering is explicitly out of scope.
 
 Integration: separate ledger. `scan_events` and `label_print_jobs` are not
 altered. No asset column is added, no historical row is backfilled, and
-`printer_reference` stays free text rather than becoming a foreign key. The
-accepted limitation is that the system can state who held a given scanner at a
-given time, but cannot state which scanner produced a given scan event. If
-per-scan equipment attribution is later required for warranty, dispute or
-maintenance purposes, this decision must be superseded rather than quietly
-extended.
+`printer_reference` stays free text rather than becoming a foreign key. Richard
+confirmed on 2026-09-21 that tying an individual scan to the scanner that
+produced it is not required, so this is a settled non-requirement rather than an
+open limitation. The ledger answers who held a given scanner, at which hub, and
+when; it does not answer which scanner produced a given scan, and does not need
+to.
+
+The binding audit requirement is narrower, and the implemented flows already meet
+it. Every scan must record the staff member who performed it and the hub where it
+happened. `scan_events.actor_user_id` is `NOT NULL`, so staff attribution is
+structural rather than conventional, and all four insert sites — inbound pickup,
+rejected driver scan, hub receive and outbound load — pass the acting user. Hub
+attribution is recorded directly on the matching `custody_events` row as
+`location_id` and `new_custodian_ref`, and the two rows share an
+`operation_uuid`, so the hub for any scan is recoverable by join without adding a
+column. "Where" in this requirement means which hub, not a geolocation and not a
+specific locker. The asset ledger must preserve both attributions and must not
+weaken them.
 
 Interface: an admin area inside operations-web, gated to `ADMIN` and
 `HUB_SUPERVISOR`. No third Vite workspace, port or deployment target is created.
@@ -68,6 +80,14 @@ hardware ownership commissioning; `StaffGrant` requires `user_id`, `role_code`
 and an audited `reason`. Generated clients come from the canonical contract and
 must not be hand-edited.
 
+One asymmetry is known and unresolved. `Custody::recordRejectedScan` writes a
+`scan_events` row for every refused driver scan, but neither `HubReceiving` nor
+`HubDispatch` records a refusal. An accepted hub scan is therefore fully
+attributed, while a rejected one — including a staff member from another hub
+attempting to scan into a session they do not own — leaves no trace of who
+tried. Since the point of this requirement is knowing who did what, recording
+refused hub scans should be settled alongside it rather than left implicit.
+
 Affected documents: `docs/handoff/docs/11_BACKLOG_AND_ACCEPTANCE.md` (P7.1 scope
 and acceptance), the canonical OpenAPI contract under `/admin/*`,
 `docs/CURRENT_STATUS.md`, and migration 003 when the ledger tables are added.
@@ -75,5 +95,6 @@ and acceptance), the canonical OpenAPI contract under `/admin/*`,
 Verification needed: none at this time, because nothing is implemented. When
 built, the acceptance evidence must include cross-hub denial tests for every
 asset and staff operation, a test proving the runtime database role cannot update
-or delete a ledger row, and contract conformance for `/admin/locations` and
+or delete a ledger row, a test proving each ledger row records both the acting
+staff member and the hub, and contract conformance for `/admin/locations` and
 `/admin/role-grants`.

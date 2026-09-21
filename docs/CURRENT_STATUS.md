@@ -97,6 +97,9 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 - **No admin surface.** `ADMIN` and `DISPATCHER` fall through `Account.tsx` into the `Shipping`
   component, and the five contract-specified `/admin/*` endpoints are unimplemented. Deferred with
   hub management — see ADR `docs/decisions/0008-hub-management-and-asset-custody.md`.
+- **Rejected hub scans are not recorded.** `Custody::recordRejectedScan` logs every refused driver
+  scan, but `HubReceiving` and `HubDispatch` log none — so a refused hub scan, including a
+  cross-hub attempt, leaves no record of who tried. Accepted scans are fully attributed.
 
 ---
 
