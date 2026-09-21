@@ -97,4 +97,5 @@
 .profile-shift-info{margin-top:16px;padding:12px 16px;background:#eef5ed;border-radius:8px}
 .profile-shift-info h3{font-size:13px;margin:0 0 4px;color:#163c2b}
 .profile-shift-info p{margin:0;font-size:13px;color:#536f60}
+.field-hint{font-size:12px;color:#607669;margin:0 0 8px;line-height:1.5}
 @media(max-width:800px){.driver-layout{grid-template-columns:1fr}.driver-sidebar{order:2}.run-header{flex-direction:column}.scan-bar{flex-direction:column;align-items:stretch}.scan-bar button{width:100%}}

@@ -30,16 +30,20 @@ type ScanResult = {
 };
 type DriverProfile = {
   driver_id: string; user_id: string; name: string; status: string;
-  engagement_type: string; email: string | null; phone: string | null;
+  engagement_type: string; verification_status: string;
+  email: string | null; phone: string | null;
   applied_at: string; approved_at: string | null;
   license: { number: string; state: string; expiry: string } | null;
   date_of_birth: string | null;
   address: { line1: string; line2: string | null; city: string; state: string; postal_code: string; country_code: string } | null;
   emergency_contact: { name: string; phone: string } | null;
-  vehicle_details: { make: string; model: string; year: number | null; color: string } | null;
+  vehicle: {
+    make: string; model: string; year: number | null; color: string;
+    license_plate: string; vin: string; registration_state: string; registration_expiry: string;
+    insurance_provider: string; insurance_policy: string; insurance_expiry: string;
+  } | null;
   insurance_reference: string | null;
   notes: string | null;
-  assigned_vehicle: { code: string; max_weight_g: number; max_packages: number } | null;
 };
 type Wallet = {
   total_earned_cents: number; total_settled_cents: number; pending_cents: number;
@@ -76,8 +80,12 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
     address_line1: p.address?.line1 || '', address_line2: p.address?.line2 || '', address_city: p.address?.city || '',
     address_state: p.address?.state || '', address_postal_code: p.address?.postal_code || '', address_country_code: p.address?.country_code || 'US',
     emergency_contact_name: p.emergency_contact?.name || '', emergency_contact_phone: p.emergency_contact?.phone || '',
-    vehicle_make: p.vehicle_details?.make || '', vehicle_model: p.vehicle_details?.model || '',
-    vehicle_year: p.vehicle_details?.year?.toString() || '', vehicle_color: p.vehicle_details?.color || '',
+    vehicle_make: p.vehicle?.make || '', vehicle_model: p.vehicle?.model || '',
+    vehicle_year: p.vehicle?.year?.toString() || '', vehicle_color: p.vehicle?.color || '',
+    vehicle_license_plate: p.vehicle?.license_plate || '', vehicle_vin: p.vehicle?.vin || '',
+    vehicle_registration_state: p.vehicle?.registration_state || '', vehicle_registration_expiry: p.vehicle?.registration_expiry?.slice(0, 10) || '',
+    vehicle_insurance_provider: p.vehicle?.insurance_provider || '', vehicle_insurance_policy: p.vehicle?.insurance_policy || '',
+    vehicle_insurance_expiry: p.vehicle?.insurance_expiry?.slice(0, 10) || '',
     insurance_reference: p.insurance_reference || '', notes: p.notes || '',
   });
 
@@ -145,26 +153,36 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
           {field('Contact Phone', 'emergency_contact_phone', 'tel')}
         </div>
       </fieldset>
-      <fieldset><legend>Vehicle Details</legend>
+      <fieldset><legend>Your Vehicle</legend>
+        <p className="field-hint">Enter your own vehicle details for verification. Drivers use their personal vehicles.</p>
         <div className="profile-form-grid">
           {field('Make', 'vehicle_make', 'text', 'Ford')}
           {field('Model', 'vehicle_model', 'text', 'Transit')}
           {field('Year', 'vehicle_year', 'number', '2024')}
           {field('Color', 'vehicle_color', 'text', 'White')}
+          {field('License Plate', 'vehicle_license_plate', 'text', 'ABC-1234')}
+          {field('VIN', 'vehicle_vin', 'text', '1HGBH41JXMN109186')}
+          {field('Registration State', 'vehicle_registration_state', 'text', 'TX')}
+          {field('Registration Expiry', 'vehicle_registration_expiry', 'date')}
         </div>
       </fieldset>
-      <fieldset><legend>Insurance & Notes</legend>
+      <fieldset><legend>Vehicle Insurance</legend>
         <div className="profile-form-grid">
-          {field('Insurance Reference', 'insurance_reference')}
+          {field('Insurance Provider', 'vehicle_insurance_provider', 'text', 'Geico')}
+          {field('Policy Number', 'vehicle_insurance_policy', 'text')}
+          {field('Insurance Expiry', 'vehicle_insurance_expiry', 'date')}
+          {field('Insurance Reference', 'insurance_reference', 'text')}
         </div>
-        <label className="profile-input full-width"><span>Notes</span>
+      </fieldset>
+      <fieldset><legend>Notes</legend>
+        <label className="profile-input full-width"><span>Additional Notes</span>
           <textarea value={form.notes} disabled={!editing || saving} rows={3}
             onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} />
         </label>
       </fieldset>
       {editing && <div className="profile-save-bar"><button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button></div>}
     </form>
-    {p.assigned_vehicle && <div className="profile-shift-info"><h3>Assigned Vehicle</h3><p>{p.assigned_vehicle.code} · Max {(p.assigned_vehicle.max_weight_g / 1000).toFixed(0)}kg · {p.assigned_vehicle.max_packages} packages</p></div>}
+    {p.verification_status && <div className="profile-shift-info"><h3>Verification Status</h3><p>{badge(p.verification_status)} {p.verification_status === 'PENDING' ? '— Your documents are being reviewed.' : p.verification_status === 'VERIFIED' ? '— All documents verified.' : ''}</p></div>}
   </div>;
 }
 

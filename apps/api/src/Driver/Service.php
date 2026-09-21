@@ -143,21 +143,13 @@ final class Service
             throw new Failure(404, 'DRIVER_NOT_FOUND', 'No driver profile found.');
         }
 
-        $vehicle = $this->q(
-            "SELECT v.code, v.max_weight_g, v.max_packages
-             FROM driver_shifts ds
-             JOIN vehicles v ON v.id=ds.vehicle_id
-             WHERE ds.driver_id=? AND ds.ends_at > now()
-             ORDER BY ds.starts_at DESC LIMIT 1",
-            [$driver['id']]
-        )->fetch(PDO::FETCH_ASSOC);
-
         return [
             'driver_id' => (string)$driver['id'],
             'user_id' => $user,
             'name' => $driver['display_name'],
             'status' => $driver['status'],
             'engagement_type' => $driver['engagement_type'],
+            'verification_status' => $driver['verification_status'],
             'email' => $driver['email'],
             'phone' => $driver['phone'],
             'applied_at' => $driver['applied_at'],
@@ -180,19 +172,21 @@ final class Service
                 'name' => $driver['emergency_contact_name'],
                 'phone' => $driver['emergency_contact_phone'],
             ] : null,
-            'vehicle_details' => $driver['vehicle_make'] ? [
+            'vehicle' => $driver['vehicle_make'] ? [
                 'make' => $driver['vehicle_make'],
                 'model' => $driver['vehicle_model'],
                 'year' => $driver['vehicle_year'] ? (int)$driver['vehicle_year'] : null,
                 'color' => $driver['vehicle_color'],
+                'license_plate' => $driver['vehicle_license_plate'],
+                'vin' => $driver['vehicle_vin'],
+                'registration_state' => $driver['vehicle_registration_state'],
+                'registration_expiry' => $driver['vehicle_registration_expiry'],
+                'insurance_provider' => $driver['vehicle_insurance_provider'],
+                'insurance_policy' => $driver['vehicle_insurance_policy'],
+                'insurance_expiry' => $driver['vehicle_insurance_expiry'],
             ] : null,
             'insurance_reference' => $driver['insurance_reference'],
             'notes' => $driver['notes'],
-            'assigned_vehicle' => $vehicle ? [
-                'code' => $vehicle['code'],
-                'max_weight_g' => (int)$vehicle['max_weight_g'],
-                'max_packages' => (int)$vehicle['max_packages'],
-            ] : null,
         ];
     }
 
@@ -205,7 +199,9 @@ final class Service
             'date_of_birth','address_line1','address_line2','address_city','address_state',
             'address_postal_code','address_country_code','emergency_contact_name',
             'emergency_contact_phone','vehicle_make','vehicle_model','vehicle_year',
-            'vehicle_color','insurance_reference','notes'];
+            'vehicle_color','vehicle_license_plate','vehicle_vin','vehicle_registration_state',
+            'vehicle_registration_expiry','vehicle_insurance_provider','vehicle_insurance_policy',
+            'vehicle_insurance_expiry','insurance_reference','notes'];
         Input::fields($input, [], $allowed);
 
         return (new Transaction($this->db))->run(function () use ($user, $input, $key) {
@@ -234,6 +230,12 @@ final class Service
                 'emergency_contact_phone' => 'emergency_contact_phone',
                 'vehicle_make' => 'vehicle_make', 'vehicle_model' => 'vehicle_model',
                 'vehicle_year' => 'vehicle_year', 'vehicle_color' => 'vehicle_color',
+                'vehicle_license_plate' => 'vehicle_license_plate', 'vehicle_vin' => 'vehicle_vin',
+                'vehicle_registration_state' => 'vehicle_registration_state',
+                'vehicle_registration_expiry' => 'vehicle_registration_expiry',
+                'vehicle_insurance_provider' => 'vehicle_insurance_provider',
+                'vehicle_insurance_policy' => 'vehicle_insurance_policy',
+                'vehicle_insurance_expiry' => 'vehicle_insurance_expiry',
                 'insurance_reference' => 'insurance_reference', 'notes' => 'notes',
             ];
             foreach ($columnMap as $inputKey => $column) {
