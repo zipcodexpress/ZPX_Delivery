@@ -9,36 +9,38 @@
 
 Date/Time: 2026-09-21
 Agent: Qwen Code
-Checkpoint reason: Milestone — P3.2 driver inbound complete (backend + frontend + seed)
+Checkpoint reason: Milestone — P3.2 driver management complete
 
 ---
 
 ## Current Branch
 
-`feature/P3.2-driver-inbound`
+`feature/P3.2-driver-management`
 
 ## Last Relevant Commit
 
-`d344f3a` — feat(P3.2): add driver workspace frontend and seed data
+`8a9dfea` — fix(migration): move settled_at/settlement_reference to driver_pay_entries
 
 ---
 
 ## Current Objective
 
-P3.2 driver inbound collection is complete. Next: P3.3 hub receiving.
+P3.2 driver management is complete. Next: P3.3 hub receiving or PR merge.
 
 ---
 
 ## Completed
 
-- Migration 010: indexes + run/manifest state constraints
-- `Custody\Service`: listRuns, getRun, acknowledgeRun, resolveScan, inboundPickupScan
-- `DriverController` + 5 API routes
-- `DriverWorkspace.tsx` frontend: run list, manifest, scan interface, progress
-- Account.tsx routes DRIVER role to workspace in operations audience
-- Seed extended: vehicle, shift, inbound run, 5 packages AT_ORIGIN with labels
-- 42 driver-inbound tests + seed test updates — all passing
-- `npm run check`, `npm run build`, `python3 scripts/dev.py test-db` — all green
+- P3.2 driver inbound backend (runs, manifest, scan, custody transfer)
+- P3.2 driver inbound frontend (run list, manifest, scan interface)
+- P3.2 driver management (registration, approval, profile, wallet, transactions)
+- P3.2 driver frontend tabs (Runs, Profile, Wallet, Transactions)
+- P3.2 compensation model (fixed shift/route rate, admin payment recording)
+- P3.2 seed data (vehicle, shift, inbound run, 5 AT_ORIGIN packages with labels)
+- P3.2 seed fix (verified contacts with encrypted values and correct HMAC)
+- Migration 010 (driver inbound indexes) + Migration 011 (driver management)
+- Documentation: `docs/DRIVER_MANAGEMENT.md`
+- All tests passing: `npm run check`, `npm run build`, `python3 scripts/dev.py test-db`
 
 ---
 
@@ -50,16 +52,17 @@ None.
 
 ## Exact Continuation Point
 
-P3.2 is complete. Next milestone: P3.3 hub receiving.
-File: `apps/api/src/Custody/Service.php` — add hub receiving methods.
-Branch: create `feature/P3.3-hub-receiving` from this branch or main.
+P3.2 is complete. Next milestones:
+- P3.3: Hub receiving (hub staff independently scan parcels, discrepancy handling)
+- P4.1: Hub sorting, staging slots, waves
+- P4.2: Outbound load, ordered-stop driver workflow
 
 ---
 
 ## Upcoming
 
 1. P3.3: Hub receiving sessions, independent receipt scans, discrepancy workflows
-2. P4.1: Hub sorting, staging slots, waves
+2. P4.1: Hub sorting, staging slots, waves and route publishing
 3. P4.2: Outbound load, ordered-stop driver workflow
 
 ---
@@ -73,15 +76,17 @@ No known blocking issues.
 ## Important Files Changed
 
 - `apps/api/database/migrations/010_driver_inbound.sql`
-- `apps/api/src/Custody/Service.php`
-- `apps/api/src/Http/DriverController.php`
-- `apps/api/route/api.php`
-- `apps/api/src/Development/Seed.php`
-- `apps/api/tests/driver-inbound.php`
-- `apps/api/tests/seed.php`
-- `packages/ui/DriverWorkspace.tsx`
-- `packages/ui/driver.css`
-- `packages/ui/Account.tsx`
+- `apps/api/database/migrations/011_driver_management.sql`
+- `apps/api/src/Custody/Service.php` — driver inbound scan service
+- `apps/api/src/Driver/Service.php` — driver management service
+- `apps/api/src/Http/DriverController.php` — driver inbound HTTP
+- `apps/api/src/Http/DriverManagementController.php` — driver management HTTP
+- `apps/api/route/api.php` — 13 new driver endpoints
+- `apps/api/src/Development/Seed.php` — driver run fixture + verified contacts
+- `packages/ui/DriverWorkspace.tsx` — 4-tab driver workspace
+- `packages/ui/driver.css` — driver workspace styles
+- `packages/ui/Account.tsx` — DRIVER role routing
+- `docs/DRIVER_MANAGEMENT.md` — driver lifecycle documentation
 
 ---
 
@@ -89,7 +94,7 @@ No known blocking issues.
 
 ### Passing
 
-- `python3 scripts/dev.py test-db` — full suite including 42 driver-inbound + seed tests
+- `python3 scripts/dev.py test-db` — full suite including driver-inbound + seed tests
 - `npm run check` — contracts, tsc, simulator/contract tests
 - `npm run build` — customer-web and operations-web
 
@@ -101,36 +106,39 @@ None.
 
 ## Important Current Decisions
 
-- Driver frontend uses shared `packages/ui/` pattern (no separate app)
-- DRIVER role in operations audience routes to DriverWorkspace, not Shipping
-- Seed creates 5 AT_ORIGIN packages for local driver testing
-- Label token hash = sha256(payload) matching Shipping\Service
+- Compensation: fixed shift/route rate per design docs (no per-minute formulas)
+- Driver approval: PENDING → ACTIVE workflow via admin endpoints
+- Driver workspace: 4 tabs (Runs, Profile, Wallet, Transactions) in operations-web
+- Seed creates verified contacts with encrypted values and correct HMAC for login
+- ZPX_ORGANIZATION_ID must be prefixed to docker compose commands (caching issue)
 
 ---
 
 ## API / Database Impact
 
-API: 5 driver endpoints (GET /driver/runs, GET /runs/{id}, POST /runs/{id}/acknowledgments, GET /scans/resolve, POST /runs/{id}/scans)
-DB: Migration 010 (3 indexes, 2 check constraints, no new tables)
+API: 13 driver endpoints (5 inbound + 8 management)
+DB: Migration 010 (3 indexes) + Migration 011 (driver approval + compensation columns)
 
 ---
 
 ## Git State
 
-Clean on `feature/P3.2-driver-inbound`. Ready for PR.
+Clean on `feature/P3.2-driver-management`. Ready for PR.
 
 ---
 
 ## Next Recommended Actions
 
-1. Create PR for P3.2
+1. Create PR for P3.2 (inbound + management combined)
 2. Start P3.3 hub receiving on new branch
-3. Re-seed dev DB (`python3 scripts/dev.py down && python3 scripts/dev.py up`) to get driver run data
+3. Re-seed dev DB to test driver workspace UI
 
 ---
 
 ## Handoff Notes
 
-- Driver workspace accessible at http://localhost:5174 with DRIVER-IN account
-- Seed credentials in `.local/seed-credentials.txt` after re-seed
-- DBeaver: use `docker compose exec postgres psql -U postgres -d zpx_delivery_dev` (port not exposed to avoid test conflicts)
+- Driver workspace at http://localhost:5174 with DRIVER-IN account
+- Seed credentials: run `docker compose exec api php bin/seed.php`
+- Test labels: TEST-LABEL-001 through TEST-LABEL-005
+- DBeaver: `docker compose exec postgres psql -U postgres -d zpx_delivery_dev`
+- Prefix `ZPX_ORGANIZATION_ID=1` to docker compose commands
