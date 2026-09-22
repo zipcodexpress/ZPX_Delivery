@@ -183,8 +183,16 @@ check($custodyEvent['previous_custodian_type'] === 'SENDER', 'previous custodian
 check($custodyEvent['new_custodian_type'] === 'DRIVER', 'new custodian is DRIVER');
 
 // Test 15: Scan event recorded
-$scanEvent = $runtime->query("SELECT action, result_code FROM scan_events WHERE package_id={$packageIds[0]} AND action='INBOUND_PICKUP'")->fetch(PDO::FETCH_ASSOC);
+$scanEvent = $runtime->query("SELECT action, result_code FROM scan_events WHERE package_id={$packageIds[0]} AND action='INBOUND_PICKUP' ORDER BY id")->fetch(PDO::FETCH_ASSOC);
 check($scanEvent['result_code'] === 'ACCEPTED', 'scan event recorded as ACCEPTED');
+
+// Test 15b: Refused scans are journaled as well. The refusal row cannot be written inside the
+// transaction that refuses it — that transaction rolls back — so this proves the journal flushes.
+// A repeat pickup is refused as WRONG_STATE: the parcel already left AT_ORIGIN on its first scan.
+$refusedPickup = $runtime->query("SELECT actor_user_id, result_code FROM scan_events WHERE run_id=$run AND action='INBOUND_PICKUP' AND result_code<>'ACCEPTED' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+check(count($refusedPickup) >= 1, 'refused pickup scan survives the rollback');
+check(in_array('WRONG_STATE', array_column($refusedPickup, 'result_code'), true), 'refused pickup scan records why it was refused');
+check((string)$refusedPickup[0]['actor_user_id'] === $driverUser, 'refused pickup scan names the driver who attempted it');
 
 // Test 16: Manifest items updated
 $loadedItems = $runtime->query("SELECT COUNT(*) FROM manifest_items WHERE run_id=$run AND state='LOADED'")->fetchColumn();

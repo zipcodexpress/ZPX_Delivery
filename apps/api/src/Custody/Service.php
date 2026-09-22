@@ -11,10 +11,16 @@ use Zpx\Infrastructure\Messaging\Outbox;
 final class Service
 {
     private Identity $identity;
+    private ?ScanJournal $journal = null;
 
     public function __construct(private PDO $db, private Secrets $crypto)
     {
         $this->identity = new Identity($db, $crypto);
+    }
+
+    private function journal(): ScanJournal
+    {
+        return $this->journal ??= new ScanJournal($this->db);
     }
 
     private function q(string $sql, array $values = []): \PDOStatement
@@ -32,6 +38,24 @@ final class Service
     private function requireDriver(string $user): void
     {
         $this->identity->requireRole($user, 'DRIVER');
+    }
+
+    /** Resolution precedes a scan for driver pickup and for independent hub receiving. */
+    private function requireResolveAccess(string $user): void
+    {
+        try { $this->identity->requireRole($user, 'DRIVER'); return; }
+        catch (Failure) {}
+
+        // HUB_STAFF grants are scoped to a hub location, so the grant must be matched there.
+        $location = $this->q(
+            'SELECT h.location_id FROM hub_staff hs
+             JOIN hubs h ON h.id=hs.hub_id
+             JOIN locations l ON l.id=h.location_id
+             WHERE hs.user_id=? AND l.organization_id=?',
+            [$user, $this->org()]
+        )->fetchColumn();
+        if (!$location) { throw new Failure(403, 'ACCESS_DENIED', 'Access denied.'); }
+        $this->identity->requireRole($user, 'HUB_STAFF', (string)$location);
     }
 
     private function driverId(string $userId): string
@@ -206,7 +230,7 @@ final class Service
 
     public function resolveScan(string $user, string $labelToken): array
     {
-        $this->requireDriver($user);
+        $this->requireResolveAccess($user);
         Input::text($labelToken, 1, 500);
 
         $tokenHash = hash('sha256', $labelToken);
@@ -245,7 +269,7 @@ final class Service
         $labelToken = Input::text($input['label_token'], 1, 500);
         $driverId = $this->driverId($user);
 
-        return (new Transaction($this->db))->run(function () use ($user, $driverId, $runId, $input, $key, $labelToken) {
+        return $this->journal()->transact(function () use ($user, $driverId, $runId, $input, $key, $labelToken) {
             $scope = 'custody:' . $this->org() . ':' . $user . ':inbound-pickup';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
@@ -410,9 +434,6 @@ final class Service
 
     private function recordRejectedScan(string $user, string $runId, ?string $packageId, string $action, string $resultCode): void
     {
-        $this->q(
-            "INSERT INTO scan_events(operation_uuid,package_id,actor_user_id,run_id,action,result_code,received_at) VALUES (?,?,?,?,?, ?,now())",
-            [Secrets::uuid(), $packageId, $user, $runId, $action, $resultCode]
-        );
+        $this->journal()->stage($user, $runId, $packageId, $action, $resultCode);
     }
 }
