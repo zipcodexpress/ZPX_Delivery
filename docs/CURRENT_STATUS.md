@@ -15,8 +15,9 @@ Checkpoint reason: Milestone — hub authorization gaps fixed; refused scans now
 
 ## Current Branch
 
-`feature/P3.3-hub-receiving` — carries the P3.3, P4.1 and all fix commits.
-Not pushed. `origin` still has only `feature/P3.2-driver-management`.
+`feature/P3.3-hub-receiving` — pushed, open as **PR #12** against `main`
+(https://github.com/zipcodexpress/ZPX_Delivery/pull/12). PR #11 merged, so `main` is at `71e852f`
+and this branch stacks cleanly on it.
 
 ## Last Relevant Commit
 
@@ -164,15 +165,15 @@ timestamps, slot status).
 
 ## Git State
 
-Clean on `feature/P3.3-hub-receiving`, 10 commits ahead of `origin` and none pushed: P3.3
-(`1bc9393`), P4.1 (`a8088ae`), then the receiving version fix (`7929b66`), hub authorization fix
-(`7f09fed`), scan journal fix (`26e4274`) and four documentation commits.
+Clean on `feature/P3.3-hub-receiving`, pushed and up to date with `origin`. 11 commits ahead of
+`main`: P3.3 (`1bc9393`), P4.1 (`a8088ae`), receiving version fix (`7929b66`), hub authorization fix
+(`7f09fed`), scan journal fix (`26e4274`) and six documentation commits. PR #12 awaits review.
 
 ---
 
 ## Next Recommended Actions
 
-1. Push the branch and open PR(s) covering P3.3 + P4.1
+1. Address PR #12 review feedback, then merge
 2. Build the P4.1 hub staging/dispatch workspace UI — P4.1 is backend-only today
 3. Build the P3.3 discrepancy workbench (DAMAGED/EXTRA dispositions, exception records)
 4. Advance the route run and its hub stop when a receiving session closes
