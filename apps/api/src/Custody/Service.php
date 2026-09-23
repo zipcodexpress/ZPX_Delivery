@@ -65,6 +65,17 @@ final class Service
         return (string)$id;
     }
 
+    private function developmentFixtureToken(array $item): ?string
+    {
+        if (!in_array(getenv('APP_ENV'), ['development', 'test'], true)
+            || !in_array($item['development_only'], [true, 't', '1', 1], true)) { return null; }
+        for ($i = 1; $i <= 5; $i++) {
+            $token = sprintf('TEST-LABEL-%03d', $i);
+            if (hash_equals(hash('sha256', $token), (string)$item['token_hash'])) { return $token; }
+        }
+        return null;
+    }
+
     public function listRuns(string $user): array
     {
         $this->requireDriver($user);
@@ -127,12 +138,13 @@ final class Service
         $items = $this->q(
             "SELECT mi.id AS manifest_item_id, mi.state, mi.package_id, p.package_uuid, p.state AS package_state,
                     p.custodian_type, p.custodian_ref, p.version AS package_version,
-                    s.public_reference, si.si,
+                    s.public_reference, s.development_only, si.si, encode(pl.token_hash,'hex') AS token_hash,
                     dest.name AS destination_name, dest.code AS destination_code,
                     rs.sequence_no AS stop_sequence
              FROM manifest_items mi
              JOIN packages p ON p.id=mi.package_id
              JOIN shipments s ON s.id=p.shipment_id
+             LEFT JOIN package_labels pl ON pl.package_id=p.id AND pl.status='ACTIVE'
              LEFT JOIN shipping_identifiers si ON si.package_id=p.id
              JOIN locations dest ON dest.id=s.destination_location_id
              JOIN route_run_stops rs ON rs.id=mi.stop_id
@@ -156,20 +168,25 @@ final class Service
                 'state' => $s['state'],
                 'location' => ['name' => $s['location_name'], 'code' => $s['location_code'], 'address' => $s['address_text']],
             ], $stops),
-            'manifest' => array_map(fn(array $m) => [
-                'manifest_item_id' => (string)$m['manifest_item_id'],
-                'package_id' => (string)$m['package_id'],
-                'package_uuid' => $m['package_uuid'],
-                'public_reference' => $m['public_reference'],
-                'si' => $m['si'],
-                'state' => $m['state'],
-                'package_state' => $m['package_state'],
-                'custodian_type' => $m['custodian_type'],
-                'custodian_ref' => $m['custodian_ref'],
-                'package_version' => (int)$m['package_version'],
-                'destination' => ['name' => $m['destination_name'], 'code' => $m['destination_code']],
-                'stop_sequence' => (int)$m['stop_sequence'],
-            ], $items),
+            'manifest' => array_map(function (array $m): array {
+                $item = [
+                    'manifest_item_id' => (string)$m['manifest_item_id'],
+                    'package_id' => (string)$m['package_id'],
+                    'package_uuid' => $m['package_uuid'],
+                    'public_reference' => $m['public_reference'],
+                    'si' => $m['si'],
+                    'state' => $m['state'],
+                    'package_state' => $m['package_state'],
+                    'custodian_type' => $m['custodian_type'],
+                    'custodian_ref' => $m['custodian_ref'],
+                    'package_version' => (int)$m['package_version'],
+                    'destination' => ['name' => $m['destination_name'], 'code' => $m['destination_code']],
+                    'stop_sequence' => (int)$m['stop_sequence'],
+                ];
+                $token = $this->developmentFixtureToken($m);
+                if ($token !== null) { $item['development_label_token'] = $token; }
+                return $item;
+            }, $items),
         ];
     }
 

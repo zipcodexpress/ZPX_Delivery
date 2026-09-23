@@ -166,6 +166,15 @@ The driver workspace (`packages/ui/DriverWorkspace.tsx`) includes four tabs:
 3. **Wallet** — earnings summary, current shift compensation
 4. **Transactions** — payment history with settlement status
 
+### Local DRIVER-IN scan testing
+
+Run `python3 scripts/dev.py seed`, sign in to the operations portal as the generated `DRIVER-IN`
+account, and acknowledge its published inbound run. The five manifest packages can then be scanned
+in order with `TEST-LABEL-001` through `TEST-LABEL-005`. These deterministic values exist only for
+the guarded development/test fixture; `package_labels` stores their SHA-256 hashes, not plaintext.
+In development, the workspace shows each token in the manifest; selecting it copies the value into
+the scan field. Production label generation and API responses do not expose raw label tokens.
+
 ## Future Work
 
 - Driver self-service profile editing (name, contact, vehicle)

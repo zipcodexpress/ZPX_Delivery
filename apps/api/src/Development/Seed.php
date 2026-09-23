@@ -30,7 +30,10 @@ final class Seed
         $existing->execute([self::ORGANIZATION . ':' . $this->namespace]);
         $ids = $existing->fetchAll(PDO::FETCH_COLUMN);
         if (count($ids) > 1) { throw new RuntimeException('Ambiguous seed organization; no data changed'); }
-        if ($ids) { return ['created' => false, 'organization_id' => $ids[0], 'credentials' => []]; }
+        if ($ids) {
+            $this->syncDriverInLabelHashes((string)$ids[0]);
+            return ['created' => false, 'organization_id' => $ids[0], 'credentials' => []];
+        }
 
         $org = $this->insert('INSERT INTO organizations(name) VALUES (?)', [self::ORGANIZATION . ':' . $this->namespace]);
         $accounts = ['ADMIN' => 'ADMIN', 'CUSTOMER' => 'CUSTOMER', 'RECIPIENT' => 'CUSTOMER', 'HUB-STAFF' => 'HUB_STAFF', 'DRIVER-IN' => 'DRIVER', 'DRIVER-OUT' => 'DRIVER'];
@@ -110,8 +113,9 @@ final class Seed
             $this->db->prepare("UPDATE shipments SET order_status='READY', payment_status='PAID', development_only=true WHERE id=?")->execute([$pkg['shipment_id']]);
             // Transition package to AT_ORIGIN
             $this->db->prepare("UPDATE packages SET state='AT_ORIGIN', custodian_type='LOCKER', custodian_ref='origin', current_location_id=?, version=1 WHERE id=?")->execute([$locations['AUS-001'], $pkg['id']]);
-            // Create active label (token_ciphertext is null in seed; scan uses token_hash only)
-            $payload = 'ZPX1:L:' . rtrim(strtr(base64_encode(random_bytes(18)), '+/', '-_'), '=');
+            // Deterministic plaintext exists only as fixture knowledge for local manual scans.
+            // As with production labels, the database stores only its one-way hash.
+            $payload = sprintf('TEST-LABEL-%03d', $i + 1);
             $tokenHash = hash('sha256', $payload);
             $this->db->prepare("INSERT INTO package_labels(package_id,label_version,token_hash,status,expires_at) VALUES (?,1,decode(?,'hex'),'ACTIVE',now()+interval '30 days')")->execute([$pkg['id'], $tokenHash]);
             // Create shipping identifier
@@ -122,6 +126,30 @@ final class Seed
         }
 
         return ['created' => true, 'organization_id' => $org, 'credentials' => $credentials];
+    }
+
+    /** Upgrade pre-existing local fixtures whose original random label plaintext was discarded. */
+    private function syncDriverInLabelHashes(string $org): void
+    {
+        $q = $this->db->prepare(
+            "SELECT pl.id FROM package_labels pl
+             JOIN manifest_items mi ON mi.package_id=pl.package_id
+             JOIN route_runs r ON r.id=mi.run_id
+             JOIN drivers d ON d.id=r.driver_id
+             JOIN users u ON u.id=d.user_id
+             JOIN packages p ON p.id=pl.package_id
+             JOIN shipments s ON s.id=p.shipment_id
+             WHERE r.organization_id=? AND r.kind='INBOUND' AND u.external_auth_id=?
+               AND s.development_only=true AND pl.status='ACTIVE'
+             ORDER BY mi.id"
+        );
+        $q->execute([$org, 'synthetic:' . $this->namespace . ':DRIVER-IN']);
+        $labels = $q->fetchAll(PDO::FETCH_COLUMN);
+        if (count($labels) !== 5) { throw new RuntimeException('Expected five synthetic DRIVER-IN labels'); }
+        $update = $this->db->prepare("UPDATE package_labels SET token_hash=decode(?,'hex'), token_ciphertext=NULL WHERE id=?");
+        foreach ($labels as $i => $label) {
+            $update->execute([hash('sha256', sprintf('TEST-LABEL-%03d', $i + 1)), $label]);
+        }
     }
 
     private function location(string $org, string $code, string $kind, string $mode): string

@@ -13,6 +13,7 @@ type RunList = { items: Run[] };
 type ManifestItem = {
   manifest_item_id: string; package_id: string; package_uuid: string;
   public_reference: string; si: string | null;
+  development_label_token?: string;
   state: string; package_state: string;
   custodian_type: string; custodian_ref: string; package_version: number;
   destination: { name: string; code: string };
@@ -326,9 +327,10 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
           {scanResult && <div className="scan-result"><span className={scanResult.result_code === 'ACCEPTED' ? 'scan-ok' : 'scan-fail'}>{scanResult.result_code}</span><span>Package {scanResult.package_id} · v{scanResult.package_version} → {scanResult.state}</span><span>{scanResult.loaded_count}/{scanResult.expected_count} loaded</span></div>}
           <div className="manifest-stops">{selected.stops.map(stop => {
             const items = selected.manifest.filter(m => m.stop_sequence === stop.sequence);
+            const showTestLabels = items.some(item => item.development_label_token);
             return <div key={stop.id} className="stop-group"><h3>Stop {stop.sequence} · {stop.location.name} <small>{stop.location.code}</small></h3>
-              <table className="manifest-table"><thead><tr><th>Package</th><th>SI</th><th>Destination</th><th>State</th></tr></thead>
-                <tbody>{items.map(item => (<tr key={item.manifest_item_id} className={item.state === 'LOADED' ? 'loaded' : ''}><td><code>{item.public_reference}</code></td><td>{item.si || '—'}</td><td>{item.destination.code}</td><td>{badge(item.state)}</td></tr>))}</tbody></table></div>;
+              <table className="manifest-table"><thead><tr><th>Package</th><th>SI</th>{showTestLabels && <th>Test label</th>}<th>Destination</th><th>State</th></tr></thead>
+                <tbody>{items.map(item => (<tr key={item.manifest_item_id} className={item.state === 'LOADED' ? 'loaded' : ''}><td><code>{item.public_reference}</code></td><td>{item.si || '—'}</td>{showTestLabels && <td>{item.development_label_token ? <button type="button" className="test-label-token" onClick={() => setScanInput(item.development_label_token || '')} title="Use this synthetic label in the scan field">{item.development_label_token}</button> : '—'}</td>}<td>{item.destination.code}</td><td>{badge(item.state)}</td></tr>))}</tbody></table></div>;
           })}</div>
         </>}
       </section>

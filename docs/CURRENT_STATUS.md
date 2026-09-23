@@ -7,34 +7,36 @@
 
 ## Last Updated
 
-Date/Time: 2026-09-21
-Agent: Qwen Code
-Checkpoint reason: Milestone — hub authorization gaps fixed; refused scans now journaled; hub management deferred (ADR 0008)
+Date/Time: 2026-09-22
+Agent: Codex
+Checkpoint reason: Seeded DRIVER-IN labels made deterministic and usable for local scan testing
 
 ---
 
 ## Current Branch
 
-`feature/P3.3-hub-receiving` — pushed, open as **PR #12** against `main`
-(https://github.com/zipcodexpress/ZPX_Delivery/pull/12). PR #11 merged, so `main` is at `71e852f`
-and this branch stacks cleanly on it.
+`main` — PR #12 is merged at `1532680`.
 
 ## Last Relevant Commit
 
-`26e4274` — fix(scan): journal refused scans after the rollback, not inside it
+`1532680` — Merge pull request #12 from zipcodexpress/feature/P3.3-hub-receiving
 
 ---
 
 ## Current Objective
 
 P3.3 hub receiving and P4.1 hub sorting/dispatch are implemented, authorization-hardened and
-passing tests locally. Next: build the missing P4.1 frontend, close the remaining P3.3 gaps,
-then push and open PRs.
+passing tests locally. Local DRIVER-IN scan fixtures now use deterministic hash-only label tokens.
+Next: build the missing P4.1 frontend and close the remaining P3.3 gaps.
 
 ---
 
 ## Completed
 
+- Local synthetic DRIVER-IN labels are `TEST-LABEL-001` through `TEST-LABEL-005`; only their
+  SHA-256 hashes are stored. Tests resolve `TEST-LABEL-001` and verify its package. In development/test, the run manifest returns
+  matching fixture tokens for development-only shipments; DriverWorkspace displays scan shortcuts.
+  Repeat seed upgrades legacy random hashes for these five labels without replacing local accounts.
 - P3.2 driver inbound + driver management (on `feature/P3.2-driver-management`, pushed)
 - P3.3 hub receiving — migration 014, `HubReceiving\Service`, 4 endpoints, `HubReceiving.tsx`
   workspace routed for HUB_STAFF, 33-assertion suite. Open a session per inbound run, scan each
@@ -107,6 +109,9 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 
 ## Important Files Changed
 
+- Seed/Custody services and seed tests — hash-only DRIVER-IN fixtures and guarded display coverage
+- `packages/ui/DriverWorkspace.tsx`, `packages/ui/driver.css` — visible/clickable development labels
+- `docs/DRIVER_MANAGEMENT.md` — local DRIVER-IN scan instructions
 - `apps/api/database/migrations/014_hub_receiving.sql`, `015_hub_dispatch.sql`
 - `apps/api/src/HubReceiving/Service.php`, `apps/api/src/HubDispatch/Service.php`
 - `apps/api/src/Http/HubReceivingController.php`, `apps/api/src/Http/HubDispatchController.php`
@@ -121,7 +126,7 @@ No blockers, and no failing tests. The following gaps are known and unaddressed:
 
 ### Passing
 
-- `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py test-db` — full suite, 373 assertions
+- `npm run test-db` — full disposable PostgreSQL suite, 379 assertions
   (hub-receiving 46, hub-dispatch 21). Both hub fixtures grant `HUB_STAFF` scoped to the hub
   location, matching `Seed.php`; an org-wide grant would hide the location-scoping regressions.
 - `npm run check` — contracts, tsc, 9 node tests
@@ -165,19 +170,17 @@ timestamps, slot status).
 
 ## Git State
 
-Clean on `feature/P3.3-hub-receiving`, pushed and up to date with `origin`. 11 commits ahead of
-`main`: P3.3 (`1bc9393`), P4.1 (`a8088ae`), receiving version fix (`7929b66`), hub authorization fix
-(`7f09fed`), scan journal fix (`26e4274`) and six documentation commits. PR #12 awaits review.
+Working tree on `main`; deterministic seed-label changes are currently uncommitted. The unrelated
+untracked `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` is preserved unchanged.
 
 ---
 
 ## Next Recommended Actions
 
-1. Address PR #12 review feedback, then merge
-2. Build the P4.1 hub staging/dispatch workspace UI — P4.1 is backend-only today
-3. Build the P3.3 discrepancy workbench (DAMAGED/EXTRA dispositions, exception records)
-4. Advance the route run and its hub stop when a receiving session closes
-5. P4.2: outbound load, ordered-stop driver workflow
+1. Build the P4.1 hub staging/dispatch workspace UI — P4.1 is backend-only today
+2. Build the P3.3 discrepancy workbench (DAMAGED/EXTRA dispositions, exception records)
+3. Advance the route run and its hub stop when a receiving session closes
+4. P4.2: outbound load, ordered-stop driver workflow
 
 ---
 
@@ -188,7 +191,8 @@ Clean on `feature/P3.3-hub-receiving`, pushed and up to date with `origin`. 11 c
 - Customer portal: http://localhost:5173 · API: http://localhost:8000
 - Seed accounts include `HUB-STAFF` (hub receiving) and `DRIVER-IN` (inbound run); the seed creates
   the hub, `hub_staff` link and a PUBLISHED inbound run with five AT_ORIGIN parcels.
-- Seed/re-seed: `docker compose exec api php bin/seed.php`; test labels `TEST-LABEL-001`…`005`
+- Seed/re-seed: `python3 scripts/dev.py seed` (also upgrades old fixtures); acknowledge DRIVER-IN, then scan
+  `TEST-LABEL-001`…`TEST-LABEL-005`. These are synthetic fixture values and only their hashes are stored.
 - Seeded origin parcels are `version=1`; after driver pickup they are `version=2`. Relevant to any
   work touching scan preconditions.
 - DB shell: `docker compose exec postgres psql -U postgres -d zpx_delivery_dev`
