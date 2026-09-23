@@ -6,96 +6,86 @@
 
 Date: 2026-09-23
 Agent: Codex
-Checkpoint: P3.3 receiving discrepancy completion implemented and fully validated
+Checkpoint: Package tracking and custody visibility implemented and validated locally
 
 ## Branch / Baseline
 
-- Branch: `feature/P3.3-discrepancy-completion`
-- Baseline: `main` at `731684b` (`fix(dev): expose deterministic seeded label tokens`)
-- Latest feature commit: `f40d729` (`feat(hub): complete receiving discrepancy workflow`)
-- PR #13 is open against `main`: https://github.com/zipcodexpress/ZPX_Delivery/pull/13
+- Branch: `feature/package-tracking-custody-view`
+- Baseline: merged P3.3 work (`main` includes PR #13 at `07f923e`)
+- Latest feature commit: `a1320b7` (`feat(operations): add package custody tracking`).
+- The two planning documents remain untracked human-authored files and are intentionally preserved.
 
 ## Current Objective
 
-P3.3 hub receiving correctness is complete: durable SHORT, DAMAGED, and EXTRA discrepancies,
-immutable receiving lifecycle, and run/stop completion. Next is package tracking/custody visibility
-on its own branch after this work is reviewed/merged.
+Deliver privacy-safe customer milestones plus an authoritative, assignment-scoped operations package
+search and custody timeline. This milestone is implemented; the next planned feature is P4.1 hub
+operations UI.
 
 ## Completed in Current Work
 
-- Added migration `016_receiving_discrepancies.sql`, extending the existing `exceptions` table with
-  organization, hub, driver, receiving-session, notes, and resolution metadata.
-- SHORT: closing a partial session records receiving disposition and an open exception while the
-  unreceived package remains `INBOUND_CUSTODY` under DRIVER custody.
-- DAMAGED: a physical scan transfers custody DRIVER → HUB, records the damage disposition, notes,
-  package/audit history, and an open exception.
-- EXTRA: an off-manifest scan records an EXTRA receiving item, rejected scan evidence, and an open
-  exception without changing custody or adding manifest membership.
-- Closing a receiving session marks the inbound run and its stops `COMPLETED`.
-- Opening is serialized per hub/run and any prior session makes the normal receiving lifecycle final.
-- Added hub-scoped discrepancy list and resolve operations; cross-hub object probes return 404.
-- Extended HubReceiving UI with condition selection, damage notes, discrepancy counts/list, and a
-  resolution action. EXTRA messaging explicitly states custody was unchanged.
-- Prior development fixture work is committed at `731684b`: deterministic hash-only DRIVER-IN labels
-  `TEST-LABEL-001`…`005`, repeat-seed legacy upgrade, and clickable DriverWorkspace test tokens.
-
-## In Progress / Exact Continuation Point
-
-None. P3.3 is ready for review. Do not begin package tracking in this branch; after merge, create
-`feature/package-tracking-custody-view` and use authoritative custody, scan, receiving, staging,
-dispatch, package-event, and discrepancy records as described in the tracking plan.
+- Added exact operations package search by public reference, package UUID, shipping identifier (SI),
+  or internal package ID at `GET /operations/packages/search?q=...`.
+- Search reuses organization and current role/location/hub assignment scope; unauthorized and
+  cross-organization identifiers return no results.
+- Extended operations tracking with package identity, current custody/location, package version,
+  and a deterministic timeline assembled from existing authoritative tables.
+- Timeline sources include package events, custody events, accepted/refused scan evidence,
+  receiving dispositions, staging assignments, dispatch calls, and discrepancy creation/resolution.
+- Customer tracking retains only privacy-safe shipment milestones; it does not expose actors,
+  custody references, scan evidence, discrepancy notes, or operations details.
+- Added the operations-web package search and detailed custody timeline to the existing shipment
+  workspace. No parallel tracking screen or duplicate event table was introduced.
+- Updated the canonical OpenAPI contract and regenerated TypeScript types.
 
 ## Tests
 
-- `npm run test-db` passed after final P3.3 review (394 assertions): SHORT/DAMAGED/EXTRA,
-  custody preservation, lifecycle, cross-hub denial, stale version, workbench resolution, plus full suite.
-- PHP syntax checks passed for receiving service/controller/tests.
-- `npm run check` passed: contract/type validation and 9 Node tests.
+- `npm run test-db` passed: full PostgreSQL suite, including the new tracking aggregation,
+  rejected scan, customer redaction, all identifiers, hub scope, and cross-org checks.
+- `npm run check` passed: OpenAPI/generated types, TypeScript, and 9 Node tests.
 - `npm run build` passed for customer-web and operations-web.
+- PHP syntax checks passed for the shipping service/controller/test.
+- `git diff --check` passed.
 
 ## Important Decisions
 
-- `exceptions` remains the durable discrepancy source; no parallel discrepancy table was added.
-- No custody transfer occurs without a valid physical receipt. Session close never transfers missing parcels.
-- DAMAGED means physically received into HUB custody plus an exception; EXTRA preserves current custody.
-- One normal receiving session exists per hub/run. Corrections occur through discrepancy resolution.
-- Resolve-before-scan and current package version checks remain mandatory.
-- HUB_STAFF authorization remains location-scoped; cross-hub resources remain hidden with 404.
-- Package tracking/custody visibility is next, before P4.1 UI, per
-  `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md`; it must consume authoritative events and discrepancies.
-- Scan contract normalization remains a later dedicated branch; known field drift is not expanded here.
-- P7.1 hub/admin/asset management remains deferred until after P5.2 (ADR 0008).
+- No tracking projection/table was added. Read models are built from authoritative operational data.
+- Existing operations authorization remains the single scope rule: ADMIN/DISPATCHER grants may be
+  network or location scoped; hub staff must have active membership at the package's current hub.
+- Search is exact-match only to reduce accidental disclosure and noisy result sets.
+- Internal actors, custody references, rejected scans, and discrepancy notes are operations-only.
+- Raw label tokens are never queried or returned by tracking/search APIs.
+- Scan contract normalization remains a later dedicated branch.
 
-## Schema / API Impact
+## API / UI Impact
 
-- DB: migration 016 adds discrepancy context/resolution fields and indexes to `exceptions`.
-- API: `GET /hub/receiving-discrepancies` and
-  `POST /hub/receiving-discrepancies/{id}/resolve`; receiving scans accept optional
-  `disposition=RECEIVED|DAMAGED` and notes.
-- UI: HubReceiving includes discrepancy capture, summary, workbench, and resolution.
+- New API: `GET /api/delivery/v1/operations/packages/search?q=...`.
+- Extended operations response: `GET /operations/shipments/{id}/tracking` includes optional
+  `package`, `current_custody`, and `events` fields.
+- Customer response shape remains compatible: `shipment_id` plus `milestones`.
+- Operations shipment workspace now supports package lookup and authoritative custody inspection.
 
 ## Important Files
 
-- `apps/api/database/migrations/016_receiving_discrepancies.sql`
-- `apps/api/src/HubReceiving/Service.php`
-- `apps/api/src/Http/HubReceivingController.php`, `apps/api/route/api.php`
-- `apps/api/tests/hub-receiving.php`
-- `packages/ui/HubReceiving.tsx`, `packages/ui/hub-receiving.css`
+- `apps/api/src/Shipping/Service.php`
+- `apps/api/src/Http/ShippingController.php`, `apps/api/route/api.php`
+- `apps/api/tests/shipping.php`
+- `packages/ui/Shipping.tsx`, `packages/ui/shipping.css`
+- `docs/handoff/contracts/openapi.json`, `packages/contracts/generated/api.ts`
 
 ## Known Remaining Gaps
 
-- `/scans/resolve` contract drift remains: implementation fields differ from canonical contract and
-  action/run context is not normalized.
-- P4.1 hub staging/dispatch backend still needs its operations UI after package tracking.
-- Staging scans are not yet journaled; add accepted/refused staging evidence together.
-- Package tracking/custody visibility plan is present but intentionally not started on this branch.
+- P4.1 still needs a dedicated hub staging/dispatch operations UI.
+- Staging actions are represented by the authoritative assignment and package event; a dedicated
+  staging scan record should be added with P4.1 accepted/refused scan evidence.
+- `/scans/resolve` contract normalization remains pending.
+- P4.2 outbound driver delivery and P7.1 hub/admin/asset management remain later milestones.
 
-## Next Branch Sequence
+## Next Actions
 
-1. `feature/package-tracking-custody-view`
-2. `feature/P4.1-hub-operations-ui`
-3. `fix/scan-contract-normalization`
-4. `feature/P4.2-outbound-driver-delivery`
+1. Push the validated package-tracking milestone and open a PR when requested.
+2. After merge, create `feature/P4.1-hub-operations-ui`.
+3. Build receiving/staging/dispatch workbench UI on existing hub services.
+4. Follow with `fix/scan-contract-normalization`, then P4.2 outbound delivery.
 
 ## Local Notes
 

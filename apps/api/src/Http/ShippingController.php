@@ -14,7 +14,7 @@ final class ShippingController
         $requestId=Secrets::uuid();
         try {
             $method=$request->method(true);
-            $expected=in_array($action,['lookup','wallet-methods','wallet-history','locations','get','tracking','operations','operations-get','operations-tracking','operations-payments','pdf','pending-payment'],true)?'GET':'POST';
+            $expected=in_array($action,['lookup','wallet-methods','wallet-history','locations','get','tracking','operations','operations-search','operations-get','operations-tracking','operations-payments','pdf','pending-payment'],true)?'GET':'POST';
             if ($action==='shipments') { $expected=in_array($method,['GET','POST'],true)?$method:'GET, POST'; }
             if ($method!==$expected) { throw new Failure(405,'METHOD_NOT_ALLOWED','Unsupported method.'); }
             $origin=$request->header('origin','');
@@ -57,6 +57,7 @@ final class ShippingController
                 'shipments'=>$method==='POST'?$shipping->create($user,$input,$key):$shipping->list($user,Input::text($request->get('view','sending'),1,20),Input::text($request->get('cursor',''),0,18)),
                 'operations-payments'=>$shipping->paymentHistory($user,$shipment),
                 'operations'=>$shipping->list($user,'operations',Input::text($request->get('cursor',''),0,18)),
+                'operations-search'=>$shipping->searchPackages($user,Input::text($request->get('q',''),1,100)),
                 'get','operations-get'=>$shipping->get($user,$shipment,$view),
                 'tracking','operations-tracking'=>$shipping->tracking($user,$shipment,$view),
                 'hosted-session'=>(new \Zpx\Payments\HostedCheckout($db,$crypto))->prepare($user,$shipment),

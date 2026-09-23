@@ -76,7 +76,7 @@ final class Service
         (new Outbox($this->db))->append(Secrets::uuid(),'shipment',(string)$row['id'],'shipping.'.strtolower($type),['shipment_id'=>(string)$row['id']]);
     }
     private function select(): string {
-        return 'SELECT s.*,p.id AS package_id,p.state AS package_state,p.width_mm,p.height_mm,p.depth_mm,p.weight_g,p.current_location_id,p.custodian_type,p.custodian_ref,o.name AS origin_name,d.name AS destination_name FROM shipments s JOIN packages p ON p.shipment_id=s.id AND p.sequence_no=1 JOIN locations o ON o.id=s.origin_location_id JOIN locations d ON d.id=s.destination_location_id';
+        return 'SELECT s.*,p.id AS package_id,p.package_uuid,p.version AS package_version,p.state AS package_state,p.width_mm,p.height_mm,p.depth_mm,p.weight_g,p.current_location_id,p.custodian_type,p.custodian_ref,si.si,o.name AS origin_name,d.name AS destination_name,cl.name AS current_location_name FROM shipments s JOIN packages p ON p.shipment_id=s.id AND p.sequence_no=1 JOIN locations o ON o.id=s.origin_location_id JOIN locations d ON d.id=s.destination_location_id LEFT JOIN locations cl ON cl.id=p.current_location_id LEFT JOIN shipping_identifiers si ON si.package_id=p.id';
     }
     private function operationsWhere(string $user,array &$values): string {
         $values[]=$user;
@@ -117,6 +117,17 @@ final class Service
         return ['items'=>array_map(fn($r)=>$this->present($r,$user,$view),$rows),'next_cursor'=>$more?(string)end($rows)['id']:null];
     }
     public function get(string $user,string $id,string $view='customer'): array { return $this->present($this->row($user,$id,$view),$user,$view); }
+    public function searchPackages(string $user,string $query): array {
+        $query=trim(Input::text($query,1,100));
+        $values=[$this->org()];
+        $where=$this->operationsWhere($user,$values);
+        $values[]=$query; $values[]=$query; $values[]=$query;
+        $identifier="(s.public_reference=? OR p.package_uuid::text=? OR si.si=?";
+        if (preg_match('/^[1-9][0-9]{0,17}$/D',$query)) { $identifier.=' OR p.id=?'; $values[]=$query; }
+        $identifier.=')';
+        $rows=$this->q($this->select().' WHERE s.organization_id=? AND '.$where.' AND '.$identifier.' ORDER BY s.id DESC LIMIT 25',$values)->fetchAll(PDO::FETCH_ASSOC);
+        return ['items'=>array_map(fn($r)=>$this->present($r,$user,'operations'),$rows),'next_cursor'=>null];
+    }
     public function lookup(string $user,string $reference): array {
         $id=$this->q('SELECT id FROM shipments WHERE organization_id=? AND public_reference=?',[$this->org(),Input::text(trim($reference),1,64)])->fetchColumn();
         if (!$id) { throw new Failure(404,'SHIPMENT_NOT_FOUND','No shipment available for this account and reference.'); }
@@ -184,7 +195,56 @@ final class Service
     public function tracking(string $user,string $id,string $view): array {
         $row=$this->row($user,$id,$view);
         $events=$this->q('SELECT event_type,occurred_at FROM package_events WHERE package_id=? ORDER BY occurred_at,id',[$row['package_id']])->fetchAll(PDO::FETCH_ASSOC);
-        return ['shipment_id'=>$id,'milestones'=>array_map(fn($e)=>['code'=>$e['event_type'],'occurred_at'=>gmdate('c',strtotime($e['occurred_at']))],$events)];
+        $result=['shipment_id'=>$id,'milestones'=>array_map(fn($e)=>['code'=>$e['event_type'],'occurred_at'=>gmdate('c',strtotime($e['occurred_at']))],$events)];
+        if ($view!=='operations') { return $result; }
+
+        $result['package']=[
+            'package_id'=>(string)$row['package_id'],'package_uuid'=>$row['package_uuid'],'public_reference'=>$row['public_reference'],
+            'si'=>$row['si'],'state'=>$row['package_state'],'version'=>(int)$row['package_version'],
+            'origin_name'=>$row['origin_name'],'destination_name'=>$row['destination_name'],
+        ];
+        $result['current_custody']=[
+            'type'=>$row['custodian_type'],'reference'=>$row['custodian_ref'],
+            'location_id'=>$row['current_location_id']===null?null:(string)$row['current_location_id'],
+            'location_name'=>$row['current_location_name'],
+        ];
+        $result['events']=$this->operationsTimeline((string)$row['package_id']);
+        return $result;
+    }
+    private function operationsTimeline(string $package): array {
+        $timeline=[];
+        $append=static function (array &$target,array $row,string $source,string $code,string $occurred,array $details=[]): void {
+            $target[]=['source'=>$source,'source_id'=>(string)$row['id'],'code'=>$code,'result'=>$row['result'] ?? null,
+                'occurred_at'=>gmdate('c',strtotime($row[$occurred])),'actor'=>$row['actor'] ?? null,
+                'location_name'=>$row['location_name'] ?? null,'details'=>$details];
+        };
+        foreach ($this->q('SELECT pe.id,pe.event_type,pe.occurred_at,u.display_name AS actor FROM package_events pe LEFT JOIN users u ON u.id=pe.actor_user_id WHERE pe.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'PACKAGE_EVENT',$e['event_type'],'occurred_at');
+        }
+        foreach ($this->q('SELECT ce.id,ce.event_type,ce.previous_custodian_type,ce.previous_custodian_ref,ce.new_custodian_type,ce.new_custodian_ref,ce.package_version,ce.occurred_at,u.display_name AS actor,l.name AS location_name FROM custody_events ce LEFT JOIN users u ON u.id=ce.actor_user_id LEFT JOIN locations l ON l.id=ce.location_id WHERE ce.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'CUSTODY_EVENT',$e['event_type'],'occurred_at',['from'=>$e['previous_custodian_type'].':'.$e['previous_custodian_ref'],'to'=>$e['new_custodian_type'].':'.$e['new_custodian_ref'],'package_version'=>(int)$e['package_version']]);
+        }
+        foreach ($this->q('SELECT se.id,se.action,se.result_code AS result,se.run_id,se.received_at,u.display_name AS actor FROM scan_events se JOIN users u ON u.id=se.actor_user_id WHERE se.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'SCAN_EVENT',$e['action'],'received_at',['run_id'=>$e['run_id']===null?null:(string)$e['run_id']]);
+        }
+        foreach ($this->q('SELECT ri.id,ri.disposition,ri.created_at,rs.id AS session_id,l.name AS location_name,u.display_name AS actor FROM receiving_items ri JOIN receiving_sessions rs ON rs.id=ri.session_id JOIN hubs h ON h.id=rs.hub_id JOIN locations l ON l.id=h.location_id JOIN users u ON u.id=rs.receiver_user_id WHERE ri.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'RECEIVING_ITEM','RECEIVING_'.$e['disposition'],'created_at',['session_id'=>(string)$e['session_id']]);
+        }
+        foreach ($this->q('SELECT sa.id,sa.outbound_run_id,sa.routing_revision,sa.created_at,hs.code AS slot_code,l.name AS location_name,u.display_name AS actor FROM staging_assignments sa JOIN hub_slots hs ON hs.id=sa.slot_id JOIN hubs h ON h.id=hs.hub_id JOIN locations l ON l.id=h.location_id JOIN users u ON u.id=sa.assigned_by WHERE sa.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'STAGING_ASSIGNMENT','STAGED','created_at',['slot_code'=>$e['slot_code'],'outbound_run_id'=>(string)$e['outbound_run_id'],'routing_revision'=>(int)$e['routing_revision']]);
+        }
+        foreach ($this->q('SELECT dc.id,dc.status,dc.called_at,COALESCE(dc.actual_pickup_at,dc.confirmed_at,dc.called_at) AS occurred_at,l.name AS location_name,u.display_name AS actor,rr.id AS run_id FROM staging_assignments sa JOIN route_runs rr ON rr.id=sa.outbound_run_id JOIN dispatch_calls dc ON dc.id=rr.dispatch_call_id JOIN hubs h ON h.id=dc.hub_id JOIN locations l ON l.id=h.location_id LEFT JOIN drivers d ON d.id=dc.driver_id LEFT JOIN users u ON u.id=d.user_id WHERE sa.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'DISPATCH_CALL','DISPATCH_'.$e['status'],'occurred_at',['run_id'=>(string)$e['run_id'],'called_at'=>gmdate('c',strtotime($e['called_at']))]);
+        }
+        foreach ($this->q('SELECT e.id,e.code,e.status,e.notes,e.resolution_code,e.created_at,e.resolved_at,reporter.display_name AS actor,resolver.display_name AS resolver,l.name AS location_name FROM exceptions e JOIN users reporter ON reporter.id=e.recorded_by LEFT JOIN users resolver ON resolver.id=e.resolved_by LEFT JOIN hubs h ON h.id=e.hub_id LEFT JOIN locations l ON l.id=h.location_id WHERE e.package_id=?',[$package])->fetchAll(PDO::FETCH_ASSOC) as $e) {
+            $append($timeline,$e,'EXCEPTION','EXCEPTION_'.$e['code'],'created_at',['status'=>$e['status'],'notes'=>$e['notes']]);
+            if ($e['resolved_at']!==null) {
+                $resolved=$e; $resolved['actor']=$e['resolver'];
+                $append($timeline,$resolved,'EXCEPTION','EXCEPTION_RESOLVED','resolved_at',['exception_code'=>$e['code'],'resolution_code'=>$e['resolution_code']]);
+            }
+        }
+        usort($timeline,static fn($a,$b)=>[$a['occurred_at'],$a['source'],$a['source_id']]<=>[$b['occurred_at'],$b['source'],$b['source_id']]);
+        return $timeline;
     }
     private function localShipment(array $row): void {
         if (!in_array(getenv('APP_ENV'),['development','test'],true) || !$row['development_only']) {
