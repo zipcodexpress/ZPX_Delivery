@@ -13,6 +13,8 @@ Checkpoint: P4.2 outbound load and departure foundation implemented and validate
 - Branch: `feature/P4.2-outbound-driver-delivery`
 - Baseline: `main` at `211b9a9` (PR #17 integrated P4.1 and scan normalization).
 - Latest feature commit: `1d4bda9` (`feat(driver): enforce scanned outbound load before departure`).
+- PR #18 is open against `main`; all four GitHub checks passed:
+  https://github.com/zipcodexpress/ZPX_Delivery/pull/18
 - The two planning documents remain untracked human-authored files and are intentionally preserved.
 
 ## Current Objective
@@ -67,7 +69,7 @@ departure eligibility. P5.1 final deposit remains out of scope.
 
 ## Next Actions
 
-1. Commit, push, and open the P4.2 PR.
+1. Review and merge PR #18.
 2. Continue ordered-stop progress behavior without entering P5.1 final deposit scope.
 
 ## Local Notes
