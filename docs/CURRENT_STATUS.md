@@ -12,7 +12,7 @@ Checkpoint: P4.2 outbound load and departure foundation implemented and validate
 
 - Branch: `feature/P4.2-outbound-driver-delivery`
 - Baseline: `main` at `211b9a9` (PR #17 integrated P4.1 and scan normalization).
-- The branch is fast-forwarded to the merged baseline; validated P4.2 changes are ready to commit.
+- Latest feature commit: `1d4bda9` (`feat(driver): enforce scanned outbound load before departure`).
 - The two planning documents remain untracked human-authored files and are intentionally preserved.
 
 ## Current Objective
