@@ -21,7 +21,7 @@ foreach (['me/profile'=>'profile-update','me/payment-methods'=>'wallet-methods',
 foreach (['payments/<shipment>/hosted-session'=>'hosted-session','payments/<shipment>/reconcile'=>'reconcile-payment','shipments/<shipment>/payment-session'=>'payment','shipments/<shipment>/pending-payment'=>'pending-payment','development/payments/<shipment>/confirm'=>'confirm-payment','packages/<shipment>/labels'=>'labels','packages/<shipment>/label/pdf'=>'pdf','shipments/<shipment>'=>'get','shipments/<shipment>/tracking'=>'tracking','shipments/<shipment>/quotes'=>'quotes','shipments/<shipment>/cancel'=>'cancel','operations/shipments/<shipment>'=>'operations-get','operations/shipments/<shipment>/tracking'=>'operations-tracking','operations/shipments/<shipment>/payments'=>'operations-payments'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,$action,$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
 }
-foreach (['driver/runs'=>'runs','runs/<run_id>'=>'run-detail','runs/<run_id>/acknowledgments'=>'acknowledge','scans/resolve'=>'resolve','runs/<run_id>/scans'=>'scan'] as $path=>$action) {
+foreach (['driver/runs'=>'runs','runs/<run_id>'=>'run-detail','runs/<run_id>/acknowledgments'=>'acknowledge','scans/resolve'=>'resolve','runs/<run_id>/scans'=>'scan','runs/<run_id>/depart'=>'depart'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $runId='') => Zpx\Http\DriverController::handle($request,$action,$runId))->pattern(['run_id'=>'[1-9][0-9]{0,17}']);
 }
 foreach (['driver/register'=>'register','driver/profile'=>'profile','driver/profile/update'=>'update-profile','driver/wallet'=>'wallet','driver/transactions'=>'transactions','admin/drivers/pending'=>'pending','admin/drivers/<driver_id>/approve'=>'approve','admin/drivers/<driver_id>/reject'=>'reject','admin/driver-pay'=>'pay-run'] as $path=>$action) {
@@ -33,7 +33,7 @@ foreach (['hub/receiving-sessions'=>'open','hub/receiving-scans'=>'scan','hub/re
 foreach (['hub/receiving-discrepancies'=>'discrepancies','hub/receiving-discrepancies/<session_id>/resolve'=>'resolve-discrepancy'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $sessionId='') => Zpx\Http\HubReceivingController::handle($request,$action,$sessionId))->pattern(['session_id'=>'[1-9][0-9]{0,17}']);
 }
-foreach (['hub/stage-scans'=>'stage','hub/dispatch-calls'=>'dispatch','hub/slots'=>'slots','hub/dispatch-calls/available'=>'available-calls','hub/dispatch-calls/<call_id>/accept'=>'accept','hub/dispatch-calls/<call_id>/load'=>'load'] as $path=>$action) {
+foreach (['hub/stage-scans'=>'stage','hub/dispatch-calls'=>'dispatch','hub/slots'=>'slots','hub/dispatch-calls/available'=>'available-calls','hub/dispatch-calls/<call_id>/accept'=>'accept'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $callId='') => Zpx\Http\HubDispatchController::handle($request,$action,$callId))->pattern(['call_id'=>'[1-9][0-9]{0,17}']);
 }
 Route::any('api/delivery/v1/integrations/payments/webhook', static function(Request $request) {

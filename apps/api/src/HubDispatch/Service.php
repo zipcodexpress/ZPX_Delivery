@@ -320,6 +320,35 @@ final class Service
                 [$this->org(), $call['hub_id'], $driverId, $vehicle, $callId, $expectedPickup]
             );
 
+            // Freeze the physical package set into an authoritative, ordered run manifest.
+            // A dispatch call currently represents one destination slot, but the manifest model
+            // supports multiple ordered stops for planned multi-destination runs.
+            $staged = $this->q(
+                "SELECT sa.package_id,s.destination_location_id FROM staging_assignments sa
+                 JOIN packages p ON p.id=sa.package_id JOIN shipments s ON s.id=p.shipment_id
+                 WHERE sa.slot_id=? AND p.state='STAGED' AND p.custodian_type='HUB'
+                   AND p.custodian_ref=? AND s.organization_id=? ORDER BY sa.package_id FOR UPDATE OF p",
+                [$call['slot_id'], $call['hub_id'], $this->org()]
+            )->fetchAll(PDO::FETCH_ASSOC);
+            if (!$staged || count($staged) !== (int)$call['package_count']) {
+                throw new Failure(409, 'DISPATCH_MANIFEST_CHANGED', 'Staged package set changed; create a new dispatch call.');
+            }
+            $manifestId = $this->insert("INSERT INTO manifests(run_id,revision,state) VALUES (?,1,'ACTIVE')", [$runId]);
+            $stopByDestination = [];
+            foreach ($staged as $pkg) {
+                $destination = (string)$pkg['destination_location_id'];
+                if (!isset($stopByDestination[$destination])) {
+                    $stopByDestination[$destination] = $this->insert(
+                        "INSERT INTO route_run_stops(run_id,location_id,sequence_no,state) VALUES (?,?,?,'EXPECTED')",
+                        [$runId, $destination, count($stopByDestination) + 1]
+                    );
+                }
+                $this->insert(
+                    "INSERT INTO manifest_items(manifest_id,run_id,package_id,stop_id,state) VALUES (?,?,?,?,'EXPECTED')",
+                    [$manifestId, $runId, $pkg['package_id'], $stopByDestination[$destination]]
+                );
+            }
+
             // Assign staged packages to this run
             $this->q(
                 "UPDATE staging_assignments SET outbound_run_id=? WHERE slot_id=? AND package_id IN (SELECT id FROM packages WHERE state='STAGED')",
@@ -334,101 +363,6 @@ final class Service
                 'run_id' => $runId,
                 'confirmed_at' => $confirmedAt,
                 'expected_pickup_at' => $expectedPickup,
-            ];
-        });
-    }
-
-    // ── Driver: Load packages at hub ─────────────────────────────────
-
-    public function loadPackages(string $user, string $callId, string $key): array
-    {
-        $this->identity->requireRole($user, 'DRIVER');
-        Input::text($callId, 1, 18);
-        Input::text($key, 16, 100);
-        $driverId = $this->driverId($user);
-
-        return (new Transaction($this->db))->run(function () use ($user, $driverId, $callId, $key) {
-            $scope = 'driver:' . $this->org() . ':' . $user . ':load';
-            $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
-
-            $call = $this->q(
-                "SELECT dc.* FROM dispatch_calls dc JOIN hubs h ON h.id=dc.hub_id JOIN locations l ON l.id=h.location_id WHERE dc.id=? AND dc.driver_id=? AND l.organization_id=? FOR UPDATE OF dc",
-                [$callId, $driverId, $this->org()]
-            )->fetch(PDO::FETCH_ASSOC);
-
-            if (!$call) { throw new Failure(404, 'CALL_NOT_FOUND', 'Dispatch call not found for this driver.'); }
-            if ($call['status'] !== 'ACCEPTED') {
-                throw new Failure(409, 'CALL_NOT_ACCEPTED', 'Call must be accepted before loading.');
-            }
-
-            // Find the outbound run
-            $run = $this->q(
-                "SELECT id FROM route_runs WHERE dispatch_call_id=? AND driver_id=?",
-                [$callId, $driverId]
-            )->fetch(PDO::FETCH_ASSOC);
-
-            if (!$run) { throw new Failure(404, 'RUN_NOT_FOUND', 'Outbound run not found.'); }
-
-            // Get staged packages for this slot
-            $packages = $this->q(
-                "SELECT sa.package_id, p.version FROM staging_assignments sa JOIN packages p ON p.id=sa.package_id WHERE sa.slot_id=? AND sa.outbound_run_id=? AND p.state='STAGED'",
-                [$call['slot_id'], $run['id']]
-            )->fetchAll(PDO::FETCH_ASSOC);
-
-            $loadedCount = 0;
-            foreach ($packages as $pkg) {
-                $newVersion = (int)$pkg['version'] + 1;
-                $operationUuid = Secrets::uuid();
-
-                // Transition: STAGED → OUTBOUND_CUSTODY
-                $this->q(
-                    "UPDATE packages SET state='OUTBOUND_CUSTODY', custodian_type='DRIVER', custodian_ref=?, current_location_id=NULL, version=? WHERE id=?",
-                    [$driverId, $newVersion, $pkg['package_id']]
-                );
-
-                // Custody event: hub → driver
-                $this->q(
-                    "INSERT INTO custody_events(package_id,operation_uuid,package_version,actor_user_id,event_type,previous_custodian_type,previous_custodian_ref,new_custodian_type,new_custodian_ref,location_id,evidence,occurred_at) VALUES (?,?,?,?, 'CUSTODY_TRANSFER','HUB',?, 'DRIVER',?, NULL, '{}', now())",
-                    [$pkg['package_id'], $operationUuid, $newVersion, $user, $call['hub_id'], $driverId]
-                );
-
-                // Scan event
-                $this->q(
-                    "INSERT INTO scan_events(operation_uuid,package_id,actor_user_id,run_id,action,result_code,received_at) VALUES (?,?,?,?, 'OUTBOUND_LOAD','ACCEPTED',now())",
-                    [$operationUuid, $pkg['package_id'], $user, $run['id']]
-                );
-
-                // Update manifest item
-                $this->q(
-                    "UPDATE manifest_items SET state='LOADED' WHERE run_id=? AND package_id=?",
-                    [$run['id'], $pkg['package_id']]
-                );
-
-                $loadedCount++;
-            }
-
-            // Record actual pickup time
-            $actualPickup = gmdate('Y-m-d H:i:s');
-            $this->q(
-                "UPDATE dispatch_calls SET actual_pickup_at=?, status='DISPATCHED' WHERE id=?",
-                [$actualPickup, $callId]
-            );
-            $this->q(
-                "UPDATE route_runs SET actual_pickup_at=? WHERE id=?",
-                [$actualPickup, $run['id']]
-            );
-
-            // Clear slot
-            $this->q("UPDATE hub_slots SET status='AVAILABLE' WHERE id=?", [$call['slot_id']]);
-
-            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'PACKAGES_LOADED','dispatch_call',?)", [$user, $callId]);
-
-            return [
-                'dispatch_call_id' => $callId,
-                'run_id' => (string)$run['id'],
-                'loaded_count' => $loadedCount,
-                'actual_pickup_at' => $actualPickup,
-                'status' => 'DISPATCHED',
             ];
         });
     }

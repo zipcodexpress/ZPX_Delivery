@@ -481,6 +481,94 @@ final class Service
         });
     }
 
+    public function outboundLoadScan(string $user, string $runId, array $input, string $key, string $match = ''): array
+    {
+        $this->requireDriver($user);
+        Input::text($runId, 1, 18);
+        Input::fields($input, ['label_payload','action','client_event_id','run_revision','expected_package_version'], ['client_occurred_at']);
+        Input::text($key, 16, 100);
+        if ($input['action'] !== 'OUTBOUND_LOAD') { throw new Failure(422, 'INVALID_ACTION', 'This run supports outbound load scans.'); }
+        $labelToken=Input::text($input['label_payload'],1,500); $clientEvent=Input::text($input['client_event_id'],36,36);
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D',$clientEvent)) { throw new Failure(422,'INVALID_INPUT','client_event_id must be a UUID.'); }
+        $runRevision=(int)$input['run_revision']; $expectedVersion=(int)$input['expected_package_version'];
+        if ($runRevision<1 || $expectedVersion<0) { throw new Failure(422,'INVALID_INPUT','Scan revisions are invalid.'); }
+        if ($match!=='' && $match!=='"'.$runRevision.'"') { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision precondition does not match.'); }
+        $driverId=$this->driverId($user);
+
+        return $this->journal()->transact(function () use ($user,$driverId,$runId,$input,$key,$labelToken,$clientEvent,$runRevision,$expectedVersion) {
+            $scope='custody:'.$this->org().':'.$user.':outbound-load';
+            $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))',[$scope.':'.$key]);
+            $hash=$this->crypto->digest('outbound-load',json_encode(['run_id'=>$runId,'label_payload'=>$labelToken,'client_event_id'=>$clientEvent,'run_revision'=>$runRevision,'expected_package_version'=>$expectedVersion],JSON_THROW_ON_ERROR));
+            $saved=$this->q("SELECT encode(payload_hash,'hex') AS hash,response_body FROM idempotency_records WHERE scope=? AND request_key=?",[$scope,$key])->fetch(PDO::FETCH_ASSOC);
+            if ($saved) { if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was already used for different details.'); } return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR); }
+
+            $run=$this->q("SELECT r.id,r.state,r.revision,r.hub_id,r.departed_at,h.location_id FROM route_runs r JOIN hubs h ON h.id=r.hub_id WHERE r.id=? AND r.driver_id=? AND r.organization_id=? AND r.kind='OUTBOUND' FOR UPDATE OF r",[$runId,$driverId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$run) { throw new Failure(404,'RUN_NOT_FOUND','Outbound run not found or not assigned to you.'); }
+            if (!in_array($run['state'],['ACKNOWLEDGED','IN_PROGRESS'],true) || $run['departed_at'] !== null) { throw new Failure(409,'RUN_NOT_LOADABLE','Run is not accepting load scans.'); }
+            if ((int)$run['revision']!==$runRevision) { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision changed. Refresh before scanning.'); }
+
+            $label=$this->q("SELECT pl.package_id,pl.status,p.version,si.si FROM package_labels pl JOIN packages p ON p.id=pl.package_id JOIN shipments s ON s.id=p.shipment_id LEFT JOIN shipping_identifiers si ON si.package_id=p.id WHERE pl.token_hash=decode(?,'hex') AND s.organization_id=?",[hash('sha256',$labelToken),$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$label) { $this->recordRejectedScan($user,$runId,null,'OUTBOUND_LOAD','LABEL_NOT_FOUND'); throw new Failure(404,'LABEL_NOT_FOUND','Label not recognized.'); }
+            $packageId=(string)$label['package_id'];
+            if ($label['status']!=='ACTIVE') { $this->recordRejectedScan($user,$runId,$packageId,'OUTBOUND_LOAD','LABEL_REVOKED'); throw new Failure(410,'LABEL_REVOKED','Label revoked.'); }
+            if ((int)$label['version']!==$expectedVersion) { $this->recordRejectedScan($user,$runId,$packageId,'OUTBOUND_LOAD','VERSION_CONFLICT'); throw new Failure(409,'VERSION_CONFLICT','Package version changed. Resolve the label again.'); }
+
+            $item=$this->q("SELECT mi.id,mi.state,rs.sequence_no,p.state AS package_state,p.version,p.custodian_type,p.custodian_ref,p.current_location_id,s.destination_location_id FROM manifest_items mi JOIN route_run_stops rs ON rs.id=mi.stop_id AND rs.run_id=mi.run_id JOIN packages p ON p.id=mi.package_id JOIN shipments s ON s.id=p.shipment_id WHERE mi.run_id=? AND mi.package_id=? FOR UPDATE OF p,mi",[$runId,$packageId])->fetch(PDO::FETCH_ASSOC);
+            if (!$item) { $this->recordRejectedScan($user,$runId,$packageId,'OUTBOUND_LOAD','NOT_ON_MANIFEST'); throw new Failure(409,'NOT_ON_MANIFEST','This package is not on your run manifest.'); }
+            if ($item['state']==='LOADED' || $item['package_state']==='OUTBOUND_CUSTODY') { $this->recordRejectedScan($user,$runId,$packageId,'OUTBOUND_LOAD','ALREADY_LOADED'); throw new Failure(409,'ALREADY_LOADED','Package already loaded.'); }
+            if ($item['package_state']!=='STAGED' || $item['custodian_type']!=='HUB' || (string)$item['custodian_ref']!==(string)$run['hub_id'] || (string)$item['current_location_id']!==(string)$run['location_id']) { $this->recordRejectedScan($user,$runId,$packageId,'OUTBOUND_LOAD','WRONG_HUB_CUSTODY'); throw new Failure(409,'WRONG_HUB_CUSTODY','Package is not staged in custody of this run hub.'); }
+
+            $newVersion=(int)$item['version']+1;
+            $this->q("UPDATE packages SET state='OUTBOUND_CUSTODY',custodian_type='DRIVER',custodian_ref=?,current_location_id=NULL,version=? WHERE id=?",[$driverId,$newVersion,$packageId]);
+            $this->q("UPDATE manifest_items SET state='LOADED' WHERE id=?",[$item['id']]);
+            $this->q("INSERT INTO scan_events(operation_uuid,package_id,actor_user_id,run_id,action,result_code,received_at,client_occurred_at) VALUES (?,?,?,?, 'OUTBOUND_LOAD','ACCEPTED',now(),?)",[$clientEvent,$packageId,$user,$runId,$input['client_occurred_at']??null]);
+            $this->q("INSERT INTO custody_events(package_id,operation_uuid,package_version,actor_user_id,event_type,previous_custodian_type,previous_custodian_ref,new_custodian_type,new_custodian_ref,location_id,evidence,occurred_at) VALUES (?,?,?,?, 'CUSTODY_TRANSFER','HUB',?,'DRIVER',?,?,'{}',now())",[$packageId,$clientEvent,$newVersion,$user,$run['hub_id'],$driverId,$run['location_id']]);
+            $this->q("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,'OUTBOUND_LOAD',?,'{}',now())",[$packageId,Secrets::uuid(),$user]);
+            (new Outbox($this->db))->append(Secrets::uuid(),'package',$packageId,'custody.outbound_load',['package_id'=>$packageId,'run_id'=>$runId,'driver_id'=>$driverId,'new_version'=>$newVersion]);
+
+            $counts=$this->q("SELECT COUNT(*) AS expected,COUNT(*) FILTER (WHERE state='LOADED') AS accepted FROM manifest_items WHERE run_id=?",[$runId])->fetch(PDO::FETCH_ASSOC);
+            $expected=(int)$counts['expected']; $accepted=(int)$counts['accepted'];
+            $result=['result'=>'ACCEPTED','package_id'=>$packageId,'si'=>$label['si'],'final_location_id'=>(string)$item['destination_location_id'],'package_version'=>$newVersion,'run_revision'=>(int)$run['revision'],'stop_sequence'=>(int)$item['sequence_no'],'counts'=>['expected'=>$expected,'accepted'=>$accepted,'pending'=>$expected-$accepted],'can_depart'=>$expected>0&&$accepted===$expected];
+            $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at) VALUES (?,?,decode(?,'hex'),200,?,now()+interval '30 days')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]);
+            return $result;
+        });
+    }
+
+    public function departRun(string $user,string $runId,array $input,string $key,string $match=''): array
+    {
+        $this->requireDriver($user); Input::text($runId,1,18); Input::fields($input,['expected_revision']); Input::text($key,16,100);
+        $revision=(int)$input['expected_revision']; if ($revision<1) { throw new Failure(422,'INVALID_INPUT','expected_revision must be positive.'); }
+        if ($match!=='' && $match!=='"'.$revision.'"') { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision precondition does not match.'); }
+        $driverId=$this->driverId($user);
+        return (new Transaction($this->db))->run(function () use ($user,$driverId,$runId,$key,$revision) {
+            $scope='custody:'.$this->org().':'.$user.':depart'; $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))',[$scope.':'.$key]);
+            $hash=$this->crypto->digest('depart-run',json_encode(['run_id'=>$runId,'expected_revision'=>$revision],JSON_THROW_ON_ERROR));
+            $saved=$this->q("SELECT encode(payload_hash,'hex') AS hash,response_body FROM idempotency_records WHERE scope=? AND request_key=?",[$scope,$key])->fetch(PDO::FETCH_ASSOC);
+            if ($saved) { if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was already used for different details.'); } return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR); }
+            $run=$this->q("SELECT * FROM route_runs WHERE id=? AND driver_id=? AND organization_id=? AND kind='OUTBOUND' FOR UPDATE",[$runId,$driverId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$run) { throw new Failure(404,'RUN_NOT_FOUND','Outbound run not found or not assigned to you.'); }
+            if ((int)$run['revision']!==$revision) { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision changed. Refresh before departure.'); }
+            if ($run['departed_at']!==null) { throw new Failure(409,'ALREADY_DEPARTED','Run has already departed.'); }
+            $counts=$this->q("SELECT COUNT(*) AS expected,COUNT(*) FILTER (WHERE mi.state='LOADED' AND p.state='OUTBOUND_CUSTODY' AND p.custodian_type='DRIVER' AND p.custodian_ref=?) AS valid_loaded FROM manifest_items mi JOIN packages p ON p.id=mi.package_id WHERE mi.run_id=?",[$driverId,$runId])->fetch(PDO::FETCH_ASSOC);
+            if ((int)$counts['expected']===0 || (int)$counts['valid_loaded']!==(int)$counts['expected']) { throw new Failure(409,'DEPARTURE_BLOCKED','Every unique expected package must be loaded in this driver custody before departure.'); }
+            $departed=gmdate('Y-m-d H:i:s'); $this->q("UPDATE route_runs SET state='IN_PROGRESS',departed_at=? WHERE id=?",[$departed,$runId]);
+            $this->q("UPDATE dispatch_calls SET status='DISPATCHED',actual_pickup_at=COALESCE(actual_pickup_at,?) WHERE id=?",[$departed,$run['dispatch_call_id']]);
+            $this->q("UPDATE hub_slots SET status='AVAILABLE' WHERE id=(SELECT slot_id FROM dispatch_calls WHERE id=?)",[$run['dispatch_call_id']]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'RUN_DEPARTED','run',?)",[$user,$runId]);
+            $result=['run_id'=>$runId,'kind'=>'OUTBOUND','driver_id'=>$driverId,'hub_id'=>(string)$run['hub_id'],'revision'=>$revision,'state'=>'IN_PROGRESS','stops'=>$this->runStops($runId),'expected_count'=>(int)$counts['expected'],'loaded_count'=>(int)$counts['valid_loaded'],'departed_at'=>$departed];
+            $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at) VALUES (?,?,decode(?,'hex'),200,?,now()+interval '30 days')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]);
+            return $result;
+        });
+    }
+
+    private function runStops(string $runId): array
+    {
+        $rows=$this->q("SELECT rs.id,rs.sequence_no,rs.location_id,rs.state,COALESCE(array_agg(mi.package_id::text ORDER BY mi.id) FILTER (WHERE mi.id IS NOT NULL),'{}') AS package_ids FROM route_run_stops rs LEFT JOIN manifest_items mi ON mi.stop_id=rs.id AND mi.run_id=rs.run_id WHERE rs.run_id=? GROUP BY rs.id ORDER BY rs.sequence_no",[$runId])->fetchAll(PDO::FETCH_ASSOC);
+        return array_map(fn($r)=>['stop_id'=>(string)$r['id'],'sequence'=>(int)$r['sequence_no'],'location_id'=>(string)$r['location_id'],'package_ids'=>$this->pgArray((string)$r['package_ids']),'state'=>$r['state']],$rows);
+    }
+
+    private function pgArray(string $value): array { return $value==='{}'?[]:str_getcsv(trim($value,'{}')); }
+
     private function recordRejectedScan(string $user, string $runId, ?string $packageId, string $action, string $resultCode): void
     {
         $this->journal()->stage($user, $runId, $packageId, $action, $resultCode);

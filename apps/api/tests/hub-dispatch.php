@@ -2,6 +2,7 @@
 declare(strict_types=1);
 use Zpx\HubDispatch\Service as HubDispatch;
 use Zpx\HubReceiving\Service as HubReceiving;
+use Zpx\Custody\Service as Custody;
 use Zpx\Identity\{Failure,Secrets,Service as Identity};
 
 $dispOrg = insertId($runtime, "INSERT INTO organizations(name) VALUES ('Synthetic hub dispatch test')");
@@ -10,6 +11,7 @@ putenv('ZPX_ORGANIZATION_ID=' . $dispOrg);
 $crypto = new Secrets();
 $identity = new Identity($runtime, $crypto);
 $dispatch = new HubDispatch($runtime, $crypto);
+$custody = new Custody($runtime, $crypto);
 
 // Create hub staff
 $staffEmail = 'hub.dispatch@example.invalid';
@@ -71,7 +73,7 @@ foreach (['EMAIL' => $senderEmail, 'PHONE' => $senderPhone] as $kind => $value) 
 
 $packageIds = [];
 $labelTokens = [];
-for ($i = 0; $i < 2; $i++) {
+for ($i = 0; $i < 10; $i++) {
     $ship = insertId($runtime, "INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status) VALUES ($dispOrg,$senderUser,'DISP-" . ($i + 1) . "',$hubLocation,$destLocation,'STANDARD','READY','PAID')");
     $pkg = insertId($runtime, "INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,state,custodian_type,custodian_ref,current_location_id,version) VALUES ($ship,'" . uuid() . "',1,100,100,100,500,'AT_HUB','HUB',$hub,$hubLocation,2)");
     $packageIds[] = $pkg;
@@ -92,11 +94,18 @@ check((int)$runtime->query("SELECT count(*) FROM scan_events WHERE package_id={$
 $pkgState = $runtime->query("SELECT state FROM packages WHERE id={$packageIds[0]}")->fetchColumn();
 check($pkgState === 'STAGED', 'package state is STAGED in DB');
 
+// Reject a mismatched destination, then stage the remaining nine packages correctly.
+$wrongDestination = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($dispOrg,'WRONG-DISP','Wrong Dest','LOCKER','Wrong addr','DELIVERY_ONLY','ACTIVE','{}')");
+$wrongSlot = insertId($runtime, "INSERT INTO hub_slots(hub_id,code,destination_location_id,kind) VALUES ($hub,'LOT-WRONG',$wrongDestination,'STAGING')");
+failsIdentity(fn() => $dispatch->stageScan($staffUser, ['label_payload' => $labelTokens[1], 'slot_code' => 'LOT-WRONG'], Secrets::uuid()), 409, 'wrong destination slot rejected authoritatively');
+check((int)$runtime->query("SELECT count(*) FROM scan_events WHERE package_id={$packageIds[1]} AND action='HUB_STAGE' AND result_code='WRONG_DESTINATION'")->fetchColumn() === 1, 'wrong destination staging refusal survives rollback');
+for ($i=1;$i<10;$i++) { $dispatch->stageScan($staffUser, ['label_payload'=>$labelTokens[$i], 'slot_code'=>'LOT-A'], Secrets::uuid()); }
+
 // Test 3: Hub staff can create dispatch call
 $dispatchKey = Secrets::uuid();
 $callResult = $dispatch->createDispatchCall($staffUser, ['slot_id' => $slot, 'minutes_to_pickup' => 30], $dispatchKey);
 check($callResult['status'] === 'PENDING', 'dispatch call created');
-check($callResult['package_count'] === 1, 'one package in call');
+check($callResult['package_count'] === 10, 'ten unique packages in call');
 check($callResult['destination'] === 'DEST-DISP', 'destination matches');
 $hubCalls = $dispatch->listDispatchCalls($staffUser);
 check(count($hubCalls['items']) === 1 && $hubCalls['items'][0]['status'] === 'PENDING', 'hub dispatch workbench shows pending call');
@@ -116,22 +125,38 @@ $acceptResult = $dispatch->acceptDispatch($driverUser, $callResult['dispatch_cal
 check($acceptResult['status'] === 'ACCEPTED', 'dispatch accepted');
 check($acceptResult['run_id'] !== '', 'outbound run created');
 
-// Test 7: Stage second package
-$wrongDestination = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($dispOrg,'WRONG-DISP','Wrong Dest','LOCKER','Wrong addr','DELIVERY_ONLY','ACTIVE','{}')");
-$wrongSlot = insertId($runtime, "INSERT INTO hub_slots(hub_id,code,destination_location_id,kind) VALUES ($hub,'LOT-WRONG',$wrongDestination,'STAGING')");
-failsIdentity(fn() => $dispatch->stageScan($staffUser, ['label_payload' => $labelTokens[1], 'slot_code' => 'LOT-WRONG'], Secrets::uuid()), 409, 'wrong destination slot rejected authoritatively');
-check((int)$runtime->query("SELECT count(*) FROM scan_events WHERE package_id={$packageIds[1]} AND action='HUB_STAGE' AND result_code='WRONG_DESTINATION'")->fetchColumn() === 1, 'wrong destination staging refusal survives rollback');
-$stageResult2 = $dispatch->stageScan($staffUser, ['label_payload' => $labelTokens[1], 'slot_code' => 'LOT-A'], Secrets::uuid());
-check($stageResult2['state'] === 'STAGED', 'second package staged');
-
-// Test 8: Driver loads packages
-$loadKey = Secrets::uuid();
-$loadResult = $dispatch->loadPackages($driverUser, $callResult['dispatch_call_id'], $loadKey);
-check($loadResult['loaded_count'] >= 1, 'at least one package loaded');
-check($loadResult['status'] === 'DISPATCHED', 'dispatch status is DISPATCHED');
+// Test 7: Exercise the official 6 + 4 ordered grouping and 9 + duplicate departure block.
+$runId = $acceptResult['run_id'];
+$firstStop=(string)$runtime->query("SELECT id FROM route_run_stops WHERE run_id=$runId")->fetchColumn();
+$secondStop=insertId($runtime,"INSERT INTO route_run_stops(run_id,location_id,sequence_no,state) VALUES ($runId,$destLocation,2,'EXPECTED')");
+$lastFour=implode(',',array_slice($packageIds,6));
+$runtime->exec("UPDATE manifest_items SET stop_id=$secondStop WHERE run_id=$runId AND package_id IN ($lastFour)");
+check((int)$runtime->query("SELECT count(*) FROM manifest_items WHERE run_id=$runId AND stop_id=$firstStop")->fetchColumn() === 6, 'first ordered stop groups six packages');
+check((int)$runtime->query("SELECT count(*) FROM manifest_items WHERE run_id=$runId AND stop_id=$secondStop")->fetchColumn() === 4, 'second ordered stop groups four packages');
+failsIdentity(fn() => $custody->departRun($driverUser, $runId, ['expected_revision'=>1], Secrets::uuid(), '"1"'), 409, 'departure blocked until every unique expected package is loaded');
+$loadResult=null;
+for ($i=0;$i<9;$i++) {
+    $resolved=$custody->resolveScan($driverUser,$labelTokens[$i],'OUTBOUND_LOAD',$runId);
+    $loadResult=$custody->outboundLoadScan($driverUser,$runId,['label_payload'=>$labelTokens[$i],'action'=>'OUTBOUND_LOAD','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>$resolved['version']],Secrets::uuid(),'"1"');
+}
+check($loadResult['counts']['accepted'] === 9 && !$loadResult['can_depart'], 'nine unique package scans are not departure eligible');
+failsIdentity(fn() => $custody->outboundLoadScan($driverUser, $runId, [
+    'label_payload'=>$labelTokens[0], 'action'=>'OUTBOUND_LOAD', 'client_event_id'=>Secrets::uuid(),
+    'run_revision'=>1, 'expected_package_version'=>3,
+], Secrets::uuid(), '"1"'), 409, 'duplicate physical package scan does not increase loaded count');
+failsIdentity(fn() => $custody->departRun($driverUser, $runId, ['expected_revision'=>1], Secrets::uuid(), '"1"'), 409, 'nine unique plus one duplicate remains departure blocked');
+$resolved=$custody->resolveScan($driverUser,$labelTokens[9],'OUTBOUND_LOAD',$runId);
+$loadResult=$custody->outboundLoadScan($driverUser,$runId,['label_payload'=>$labelTokens[9],'action'=>'OUTBOUND_LOAD','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>$resolved['version']],Secrets::uuid(),'"1"');
+check($loadResult['counts']['accepted']===10 && $loadResult['can_depart'], 'tenth unique package enables departure');
+$driverLogin=identityHttp('POST',$base.'/auth/login',['email'=>$driverEmail,'password'=>$driverInput['password'],'client_kind'=>'BROWSER']);
+preg_match('/zpx_delivery_session=([a-f0-9]{64})/',$driverLogin[0]->getHeader('Set-Cookie'),$driverCookieMatch);
+$driverCookies=['zpx_delivery_session'=>$driverCookieMatch[1]];
+[$departResponse,$departResult]=identityHttp('POST',$base.'/runs/'.$runId.'/depart',['expected_revision'=>1],['idempotency-key'=>Secrets::uuid(),'x-csrf-token'=>$driverLogin[1]['csrf_token'],'if-match'=>'"1"'],$driverCookies);
+check($departResponse->getCode()===200,'outbound departure HTTP route accepts canonical preconditions');
+check($departResult['state'] === 'IN_PROGRESS' && $departResult['loaded_count'] === 10, 'complete unique load authorizes departure');
 $hubCalls = $dispatch->listDispatchCalls($staffUser);
 check($hubCalls['items'][0]['status'] === 'DISPATCHED' && $hubCalls['items'][0]['driver_name'] === 'Dispatch Driver', 'hub workbench shows assigned driver and dispatched state');
-check($hubCalls['items'][0]['loaded_count'] >= 1 && $hubCalls['items'][0]['remaining_count'] === 0, 'hub workbench reports load progress');
+check($hubCalls['items'][0]['loaded_count'] === 10 && $hubCalls['items'][0]['remaining_count'] === 0, 'hub workbench reports unique load progress');
 
 // Test 9: Loaded packages are OUTBOUND_CUSTODY
 $loadedState = $runtime->query("SELECT state FROM packages WHERE id={$packageIds[0]}")->fetchColumn();
