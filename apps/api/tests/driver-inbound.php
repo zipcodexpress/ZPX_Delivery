@@ -131,43 +131,46 @@ check($ackRetry['state'] === 'ACKNOWLEDGED', 'acknowledge retry returns same sta
 failsIdentity(fn() => $custody->acknowledgeRun($driverUser, $run, Secrets::uuid()), 409, 'already-acknowledged run cannot be acknowledged again');
 
 // Test 6: Driver can resolve a valid label
-$resolved = $custody->resolveScan($driverUser, $labelTokens[0]);
+$resolved = $custody->resolveScan($driverUser, $labelTokens[0], 'INBOUND_PICKUP', $run);
 check($resolved['package_id'] === $packageIds[0], 'label resolves to correct package');
-check($resolved['package_state'] === 'AT_ORIGIN', 'package is at origin');
+check($resolved['state'] === 'AT_ORIGIN' && $resolved['version'] === 0, 'package is at origin with canonical version');
+check(in_array('INBOUND_PICKUP', $resolved['allowed_actions'], true), 'resolver authorizes assigned inbound pickup action');
 
 // Test 7: Driver cannot resolve unknown label
 failsIdentity(fn() => $custody->resolveScan($driverUser, 'UNKNOWN-TOKEN'), 404, 'unknown label rejected');
 
 // Test 8: Driver can perform inbound pickup scan
 $scanKey = Secrets::uuid();
-$scanResult = $custody->inboundPickupScan($driverUser, $run, ['label_token' => $labelTokens[0]], $scanKey);
-check($scanResult['state'] === 'INBOUND_CUSTODY', 'package transitions to INBOUND_CUSTODY');
-check($scanResult['result_code'] === 'ACCEPTED', 'scan accepted');
-check($scanResult['loaded_count'] === 1, 'one package loaded');
-check($scanResult['expected_count'] === 3, 'three packages expected');
+$scanInput=['label_payload'=>$labelTokens[0],'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>0];
+$staleRun=$scanInput;$staleRun['run_revision']=2;
+failsIdentity(fn()=>$custody->inboundPickupScan($driverUser,$run,$staleRun,Secrets::uuid(),'"2"'),409,'stale run revision rejected before pickup');
+$scanResult = $custody->inboundPickupScan($driverUser, $run, $scanInput, $scanKey, '"1"');
+check($scanResult['result'] === 'ACCEPTED', 'package transitions to inbound custody with canonical accepted result');
+check($scanResult['counts']['accepted'] === 1, 'one package loaded');
+check($scanResult['counts']['expected'] === 3, 'three packages expected');
 check($scanResult['package_version'] === 1, 'package version incremented');
 
 // Test 9: Scan is idempotent with same key
-$scanRetry = $custody->inboundPickupScan($driverUser, $run, ['label_token' => $labelTokens[0]], $scanKey);
+$scanRetry = $custody->inboundPickupScan($driverUser, $run, $scanInput, $scanKey, '"1"');
 check($scanRetry['package_id'] === $packageIds[0], 'idempotent retry returns same package');
 
 // Test 10: Duplicate scan with different key rejected
 failsIdentity(
-    fn() => $custody->inboundPickupScan($driverUser, $run, ['label_token' => $labelTokens[0]], Secrets::uuid()),
+    fn() => $custody->inboundPickupScan($driverUser, $run, $scanInput, Secrets::uuid(), '"1"'),
     409,
     'duplicate scan with different key rejected'
 );
 
 // Test 11: Scan second package
 $scanKey2 = Secrets::uuid();
-$scanResult2 = $custody->inboundPickupScan($driverUser, $run, ['label_token' => $labelTokens[1]], $scanKey2);
-check($scanResult2['loaded_count'] === 2, 'two packages loaded after second scan');
+$scanResult2 = $custody->inboundPickupScan($driverUser, $run, ['label_payload'=>$labelTokens[1],'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>0], $scanKey2, '"1"');
+check($scanResult2['counts']['accepted'] === 2, 'two packages loaded after second scan');
 
 // Test 12: Scan third package
 $scanKey3 = Secrets::uuid();
-$scanResult3 = $custody->inboundPickupScan($driverUser, $run, ['label_token' => $labelTokens[2]], $scanKey3);
-check($scanResult3['loaded_count'] === 3, 'all three packages loaded');
-check($scanResult3['loaded_count'] === $scanResult3['expected_count'], 'loaded equals expected');
+$scanResult3 = $custody->inboundPickupScan($driverUser, $run, ['label_payload'=>$labelTokens[2],'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>0], $scanKey3, '"1"');
+check($scanResult3['counts']['accepted'] === 3, 'all three packages loaded');
+check($scanResult3['counts']['accepted'] === $scanResult3['counts']['expected'] && $scanResult3['can_depart'], 'loaded equals expected and run is load-complete');
 
 // Test 13: Package custody updated correctly
 $custodyRow = $runtime->query("SELECT state, custodian_type, custodian_ref, version FROM packages WHERE id={$packageIds[0]}")->fetch(PDO::FETCH_ASSOC);
@@ -188,10 +191,10 @@ check($scanEvent['result_code'] === 'ACCEPTED', 'scan event recorded as ACCEPTED
 
 // Test 15b: Refused scans are journaled as well. The refusal row cannot be written inside the
 // transaction that refuses it — that transaction rolls back — so this proves the journal flushes.
-// A repeat pickup is refused as WRONG_STATE: the parcel already left AT_ORIGIN on its first scan.
+// A repeat pickup using the stale resolved version is refused before any second mutation.
 $refusedPickup = $runtime->query("SELECT actor_user_id, result_code FROM scan_events WHERE run_id=$run AND action='INBOUND_PICKUP' AND result_code<>'ACCEPTED' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
 check(count($refusedPickup) >= 1, 'refused pickup scan survives the rollback');
-check(in_array('WRONG_STATE', array_column($refusedPickup, 'result_code'), true), 'refused pickup scan records why it was refused');
+check(in_array('VERSION_CONFLICT', array_column($refusedPickup, 'result_code'), true), 'refused pickup scan records stale resolved version');
 check((string)$refusedPickup[0]['actor_user_id'] === $driverUser, 'refused pickup scan names the driver who attempted it');
 
 // Test 16: Manifest items updated
@@ -244,7 +247,7 @@ $runtime->exec("UPDATE package_labels SET status='ACTIVE' WHERE package_id={$pac
 // Test 20: Package not AT_ORIGIN rejected
 $runtime->exec("UPDATE packages SET state='AT_HUB' WHERE id={$packageIds[1]}");
 failsIdentity(
-    fn() => $custody->inboundPickupScan($driverUser, $run, ['label_token' => $labelTokens[1]], Secrets::uuid()),
+    fn() => $custody->inboundPickupScan($driverUser, $run, ['label_payload'=>$labelTokens[1],'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>1], Secrets::uuid(), '"1"'),
     409,
     'package not at origin rejected'
 );

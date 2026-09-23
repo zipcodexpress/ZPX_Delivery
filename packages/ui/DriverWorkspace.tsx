@@ -26,9 +26,10 @@ type RunDetail = {
   stops: Stop[]; manifest: ManifestItem[];
 };
 type ScanResult = {
-  package_id: string; package_version: number; state: string;
-  result_code: string; loaded_count: number; expected_count: number;
+  package_id: string; package_version: number; result: string;
+  counts: { expected: number; accepted: number; pending: number }; can_depart: boolean;
 };
+type ResolvedScan = { package_id: string; version: number; state: string; allowed_actions: string[] };
 type DriverProfile = {
   driver_id: string; user_id: string; name: string; status: string;
   engagement_type: string; verification_status: string;
@@ -261,12 +262,15 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     if (!selected || !scanInput.trim() || busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
+      const labelPayload=scanInput.trim(); const clientEventId=crypto.randomUUID();
+      const resolved=await api<ResolvedScan>('/scans/resolve', { label_payload: labelPayload, action: 'INBOUND_PICKUP', run_id: selected.id }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       const result = await api<ScanResult>('/runs/' + selected.id + '/scans', {
-        label_token: scanInput.trim(),
-      }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+        label_payload: labelPayload, action: 'INBOUND_PICKUP', client_event_id: clientEventId,
+        run_revision: selected.revision, expected_package_version: resolved.version,
+      }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '', 'If-Match': `"${selected.revision}"` });
       setScanResult(result);
       setScanInput('');
-      setNotice(`Package scanned. ${result.loaded_count}/${result.expected_count} loaded.`);
+      setNotice(`Package scanned. ${result.counts.accepted}/${result.counts.expected} loaded.`);
       await openRun(selected.id);
     } catch (e) { setError(e instanceof Error ? e.message : 'Scan failed.'); }
     finally { setBusy(false); }
@@ -324,7 +328,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
             <label>Scan or enter label token<input value={scanInput} onChange={e => setScanInput(e.target.value)} placeholder="ZPX1:L:..." autoFocus disabled={busy} /></label>
             <button type="submit" disabled={busy || !scanInput.trim()}>{busy ? 'Scanning…' : 'Scan package'}</button>
           </form>}
-          {scanResult && <div className="scan-result"><span className={scanResult.result_code === 'ACCEPTED' ? 'scan-ok' : 'scan-fail'}>{scanResult.result_code}</span><span>Package {scanResult.package_id} · v{scanResult.package_version} → {scanResult.state}</span><span>{scanResult.loaded_count}/{scanResult.expected_count} loaded</span></div>}
+          {scanResult && <div className="scan-result"><span className={scanResult.result === 'ACCEPTED' ? 'scan-ok' : 'scan-fail'}>{scanResult.result}</span><span>Package {scanResult.package_id} · version {scanResult.package_version}</span><span>{scanResult.counts.accepted}/{scanResult.counts.expected} loaded</span></div>}
           <div className="manifest-stops">{selected.stops.map(stop => {
             const items = selected.manifest.filter(m => m.stop_sequence === stop.sequence);
             const showTestLabels = items.some(item => item.development_label_token);

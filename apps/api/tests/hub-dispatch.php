@@ -160,6 +160,11 @@ failsIdentity(fn() => $dispatch->acceptDispatch($staffUser, $callResult['dispatc
 [$response, $body] = identityHttp('POST', $base . '/auth/login', ['email' => $staffEmail, 'password' => $staffInput['password'], 'client_kind' => 'BROWSER']);
 preg_match('/zpx_delivery_session=([a-f0-9]{64})/', $response->getHeader('Set-Cookie'), $matches);
 $hubCookies = ['zpx_delivery_session' => $matches[1]];
+$hubCsrf = $body['csrf_token'];
+[$response, $body] = identityHttp('POST', $base . '/scans/resolve', ['label_payload' => $labelTokens[0], 'action' => 'INSPECT'], ['idempotency-key' => Secrets::uuid(), 'x-csrf-token' => $hubCsrf], $hubCookies);
+check($response->getCode() === 200 && isset($body['state'],$body['version'],$body['allowed_actions']) && !isset($body['package_state'],$body['package_version']), 'scan resolver HTTP response uses canonical fields');
+[$response, $body] = identityHttp('GET', $base . '/scans/resolve?label=' . urlencode($labelTokens[0]), [], [], $hubCookies);
+check($response->getCode() !== 200, 'legacy GET scan resolver is rejected');
 [$response, $body] = identityHttp('GET', $base . '/hub/dispatch-calls', [], [], $hubCookies);
 check($response->getCode() === 200 && $body['items'][0]['status'] === 'DISPATCHED', 'hub dispatch HTTP workbench route lists calls');
 [$response, $body] = identityHttp('POST', $base . '/hub/dispatch-calls', ['slot_id' => $slot, 'minutes_to_pickup' => 30], ['idempotency-key' => Secrets::uuid()], $hubCookies);

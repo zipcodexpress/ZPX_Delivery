@@ -240,14 +240,14 @@ $token3 = 'ZPX1:L:FLOW-TOKEN-' . bin2hex(random_bytes(8));
 $runtime->exec("INSERT INTO package_labels(package_id,label_version,token_hash,status,expires_at) VALUES ($pkg3,1,decode('" . hash('sha256', $token3) . "','hex'),'ACTIVE',now()+interval '30 days')");
 insertId($runtime, "INSERT INTO manifest_items(manifest_id,run_id,package_id,stop_id,state) VALUES ($manifest3,$run3,$pkg3,$stop3,'EXPECTED')");
 
-$pickup = $custody->inboundPickupScan($driverUser, $run3, ['label_token' => $token3], Secrets::uuid());
+$pickup = $custody->inboundPickupScan($driverUser, $run3, ['label_payload'=>$token3,'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>1,'expected_package_version'=>1], Secrets::uuid(), '"1"');
 check($pickup['package_version'] === 2, 'driver pickup increments the package past its origin version');
 
 // Test 14: Hub staff may resolve a label to learn the current version
-$resolvedByHub = $custody->resolveScan($staffUser, $token3);
+$resolvedByHub = $custody->resolveScan($staffUser, $token3, 'HUB_RECEIVE', $run3);
 check($resolvedByHub['package_id'] === $pkg3, 'hub staff resolve returns the scanned package');
-check($resolvedByHub['package_state'] === 'INBOUND_CUSTODY', 'hub staff resolve reports inbound custody');
-check($resolvedByHub['package_version'] === 2, 'hub staff resolve reports the current package version');
+check($resolvedByHub['state'] === 'INBOUND_CUSTODY', 'hub staff resolve reports inbound custody');
+check($resolvedByHub['version'] === 2 && in_array('HUB_RECEIVE',$resolvedByHub['allowed_actions'],true), 'hub staff resolve reports canonical version and allowed action');
 
 // Test 15: A stale version is rejected; the resolved version is accepted
 $session3 = $hubService->openSession($staffUser, ['hub_id' => $hub, 'inbound_run_id' => $run3], Secrets::uuid());
@@ -262,7 +262,7 @@ $flowScan = $hubService->receiveScan($staffUser, [
     'label_payload' => $token3,
     'inbound_run_id' => $run3,
     'receiving_session_id' => $session3['receiving_session_id'],
-    'expected_package_version' => $resolvedByHub['package_version'],
+    'expected_package_version' => $resolvedByHub['version'],
     'disposition' => 'DAMAGED',
     'notes' => 'Synthetic crushed corner',
 ], Secrets::uuid());
@@ -273,7 +273,7 @@ $damageException = $runtime->query("SELECT code,status,notes FROM exceptions WHE
 check($damageException['status'] === 'OPEN' && $damageException['notes'] === 'Synthetic crushed corner', 'damage discrepancy preserves notes');
 
 // Test 16: Resolution stays open to drivers and closed to customers
-check($custody->resolveScan($driverUser, $token3)['package_version'] === 3, 'driver resolve still works after hub receive');
+check($custody->resolveScan($driverUser, $token3)['version'] === 3, 'driver inspect resolve still works after hub receive');
 failsIdentity(fn() => $custody->resolveScan($customerUser, $token3), 403, 'customer cannot resolve label');
 
 // Test 17: A parcel that is not on this run's manifest is recorded as EXTRA without custody transfer.

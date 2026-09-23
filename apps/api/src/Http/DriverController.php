@@ -19,7 +19,7 @@ final class DriverController
                 'runs' => 'GET',
                 'run-detail' => 'GET',
                 'acknowledge' => 'POST',
-                'resolve' => 'GET',
+                'resolve' => 'POST',
                 'scan' => 'POST',
                 default => 'GET',
             };
@@ -63,13 +63,14 @@ final class DriverController
                 $input = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
                 $key = Input::text($request->header('idempotency-key', ''), 16, 100);
             }
+            if ($action === 'resolve') { Input::fields($input, ['label_payload', 'action'], ['run_id']); }
 
             $body = match ($action) {
                 'runs' => $custody->listRuns($user),
                 'run-detail' => $custody->getRun($user, $runId),
                 'acknowledge' => $custody->acknowledgeRun($user, $runId, $key),
-                'resolve' => $custody->resolveScan($user, Input::text($request->get('label', ''), 1, 500)),
-                'scan' => $custody->inboundPickupScan($user, $runId, $input, $key),
+                'resolve' => $custody->resolveScan($user, Input::text($input['label_payload'] ?? '', 1, 500), Input::text($input['action'] ?? '', 1, 40), isset($input['run_id']) ? Input::text($input['run_id'], 1, 18) : null),
+                'scan' => $custody->inboundPickupScan($user, $runId, $input, $key, $request->header('if-match','')),
             };
 
             return Reply::json(200, $body, $requestId);
