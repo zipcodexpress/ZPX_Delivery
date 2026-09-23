@@ -245,48 +245,73 @@ final class Service
         });
     }
 
-    public function resolveScan(string $user, string $labelToken): array
+    public function resolveScan(string $user, string $labelToken, string $action = 'INSPECT', ?string $runId = null): array
     {
         $this->requireResolveAccess($user);
         Input::text($labelToken, 1, 500);
+        if (!in_array($action, ['INSPECT','INBOUND_PICKUP','HUB_RECEIVE','STAGE','OUTBOUND_LOAD','FINAL_DEPOSIT'], true)) {
+            throw new Failure(422, 'INVALID_ACTION', 'Unsupported scan action.');
+        }
+        if ($runId !== null) { Input::text($runId, 1, 18); }
 
         $tokenHash = hash('sha256', $labelToken);
         $label = $this->q(
             "SELECT pl.id AS label_id, pl.package_id, pl.status, p.state AS package_state,
-                    p.custodian_type, p.custodian_ref, p.version AS package_version,
-                    s.id AS shipment_id, s.public_reference, s.origin_location_id, s.destination_location_id
+                    p.custodian_type,p.custodian_ref,p.current_location_id,p.version AS package_version,
+                    s.id AS shipment_id,s.origin_location_id,s.destination_location_id,si.si
              FROM package_labels pl
              JOIN packages p ON p.id=pl.package_id
              JOIN shipments s ON s.id=p.shipment_id
-             WHERE pl.token_hash=decode(?,'hex')",
-            [$tokenHash]
+             LEFT JOIN shipping_identifiers si ON si.package_id=p.id
+             WHERE pl.token_hash=decode(?,'hex') AND s.organization_id=?",
+            [$tokenHash, $this->org()]
         )->fetch(PDO::FETCH_ASSOC);
 
         if (!$label) { throw new Failure(404, 'LABEL_NOT_FOUND', 'Label not recognized.'); }
         if ($label['status'] !== 'ACTIVE') { throw new Failure(410, 'LABEL_REVOKED', 'This label is no longer active.'); }
 
+        $profile=$this->identity->profile($user); $roles=$profile['roles']; $package=(string)$label['package_id'];
+        $allowed=['INSPECT'];
+        $driverId=in_array('DRIVER',$roles,true)?$this->q('SELECT id FROM drivers WHERE user_id=?',[$user])->fetchColumn():false;
+        $hubId=false;
+        if (array_intersect($roles,['HUB_STAFF','HUB_SUPERVISOR'])) {
+            $hubId=$this->q('SELECT hs.hub_id FROM hub_staff hs JOIN hubs h ON h.id=hs.hub_id JOIN locations l ON l.id=h.location_id WHERE hs.user_id=? AND l.organization_id=?',[$user,$this->org()])->fetchColumn();
+        }
+        if ($driverId && $runId !== null && $label['package_state']==='AT_ORIGIN'
+            && $this->q("SELECT 1 FROM route_runs r JOIN manifest_items mi ON mi.run_id=r.id WHERE r.id=? AND r.driver_id=? AND r.organization_id=? AND r.kind='INBOUND' AND mi.package_id=?",[$runId,$driverId,$this->org(),$package])->fetchColumn()) { $allowed[]='INBOUND_PICKUP'; }
+        if ($hubId && $runId !== null && $label['package_state']==='INBOUND_CUSTODY'
+            && $this->q("SELECT 1 FROM route_runs r JOIN manifest_items mi ON mi.run_id=r.id WHERE r.id=? AND r.hub_id=? AND r.organization_id=? AND r.kind='INBOUND' AND mi.package_id=?",[$runId,$hubId,$this->org(),$package])->fetchColumn()) { $allowed[]='HUB_RECEIVE'; }
+        if ($hubId && $label['package_state']==='AT_HUB' && $label['custodian_type']==='HUB' && (string)$label['custodian_ref']===(string)$hubId) { $allowed[]='STAGE'; }
+        if ($driverId && $runId !== null && $label['package_state']==='STAGED'
+            && $this->q('SELECT 1 FROM route_runs r JOIN staging_assignments sa ON sa.outbound_run_id=r.id WHERE r.id=? AND r.driver_id=? AND r.organization_id=? AND sa.package_id=?',[$runId,$driverId,$this->org(),$package])->fetchColumn()) { $allowed[]='OUTBOUND_LOAD'; }
+        if ($action!=='INSPECT' && !in_array($action,$allowed,true)) { throw new Failure(409,'SCAN_ACTION_NOT_ALLOWED','This package is not eligible for the requested scan action.'); }
+
         return [
-            'package_id' => (string)$label['package_id'],
-            'package_state' => $label['package_state'],
-            'package_version' => (int)$label['package_version'],
-            'custodian_type' => $label['custodian_type'],
-            'custodian_ref' => $label['custodian_ref'],
-            'public_reference' => $label['public_reference'],
-            'origin_location_id' => (string)$label['origin_location_id'],
+            'package_id' => $package,
+            'si' => $label['si'],
             'destination_location_id' => (string)$label['destination_location_id'],
+            'state' => $label['package_state'],
+            'version' => (int)$label['package_version'],
+            'allowed_actions' => $allowed,
         ];
     }
 
-    public function inboundPickupScan(string $user, string $runId, array $input, string $key): array
+    public function inboundPickupScan(string $user, string $runId, array $input, string $key, string $match = ''): array
     {
         $this->requireDriver($user);
         Input::text($runId, 1, 18);
-        Input::fields($input, ['label_token'], ['client_event_id', 'client_occurred_at']);
+        Input::fields($input, ['label_payload','action','client_event_id','run_revision','expected_package_version'], ['client_occurred_at']);
         Input::text($key, 16, 100);
-        $labelToken = Input::text($input['label_token'], 1, 500);
+        $labelToken = Input::text($input['label_payload'], 1, 500);
+        if ($input['action']!=='INBOUND_PICKUP') { throw new Failure(422,'INVALID_ACTION','This run supports inbound pickup scans.'); }
+        $clientEvent=Input::text($input['client_event_id'],36,36);
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D',$clientEvent)) { throw new Failure(422,'INVALID_INPUT','client_event_id must be a UUID.'); }
+        $runRevision=(int)$input['run_revision']; $expectedVersion=(int)$input['expected_package_version'];
+        if ($runRevision<1 || $expectedVersion<0) { throw new Failure(422,'INVALID_INPUT','Scan revisions are invalid.'); }
+        if ($match!=='' && $match!=='"'.$runRevision.'"') { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision precondition does not match.'); }
         $driverId = $this->driverId($user);
 
-        return $this->journal()->transact(function () use ($user, $driverId, $runId, $input, $key, $labelToken) {
+        return $this->journal()->transact(function () use ($user, $driverId, $runId, $input, $key, $labelToken, $clientEvent, $runRevision, $expectedVersion) {
             $scope = 'custody:' . $this->org() . ':' . $user . ':inbound-pickup';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
@@ -296,7 +321,8 @@ final class Service
 
             $hash = $this->crypto->digest('inbound-pickup', json_encode([
                 'run_id' => $runId,
-                'label_token' => $labelToken,
+                'label_payload' => $labelToken,'client_event_id'=>$clientEvent,
+                'run_revision'=>$runRevision,'expected_package_version'=>$expectedVersion,
             ], JSON_THROW_ON_ERROR));
 
             $saved = $this->q(
@@ -321,13 +347,15 @@ final class Service
             if (!in_array($run['state'], ['ACKNOWLEDGED', 'IN_PROGRESS'], true)) {
                 throw new Failure(409, 'RUN_NOT_ACTIVE', 'Run must be acknowledged before scanning.');
             }
+            if ((int)$run['revision']!==$runRevision) { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision changed. Refresh before scanning.'); }
 
             // Resolve label
             $tokenHash = hash('sha256', $labelToken);
             $label = $this->q(
-                "SELECT pl.id AS label_id, pl.package_id, pl.status, p.version AS package_version
+                "SELECT pl.id AS label_id,pl.package_id,pl.status,p.version AS package_version,si.si
                  FROM package_labels pl
                  JOIN packages p ON p.id=pl.package_id
+                 LEFT JOIN shipping_identifiers si ON si.package_id=p.id
                  WHERE pl.token_hash=decode(?,'hex')",
                 [$tokenHash]
             )->fetch(PDO::FETCH_ASSOC);
@@ -342,6 +370,7 @@ final class Service
             }
 
             $packageId = (string)$label['package_id'];
+            if ((int)$label['package_version']!==$expectedVersion) { $this->recordRejectedScan($user,$runId,$packageId,'INBOUND_PICKUP','VERSION_CONFLICT'); throw new Failure(409,'VERSION_CONFLICT','Package version changed. Resolve the label again.'); }
 
             // Lock package and check state
             $package = $this->q(
@@ -360,7 +389,7 @@ final class Service
 
             // Check package is in this run's manifest
             $manifestItem = $this->q(
-                "SELECT mi.id, mi.state FROM manifest_items mi WHERE mi.run_id=? AND mi.package_id=?",
+                "SELECT mi.id,mi.state,rrs.sequence_no AS stop_sequence FROM manifest_items mi JOIN route_run_stops rrs ON rrs.id=mi.stop_id AND rrs.run_id=mi.run_id WHERE mi.run_id=? AND mi.package_id=?",
                 [$runId, $packageId]
             )->fetch(PDO::FETCH_ASSOC);
 
@@ -375,7 +404,7 @@ final class Service
             }
 
             // Perform custody transfer
-            $operationUuid = Secrets::uuid();
+            $operationUuid = $clientEvent;
             $newVersion = (int)$package['version'] + 1;
 
             // Update package state and custody
@@ -431,12 +460,15 @@ final class Service
             )->fetchColumn();
 
             $result = [
+                'result' => 'ACCEPTED',
                 'package_id' => $packageId,
+                'si' => $label['si'],
+                'final_location_id' => (string)$package['origin_location_id'],
                 'package_version' => $newVersion,
-                'state' => 'INBOUND_CUSTODY',
-                'result_code' => 'ACCEPTED',
-                'loaded_count' => $loadedCount,
-                'expected_count' => $expectedCount,
+                'run_revision' => (int)$run['revision'],
+                'stop_sequence' => (int)$manifestItem['stop_sequence'],
+                'counts' => ['expected'=>$expectedCount,'accepted'=>$loadedCount,'pending'=>max(0,$expectedCount-$loadedCount)],
+                'can_depart' => $loadedCount===$expectedCount,
             ];
 
             // Save idempotency record

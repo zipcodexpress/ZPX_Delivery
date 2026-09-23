@@ -14,7 +14,7 @@ type ScanResult = {
   result_code: string; received_count: number; expected_count: number;
   disposition?: string;
 };
-type ResolvedLabel = { package_id: string; package_state: string; package_version: number };
+type ResolvedLabel = { package_id: string; state: string; version: number; allowed_actions: string[] };
 type Discrepancy = { id: string; package_id: string; run_id: string | null; public_reference: string; type: string; status: string; notes: string | null; package_state: string; custodian_type: string; reported_at: string; resolution_code: string | null };
 
 export function HubReceiving({ profile, onLogout, embedded = false, show = 'all' }: { profile: components['schemas']['Profile']; onLogout: () => void; embedded?: boolean; show?: 'all' | 'receiving' | 'exceptions' }) {
@@ -57,12 +57,12 @@ export function HubReceiving({ profile, onLogout, embedded = false, show = 'all'
     const labelPayload = scanInput.trim();
     setBusy(true); setError(''); setNotice('');
     try {
-      const resolved = await api<ResolvedLabel>(`/scans/resolve?label=${encodeURIComponent(labelPayload)}`);
+      const resolved = await api<ResolvedLabel>('/scans/resolve', { label_payload: labelPayload, action: 'HUB_RECEIVE', run_id: session.inbound_run_id }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       const result = await api<ScanResult>('/hub/receiving-scans', {
         label_payload: labelPayload,
         inbound_run_id: session.inbound_run_id,
         receiving_session_id: session.receiving_session_id,
-        expected_package_version: resolved.package_version,
+        expected_package_version: resolved.version,
         disposition, notes: notes.trim(),
       }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       setScanResult(result);

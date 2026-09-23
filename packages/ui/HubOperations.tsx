@@ -9,7 +9,7 @@ type Profile = components['schemas']['Profile'];
 type Tab = 'receiving' | 'staging' | 'dispatch' | 'exceptions' | 'history';
 type Slot = { slot_id: string; code: string; status: string; destination: string; destination_name: string; staged_count: number };
 type DispatchCall = { dispatch_call_id: string; slot_id: string | null; slot_code: string | null; destination: string; destination_name: string; package_count: number; loaded_count: number; remaining_count: number; status: string; driver_name: string | null; run_id: string | null; called_at: string; expires_at: string; expected_pickup_at: string | null; actual_pickup_at: string | null };
-type Resolved = { package_id: string; package_state: string; package_version: number };
+type Resolved = { package_id: string; state: string; version: number; allowed_actions: string[] };
 type Staged = { package_id: string; package_version: number; state: string; slot_code: string; destination_location_id: string };
 
 const title = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
@@ -40,7 +40,7 @@ function StagingDispatch({ profile, view }: { profile: Profile; view: 'staging' 
   function resolve(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void run(async () => {
-      const result = await api<Resolved>('/scans/resolve?label=' + encodeURIComponent(token.trim()));
+      const result = await api<Resolved>('/scans/resolve', { label_payload: token.trim(), action: 'STAGE' }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       setResolved(result); setNotice(`Package ${result.package_id} resolved. Confirm its destination slot.`);
     });
   }
@@ -63,7 +63,7 @@ function StagingDispatch({ profile, view }: { profile: Profile; view: 'staging' 
     {view === 'staging' ? <>
       <section className="hub-card"><p className="eyebrow">DESTINATION STAGING</p><h2>Resolve, verify, and stage</h2><p className="hub-intro">Resolve the label first, then select the slot matching the package destination. The server rejects a mismatched destination.</p>
         {!resolved ? <form className="scan-bar" onSubmit={resolve}><label>Label token<input value={token} onChange={e => setToken(e.target.value)} required placeholder="Scan or paste label token" /></label><button disabled={busy || !token.trim()}>Resolve package</button></form>
-          : <form onSubmit={stage}><div className="scan-result"><span className="scan-ok">RESOLVED</span><span>Package {resolved.package_id}</span><span>{title(resolved.package_state)} · version {resolved.package_version}</span></div><label>Destination slot<select value={slotCode} onChange={e => setSlotCode(e.target.value)} required><option value="">Choose the verified destination slot</option>{slots.map(slot => <option key={slot.slot_id} value={slot.code}>{slot.code} · {slot.destination_name} · {slot.staged_count} ready</option>)}</select></label><div className="hub-actions"><button type="submit" disabled={busy || !slotCode}>Confirm stage</button><button type="button" onClick={() => { setResolved(null); setSlotCode(''); }} disabled={busy}>Cancel</button></div></form>}
+          : <form onSubmit={stage}><div className="scan-result"><span className="scan-ok">RESOLVED</span><span>Package {resolved.package_id}</span><span>{title(resolved.state)} · version {resolved.version}</span></div><label>Destination slot<select value={slotCode} onChange={e => setSlotCode(e.target.value)} required><option value="">Choose the verified destination slot</option>{slots.map(slot => <option key={slot.slot_id} value={slot.code}>{slot.code} · {slot.destination_name} · {slot.staged_count} ready</option>)}</select></label><div className="hub-actions"><button type="submit" disabled={busy || !slotCode}>Confirm stage</button><button type="button" onClick={() => { setResolved(null); setSlotCode(''); }} disabled={busy}>Cancel</button></div></form>}
       </section>
       <section className="hub-card hub-table-card"><h2>Staging slots</h2><div className="hub-table"><div className="hub-table-head"><span>Slot</span><span>Destination</span><span>Ready</span><span>Status</span></div>{slots.map(slot => <div key={slot.slot_id}><strong>{slot.code}</strong><span>{slot.destination_name}</span><span>{slot.staged_count}</span><span>{title(slot.status)}</span></div>)}</div></section>
     </> : <>
