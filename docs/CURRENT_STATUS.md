@@ -17,6 +17,8 @@ Checkpoint: Scan contract normalization implemented and validated locally
   https://github.com/zipcodexpress/ZPX_Delivery/pull/14
 - PR #15 P4.1 hub operations UI: open against PR #14's branch, mergeable, all checks passed:
   https://github.com/zipcodexpress/ZPX_Delivery/pull/15
+- PR #16 scan normalization: open against PR #15's branch; all four GitHub checks passed:
+  https://github.com/zipcodexpress/ZPX_Delivery/pull/16
 - After each dependency merges, rebase/retarget the next branch onto `main`.
 - The two untracked planning documents remain human-authored and intentionally preserved.
 
@@ -73,9 +75,8 @@ Implementation and database validation are complete in the working tree.
 
 ## Next Actions
 
-1. Push this branch and open it as a stacked PR against P4.1 while dependencies are open.
-2. Merge/rebase the PR chain in order: #14, #15, then scan normalization.
-3. Begin P4.2 outbound driver delivery only after the normalized scan contract lands.
+1. Review and merge/rebase the PR chain in order: #14, #15, then #16.
+2. Begin P4.2 outbound driver delivery only after the normalized scan contract lands.
 
 ## Local Notes
 
