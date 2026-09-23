@@ -14,6 +14,7 @@ Checkpoint: P4.1 hub operations UI implemented and fully validated locally
 - This branch is intentionally stacked on `feature/package-tracking-custody-view`.
 - Tracking PR #14 is open, mergeable, and all GitHub checks passed:
   https://github.com/zipcodexpress/ZPX_Delivery/pull/14
+- Latest P4.1 commit: `94ab71e` (`feat(hub-ui): add staging and dispatch workspace`).
 - Rebase P4.1 onto `main` after PR #14 merges.
 - The two untracked planning documents remain human-authored and intentionally preserved.
 
@@ -74,10 +75,9 @@ departure behavior. P4.1 implementation and validation are complete in the worki
 
 ## Remaining / Next Actions
 
-1. Run final diff/security review and commit P4.1 locally.
-2. Push as a stacked PR only if tracking PR #14 remains unmerged.
-3. After P4.1, create `fix/scan-contract-normalization` before P4.2 outbound delivery.
-4. P4.2 owns departure authorization and per-package outbound delivery; do not add it here.
+1. Push P4.1 as a stacked PR while tracking PR #14 remains unmerged.
+2. After P4.1, create `fix/scan-contract-normalization` before P4.2 outbound delivery.
+3. P4.2 owns departure authorization and per-package outbound delivery; do not add it here.
 
 ## Local Notes
 
