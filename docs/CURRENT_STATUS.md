@@ -12,7 +12,7 @@ Checkpoint: Package tracking and custody visibility implemented and validated lo
 
 - Branch: `feature/package-tracking-custody-view`
 - Baseline: merged P3.3 work (`main` includes PR #13 at `07f923e`)
-- Package-tracking changes are ready for a focused commit.
+- Latest feature commit: `a1320b7` (`feat(operations): add package custody tracking`).
 - The two planning documents remain untracked human-authored files and are intentionally preserved.
 
 ## Current Objective
@@ -82,7 +82,7 @@ operations UI.
 
 ## Next Actions
 
-1. Commit the validated package-tracking milestone and open a PR when requested.
+1. Push the validated package-tracking milestone and open a PR when requested.
 2. After merge, create `feature/P4.1-hub-operations-ui`.
 3. Build receiving/staging/dispatch workbench UI on existing hub services.
 4. Follow with `fix/scan-contract-normalization`, then P4.2 outbound delivery.
