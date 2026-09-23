@@ -11,6 +11,7 @@ Checkpoint: Scan contract normalization implemented and validated locally
 ## Branch / Dependency Chain
 
 - Current branch: `fix/scan-contract-normalization`
+- Latest scan-normalization commit: `d1c1390` (`fix(scan): normalize resolve and inbound scan contracts`).
 - This branch is stacked on P4.1, which is stacked on package tracking.
 - PR #14 package tracking: open, mergeable, all checks passed:
   https://github.com/zipcodexpress/ZPX_Delivery/pull/14
@@ -72,7 +73,7 @@ Implementation and database validation are complete in the working tree.
 
 ## Next Actions
 
-1. Commit and push this branch; open it as a stacked PR against P4.1 while dependencies are open.
+1. Push this branch and open it as a stacked PR against P4.1 while dependencies are open.
 2. Merge/rebase the PR chain in order: #14, #15, then scan normalization.
 3. Begin P4.2 outbound driver delivery only after the normalized scan contract lands.
 
