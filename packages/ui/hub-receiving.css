@@ -10,6 +10,7 @@
 .hub-card input{min-height:44px;padding:10px 12px;border:1px solid #cbd9cf;border-radius:7px;font:inherit;font-size:14px;background:white}
 .hub-card input:focus{outline:3px solid #9fc4b3;outline-offset:2px}
 .hub-card input:disabled{background:#eef3ef;color:#607669}
+.hub-card select{min-height:44px;padding:10px 12px;border:1px solid #cbd9cf;border-radius:7px;background:white;font:inherit}
 .hub-card button[type=submit],.hub-card>button{background:#174d39;color:white;border:none;padding:12px 24px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer;margin-top:12px}
 .hub-card button:disabled{opacity:.5;cursor:wait}
 .session-header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:20px}
@@ -32,7 +33,7 @@
 .close-btn:disabled{opacity:.5;cursor:wait}
 .session-summary{margin-top:20px;padding:20px;background:white;border-radius:10px;border:1px solid #e5ece6}
 .session-summary h3{font-size:15px;margin:0 0 16px;color:#163c2b}
-.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:16px}
 .summary-stat{display:flex;flex-direction:column;gap:4px;text-align:center}
 .summary-stat label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#607669;font-weight:600}
 .summary-stat strong{font-size:28px;color:#163c2b}
@@ -44,4 +45,5 @@
 .hub-page .eyebrow{font-size:10px;font-weight:700;letter-spacing:1.5px;color:#527e66;text-transform:uppercase;margin:0}
 .hub-page footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5ece6;font-size:12px;color:#607669}
 .small{font-size:12px;padding:6px 12px!important;border:1px solid #ccdacf;background:white;color:#194330;border-radius:6px;cursor:pointer}
+.discrepancy-workbench{margin-top:20px}.discrepancy-list{display:grid;gap:10px}.discrepancy-list article{display:flex;justify-content:space-between;gap:16px;align-items:center;background:white;border:1px solid #e5ece6;border-radius:8px;padding:12px}.discrepancy-list small{display:block;color:#607669;margin-top:4px}.discrepancy-list p{font-size:12px;margin:6px 0 0}.discrepancy-list button{border:1px solid #8c3026;background:white;color:#8c3026;border-radius:6px;padding:8px 12px;cursor:pointer}
 @media(max-width:600px){.session-header{flex-direction:column}.scan-bar{flex-direction:column;align-items:stretch}.scan-bar button{width:100%}.summary-grid{grid-template-columns:1fr}}

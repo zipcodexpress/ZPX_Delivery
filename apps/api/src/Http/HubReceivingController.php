@@ -20,6 +20,8 @@ final class HubReceivingController
                 'scan' => 'POST',
                 'close' => 'POST',
                 'status' => 'GET',
+                'discrepancies' => 'GET',
+                'resolve-discrepancy' => 'POST',
                 default => 'GET',
             };
             if ($method !== $expected) { throw new Failure(405, 'METHOD_NOT_ALLOWED', 'Unsupported method.'); }
@@ -68,6 +70,8 @@ final class HubReceivingController
                 'scan' => $service->receiveScan($user, $input, $key),
                 'close' => $service->closeSession($user, $sessionId, $key),
                 'status' => $service->getSession($user, $sessionId),
+                'discrepancies' => $service->listDiscrepancies($user),
+                'resolve-discrepancy' => $service->resolveDiscrepancy($user, $sessionId, $input, $key),
             };
 
             return Reply::json(200, $body, $requestId);

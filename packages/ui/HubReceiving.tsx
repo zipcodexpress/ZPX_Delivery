@@ -7,12 +7,15 @@ type ReceivingSession = {
   receiving_session_id: string; hub_id: string; inbound_run_id: string;
   expected_count: number; received_count: number; state: string;
   short_count?: number;
+  damaged_count?: number; extra_count?: number;
 };
 type ScanResult = {
   package_id: string; package_version: number; state: string;
   result_code: string; received_count: number; expected_count: number;
+  disposition?: string;
 };
 type ResolvedLabel = { package_id: string; package_state: string; package_version: number };
+type Discrepancy = { id: string; package_id: string; run_id: string | null; public_reference: string; type: string; status: string; notes: string | null; package_state: string; custodian_type: string; reported_at: string; resolution_code: string | null };
 
 export function HubReceiving({ profile, onLogout }: { profile: components['schemas']['Profile']; onLogout: () => void }) {
   const [session, setSession] = useState<ReceivingSession | null>(null);
@@ -23,6 +26,16 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [disposition, setDisposition] = useState<'RECEIVED' | 'DAMAGED'>('RECEIVED');
+  const [notes, setNotes] = useState('');
+  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+
+  const loadDiscrepancies = useCallback(async () => {
+    try { setDiscrepancies((await api<{ items: Discrepancy[] }>('/hub/receiving-discrepancies')).items); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load discrepancies.'); }
+  }, []);
+
+  useEffect(() => { void loadDiscrepancies(); }, [loadDiscrepancies]);
 
   const openSession = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -50,11 +63,16 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
         inbound_run_id: session.inbound_run_id,
         receiving_session_id: session.receiving_session_id,
         expected_package_version: resolved.package_version,
+        disposition, notes: notes.trim(),
       }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       setScanResult(result);
       setScanInput('');
+      setNotes(''); setDisposition('RECEIVED');
       setSession(prev => prev ? { ...prev, received_count: result.received_count } : null);
-      setNotice(`Received. ${result.received_count}/${result.expected_count} scanned.`);
+      setNotice(result.result_code === 'EXTRA_RECORDED'
+        ? `Extra parcel recorded. Custody was not changed. ${result.received_count}/${result.expected_count} expected parcels received.`
+        : `${result.disposition === 'DAMAGED' ? 'Damaged parcel received and flagged.' : 'Received.'} ${result.received_count}/${result.expected_count} scanned.`);
+      await loadDiscrepancies();
     } catch (e) { setError(e instanceof Error ? e.message : 'Scan failed.'); }
     finally { setBusy(false); }
   }
@@ -68,12 +86,22 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
       });
       setSession(result);
       setNotice(`Session closed. ${result.received_count}/${result.expected_count} received. ${result.short_count ?? 0} short.`);
+      await loadDiscrepancies();
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to close session.'); }
     finally { setBusy(false); }
   }
 
   function reset() {
     setSession(null); setScanResult(null); setScanInput(''); setError(''); setNotice('');
+  }
+
+  async function resolveDiscrepancy(id: string) {
+    setBusy(true); setError('');
+    try {
+      await api(`/hub/receiving-discrepancies/${id}/resolve`, { resolution_code: 'REVIEWED' }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      setNotice('Discrepancy marked resolved.'); await loadDiscrepancies();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to resolve discrepancy.'); }
+    finally { setBusy(false); }
   }
 
   return <main className="hub-page">
@@ -113,6 +141,8 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
           <label>Scan or enter label token
             <input value={scanInput} onChange={e => setScanInput(e.target.value)} placeholder="ZPX1:L:..." autoFocus disabled={busy} />
           </label>
+          <label>Condition<select value={disposition} onChange={e => setDisposition(e.target.value as 'RECEIVED' | 'DAMAGED')} disabled={busy}><option value="RECEIVED">Received</option><option value="DAMAGED">Damaged</option></select></label>
+          {disposition === 'DAMAGED' && <label>Damage notes<input value={notes} onChange={e => setNotes(e.target.value)} maxLength={1000} placeholder="Describe visible damage" disabled={busy} /></label>}
           <button type="submit" disabled={busy || !scanInput.trim()}>{busy ? 'Scanning…' : 'Receive package'}</button>
         </form>
 
@@ -135,10 +165,20 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
           <div className="summary-stat"><label>Expected</label><strong>{session.expected_count}</strong></div>
           <div className="summary-stat"><label>Received</label><strong className="ok">{session.received_count}</strong></div>
           <div className="summary-stat"><label>Short</label><strong className={session.short_count ? 'warn' : ''}>{session.short_count ?? 0}</strong></div>
+          <div className="summary-stat"><label>Damaged</label><strong className={session.damaged_count ? 'warn' : ''}>{session.damaged_count ?? 0}</strong></div>
+          <div className="summary-stat"><label>Extra</label><strong className={session.extra_count ? 'warn' : ''}>{session.extra_count ?? 0}</strong></div>
         </div>
         <button onClick={reset}>Open New Session</button>
       </div>}
     </div>}
+
+    <section className="hub-card discrepancy-workbench">
+      <p className="eyebrow">DISCREPANCY WORKBENCH</p><h2>Receiving issues</h2>
+      {discrepancies.length === 0 ? <p className="hub-intro">No receiving discrepancies.</p> : <div className="discrepancy-list">{discrepancies.map(item => <article key={item.id}>
+        <div><strong>{item.type} · {item.public_reference}</strong><small>{item.package_state} · custody {item.custodian_type} · {item.status.toLowerCase()}</small>{item.notes && <p>{item.notes}</p>}</div>
+        {item.status === 'OPEN' && <button type="button" onClick={() => void resolveDiscrepancy(item.id)} disabled={busy}>Mark reviewed</button>}
+      </article>)}</div>}
+    </section>
 
     <footer>ZipcodeXpress · Austin pilot · Hub receiving workspace</footer>
   </main>;
