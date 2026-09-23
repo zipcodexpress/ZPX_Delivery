@@ -169,10 +169,13 @@ $closeResult = $hubService->closeSession($staffUser, $session['receiving_session
 check($closeResult['state'] === 'CLOSED', 'session closed');
 check($closeResult['received_count'] === 3, 'three received at close');
 check($closeResult['short_count'] === 0, 'no shortages');
+check($runtime->query("SELECT state FROM route_runs WHERE id=$run")->fetchColumn() === 'COMPLETED', 'closing receiving completes inbound run');
+check($runtime->query("SELECT state FROM route_run_stops WHERE id=$stop")->fetchColumn() === 'COMPLETED', 'closing receiving completes inbound stop');
 
 // Test 9: Session status after close
 $status = $hubService->getSession($staffUser, $session['receiving_session_id']);
 check($status['state'] === 'CLOSED', 'session status is CLOSED');
+failsIdentity(fn() => $hubService->openSession($staffUser, ['hub_id' => $hub, 'inbound_run_id' => $run], Secrets::uuid()), 409, 'closed receiving session cannot be reopened');
 
 // Test 10: Non-hub-staff cannot access
 $customerEmail = 'customer.receive@example.invalid';
@@ -217,6 +220,11 @@ check($closeResult2['short_count'] === 1, 'shortage: one short');
 // Test 12: Short manifest item marked SHORT
 $shortItem = $runtime->query("SELECT state FROM manifest_items WHERE package_id={$shortPkgIds[2]}")->fetchColumn();
 check($shortItem === 'SHORT', 'unreceived manifest item marked SHORT');
+$shortCustody = $runtime->query("SELECT state,custodian_type,custodian_ref FROM packages WHERE id={$shortPkgIds[2]}")->fetch(PDO::FETCH_ASSOC);
+check($shortCustody['state'] === 'INBOUND_CUSTODY' && $shortCustody['custodian_type'] === 'DRIVER' && $shortCustody['custodian_ref'] === $driverId, 'short package remains in driver custody');
+$shortException = $runtime->query("SELECT code,status,hub_id,driver_id,receiving_session_id FROM exceptions WHERE package_id={$shortPkgIds[2]}")->fetch(PDO::FETCH_ASSOC);
+check($shortException['code'] === 'SHORT' && $shortException['status'] === 'OPEN', 'short package creates durable open discrepancy');
+check($shortException['hub_id'] === $hub && $shortException['driver_id'] === $driverId && $shortException['receiving_session_id'] === $session2['receiving_session_id'], 'short discrepancy records hub driver and session');
 
 // Test 13: Receive a package that reached the hub through a real driver pickup.
 // Origin parcels start at version 1 and pickup increments, so the version a receiver
@@ -255,23 +263,32 @@ $flowScan = $hubService->receiveScan($staffUser, [
     'inbound_run_id' => $run3,
     'receiving_session_id' => $session3['receiving_session_id'],
     'expected_package_version' => $resolvedByHub['package_version'],
+    'disposition' => 'DAMAGED',
+    'notes' => 'Synthetic crushed corner',
 ], Secrets::uuid());
 check($flowScan['state'] === 'AT_HUB', 'package received using the resolved version');
 check($flowScan['package_version'] === 3, 'hub receive increments the package version');
+check($flowScan['disposition'] === 'DAMAGED' && $flowScan['exception_id'] !== null, 'damaged receipt creates a discrepancy while accepting custody');
+$damageException = $runtime->query("SELECT code,status,notes FROM exceptions WHERE package_id=$pkg3 AND code='DAMAGED'")->fetch(PDO::FETCH_ASSOC);
+check($damageException['status'] === 'OPEN' && $damageException['notes'] === 'Synthetic crushed corner', 'damage discrepancy preserves notes');
 
 // Test 16: Resolution stays open to drivers and closed to customers
 check($custody->resolveScan($driverUser, $token3)['package_version'] === 3, 'driver resolve still works after hub receive');
 failsIdentity(fn() => $custody->resolveScan($customerUser, $token3), 403, 'customer cannot resolve label');
 
-// Test 17: A parcel that is not on this run's manifest cannot be received into the session.
+// Test 17: A parcel that is not on this run's manifest is recorded as EXTRA without custody transfer.
 // $shortTokens[2] was never received, so it is still in inbound custody on run 2.
-failsIdentity(fn() => $hubService->receiveScan($staffUser, [
+$extraResult = $hubService->receiveScan($staffUser, [
     'label_payload' => $shortTokens[2],
     'inbound_run_id' => $run3,
     'receiving_session_id' => $session3['receiving_session_id'],
     'expected_package_version' => 1,
-], Secrets::uuid()), 409, 'parcel from another run cannot be received into this session');
+    'notes' => 'Unexpected parcel at dock',
+], Secrets::uuid());
+check($extraResult['result_code'] === 'EXTRA_RECORDED', 'off-manifest parcel is recorded as extra');
 check($runtime->query("SELECT state FROM packages WHERE id={$shortPkgIds[2]}")->fetchColumn() === 'INBOUND_CUSTODY', 'rejected parcel keeps driver custody');
+check((int)$runtime->query("SELECT count(*) FROM manifest_items WHERE run_id=$run3 AND package_id={$shortPkgIds[2]}")->fetchColumn() === 0, 'extra parcel is not added to manifest');
+check($runtime->query("SELECT status FROM exceptions WHERE package_id={$shortPkgIds[2]} AND run_id=$run3 AND code='EXTRA'")->fetchColumn() === 'OPEN', 'extra parcel creates durable discrepancy');
 
 // Test 18: Staff assigned to a different hub are denied every operation on this hub's session
 $otherLocation = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($hubOrg,'HUB-OTHER','Other Hub','HUB','Other addr','DELIVERY_ONLY','ACTIVE','{}')");
@@ -305,6 +322,13 @@ failsIdentity(fn() => $hubService->receiveScan($otherUser, [
 ], Secrets::uuid()), 404, 'staff from another hub cannot scan into this session');
 failsIdentity(fn() => $hubService->getSession($otherUser, $session3['receiving_session_id']), 404, 'staff from another hub cannot read this session');
 failsIdentity(fn() => $hubService->closeSession($otherUser, $session3['receiving_session_id'], Secrets::uuid()), 404, 'staff from another hub cannot close this session');
+$issues = $hubService->listDiscrepancies($staffUser)['items'];
+check(count(array_filter($issues, fn($i) => $i['status'] === 'OPEN')) >= 3, 'workbench lists open short damaged and extra discrepancies');
+$damageIssue = array_values(array_filter($issues, fn($i) => $i['type'] === 'DAMAGED' && $i['package_id'] === $pkg3))[0];
+failsIdentity(fn() => $hubService->resolveDiscrepancy($otherUser, $damageIssue['id'], ['resolution_code' => 'REVIEWED'], Secrets::uuid()), 404, 'other hub cannot resolve discrepancy');
+$resolvedIssue = $hubService->resolveDiscrepancy($staffUser, $damageIssue['id'], ['resolution_code' => 'REVIEWED', 'notes' => 'Moved to damage review'], Secrets::uuid());
+check($resolvedIssue['status'] === 'RESOLVED', 'assigned hub resolves discrepancy');
+check($runtime->query("SELECT status FROM exceptions WHERE id={$damageIssue['id']}")->fetchColumn() === 'RESOLVED', 'discrepancy resolution persists');
 
 // Test 19: The rightful hub can still close the session after the denied attempts
 $finalClose = $hubService->closeSession($staffUser, $session3['receiving_session_id'], Secrets::uuid());
@@ -317,7 +341,7 @@ $refused = $runtime->query("SELECT actor_user_id, result_code FROM scan_events W
 $codes = array_column($refused, 'result_code');
 check(in_array('ALREADY_RECEIVED', $codes, true), 'refused duplicate receive survives the rollback');
 check(in_array('VERSION_MISMATCH', $codes, true), 'refused stale-version scan survives the rollback');
-check(in_array('NOT_ON_MANIFEST', $codes, true), 'refused off-manifest scan survives the rollback');
+check(in_array('NOT_ON_MANIFEST', $codes, true), 'extra off-manifest scan is journaled');
 check(in_array('SESSION_NOT_FOUND', $codes, true), 'refused cross-hub scan survives the rollback');
 $crossHub = array_values(array_filter($refused, fn($r) => $r['result_code'] === 'SESSION_NOT_FOUND'));
 check((string)$crossHub[0]['actor_user_id'] === $otherUser, 'cross-hub attempt names the staff member who tried');

@@ -41,6 +41,21 @@ final class Service
         return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0');
     }
 
+    private function discrepancy(string $user, string $hubId, string $runId, string $sessionId, string $packageId, string $driverId, string $code, ?string $notes): string
+    {
+        $id = $this->insert(
+            "INSERT INTO exceptions(organization_id,hub_id,driver_id,receiving_session_id,package_id,run_id,code,status,recorded_by,notes)
+             VALUES (?,?,?,?,?,?,?,'OPEN',?,?) ON CONFLICT (receiving_session_id,package_id,code) WHERE receiving_session_id IS NOT NULL DO UPDATE SET notes=COALESCE(EXCLUDED.notes,exceptions.notes)",
+            [$this->org(), $hubId, $driverId, $sessionId, $packageId, $runId, $code, $user, $notes]
+        );
+        $this->q(
+            "INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,?,?,?::jsonb,now())",
+            [$packageId, Secrets::uuid(), $code . '_REPORTED', $user, json_encode(['exception_id' => $id, 'run_id' => $runId, 'hub_id' => $hubId], JSON_THROW_ON_ERROR)]
+        );
+        $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'RECEIVING_DISCREPANCY_REPORTED','exception',?)", [$user, $id]);
+        return $id;
+    }
+
     /** HUB_STAFF grants are scoped to a hub location, so requireRole must be given that location to match. */
     private function hubId(string $userId): string
     {
@@ -78,6 +93,7 @@ final class Service
             if ($myHub !== $hubId) {
                 throw new Failure(403, 'ACCESS_DENIED', 'You are not assigned to this hub.');
             }
+            $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', ['receiving-run:' . $this->org() . ':' . $hubId . ':' . $runId]);
 
             // Verify run exists and is inbound to this hub
             $run = $this->q(
@@ -88,15 +104,18 @@ final class Service
             if (!$run) {
                 throw new Failure(404, 'RUN_NOT_FOUND', 'Inbound run not found for this hub.');
             }
+            if (!in_array($run['state'], ['ACKNOWLEDGED', 'IN_PROGRESS'], true)) {
+                throw new Failure(409, 'RUN_NOT_RECEIVABLE', 'Inbound run is not ready for receiving.');
+            }
 
-            // Check no open session for this run
+            // One immutable receiving lifecycle per run. Corrections use discrepancy resolution.
             $existing = $this->q(
-                "SELECT id FROM receiving_sessions WHERE hub_id=? AND inbound_run_id=? AND status='OPEN'",
+                "SELECT id, status FROM receiving_sessions WHERE hub_id=? AND inbound_run_id=?",
                 [$hubId, $runId]
-            )->fetchColumn();
+            )->fetch(PDO::FETCH_ASSOC);
 
             if ($existing) {
-                throw new Failure(409, 'SESSION_EXISTS', 'An open receiving session already exists for this run.');
+                throw new Failure(409, $existing['status'] === 'OPEN' ? 'SESSION_EXISTS' : 'SESSION_FINALIZED', 'A receiving session already exists for this run.');
             }
 
             // Count expected packages from manifest
@@ -127,14 +146,18 @@ final class Service
 
     public function receiveScan(string $user, array $input, string $key): array
     {
-        Input::fields($input, ['label_payload', 'inbound_run_id', 'receiving_session_id', 'expected_package_version']);
+        Input::fields($input, ['label_payload', 'inbound_run_id', 'receiving_session_id', 'expected_package_version'], ['disposition', 'notes']);
         $labelToken = Input::text($input['label_payload'], 1, 500);
         $runId = Input::text($input['inbound_run_id'], 1, 18);
         $sessionId = Input::text($input['receiving_session_id'], 1, 18);
         $expectedVersion = (int)$input['expected_package_version'];
+        $disposition = $input['disposition'] ?? 'RECEIVED';
+        if (!in_array($disposition, ['RECEIVED', 'DAMAGED'], true)) { throw new Failure(422, 'INVALID_DISPOSITION', 'Disposition must be RECEIVED or DAMAGED.'); }
+        $notes = array_key_exists('notes', $input) && $input['notes'] !== '' ? Input::text($input['notes'], 1, 1000) : null;
+        if ($disposition === 'DAMAGED' && $notes === null) { throw new Failure(422, 'DAMAGE_NOTES_REQUIRED', 'Describe the observed damage.'); }
         Input::text($key, 16, 100);
 
-        return $this->journal()->transact(function () use ($user, $labelToken, $runId, $sessionId, $expectedVersion, $key) {
+        return $this->journal()->transact(function () use ($user, $labelToken, $runId, $sessionId, $expectedVersion, $disposition, $notes, $key) {
             $scope = 'hub:' . $this->org() . ':' . $user . ':receive';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
@@ -165,8 +188,11 @@ final class Service
             // Resolve label
             $tokenHash = hash('sha256', $labelToken);
             $label = $this->q(
-                "SELECT pl.id AS label_id, pl.package_id, pl.status FROM package_labels pl WHERE pl.token_hash=decode(?,'hex')",
-                [$tokenHash]
+                "SELECT pl.id AS label_id, pl.package_id, pl.status, p.state AS package_state, p.version AS package_version,
+                        p.custodian_type, p.custodian_ref, r.driver_id
+                 FROM package_labels pl JOIN packages p ON p.id=pl.package_id JOIN shipments s ON s.id=p.shipment_id
+                 LEFT JOIN route_runs r ON r.id=? WHERE pl.token_hash=decode(?,'hex') AND s.organization_id=?",
+                [$runId, $tokenHash, $this->org()]
             )->fetch(PDO::FETCH_ASSOC);
 
             if (!$label) {
@@ -179,6 +205,7 @@ final class Service
             }
 
             $packageId = (string)$label['package_id'];
+            $responsibleDriver = $label['custodian_type'] === 'DRIVER' ? (string)$label['custodian_ref'] : (string)$label['driver_id'];
 
             // Check not already received in this session
             $alreadyReceived = $this->q(
@@ -198,8 +225,18 @@ final class Service
             )->fetchColumn();
 
             if (!$onManifest) {
-                $this->recordRejectedScan($user, $scanRunId, $packageId, 'NOT_ON_MANIFEST');
-                throw new Failure(409, 'NOT_ON_MANIFEST', 'This package is not on the run manifest.');
+                $this->q(
+                    "INSERT INTO receiving_items(session_id,package_id,disposition) VALUES (?,?,'EXTRA') ON CONFLICT(session_id,package_id) DO NOTHING",
+                    [$sessionId, $packageId]
+                );
+                $exceptionId = $this->discrepancy($user, $hubId, $runId, $sessionId, $packageId, $responsibleDriver, 'EXTRA', $notes);
+                $this->q(
+                    "INSERT INTO scan_events(operation_uuid,package_id,actor_user_id,run_id,action,result_code,received_at) VALUES (?,?,?,?, 'HUB_RECEIVE','NOT_ON_MANIFEST',now())",
+                    [Secrets::uuid(), $packageId, $user, $runId]
+                );
+                return ['package_id' => $packageId, 'package_version' => (int)$label['package_version'], 'state' => $label['package_state'], 'result_code' => 'EXTRA_RECORDED', 'disposition' => 'EXTRA', 'exception_id' => $exceptionId,
+                    'received_count' => (int)$this->q("SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition IN ('RECEIVED','DAMAGED')", [$sessionId])->fetchColumn(),
+                    'expected_count' => (int)$this->q("SELECT COUNT(*) FROM manifest_items WHERE run_id=?", [$runId])->fetchColumn()];
             }
 
             // Lock package and check state
@@ -251,9 +288,14 @@ final class Service
 
             // Record receiving item
             $this->insert(
-                "INSERT INTO receiving_items(session_id,package_id,disposition) VALUES (?,?, 'RECEIVED')",
-                [$sessionId, $packageId]
+                "INSERT INTO receiving_items(session_id,package_id,disposition) VALUES (?,?,?)",
+                [$sessionId, $packageId, $disposition]
             );
+
+            $exceptionId = null;
+            if ($disposition === 'DAMAGED') {
+                $exceptionId = $this->discrepancy($user, $hubId, $runId, $sessionId, $packageId, (string)$package['custodian_ref'], 'DAMAGED', $notes);
+            }
 
             // Update manifest item
             $this->q(
@@ -278,7 +320,7 @@ final class Service
 
             // Count received
             $receivedCount = (int)$this->q(
-                "SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition='RECEIVED'",
+                "SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition IN ('RECEIVED','DAMAGED')",
                 [$sessionId]
             )->fetchColumn();
             $expectedCount = (int)$this->q(
@@ -291,6 +333,8 @@ final class Service
                 'package_version' => $newVersion,
                 'state' => 'AT_HUB',
                 'result_code' => 'ACCEPTED',
+                'disposition' => $disposition,
+                'exception_id' => $exceptionId,
                 'received_count' => $receivedCount,
                 'expected_count' => $expectedCount,
             ];
@@ -321,25 +365,34 @@ final class Service
 
             $runId = (string)$session['inbound_run_id'];
 
-            // Mark unreceived manifest items as SHORT
-            $this->q(
-                "UPDATE manifest_items SET state='SHORT' WHERE run_id=? AND state='EXPECTED' AND package_id NOT IN (SELECT package_id FROM receiving_items WHERE session_id=?)",
+            $missing = $this->q(
+                "SELECT mi.package_id, r.driver_id FROM manifest_items mi JOIN route_runs r ON r.id=mi.run_id
+                 WHERE mi.run_id=? AND mi.state='EXPECTED' AND mi.package_id NOT IN (SELECT package_id FROM receiving_items WHERE session_id=?) FOR UPDATE OF mi",
                 [$runId, $sessionId]
-            );
+            )->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($missing as $row) {
+                $this->q("UPDATE manifest_items SET state='SHORT' WHERE run_id=? AND package_id=?", [$runId, $row['package_id']]);
+                $this->q("INSERT INTO receiving_items(session_id,package_id,disposition) VALUES (?,?,'SHORT')", [$sessionId, $row['package_id']]);
+                $this->discrepancy($user, $hubId, $runId, $sessionId, (string)$row['package_id'], (string)$row['driver_id'], 'SHORT', 'Not physically received when the session closed.');
+            }
 
             // Close session
             $this->q("UPDATE receiving_sessions SET status='CLOSED' WHERE id=?", [$sessionId]);
+            $this->q("UPDATE route_runs SET state='COMPLETED' WHERE id=?", [$runId]);
+            $this->q("UPDATE route_run_stops SET state='COMPLETED' WHERE run_id=?", [$runId]);
 
             // Count results
             $receivedCount = (int)$this->q(
-                "SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition='RECEIVED'",
+                "SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition IN ('RECEIVED','DAMAGED')",
                 [$sessionId]
             )->fetchColumn();
             $expectedCount = (int)$this->q(
                 "SELECT COUNT(*) FROM manifest_items WHERE run_id=?",
                 [$runId]
             )->fetchColumn();
-            $shortCount = $expectedCount - $receivedCount;
+            $shortCount = count($missing);
+            $damagedCount = (int)$this->q("SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition='DAMAGED'", [$sessionId])->fetchColumn();
+            $extraCount = (int)$this->q("SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition='EXTRA'", [$sessionId])->fetchColumn();
 
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'RECEIVING_SESSION_CLOSED','receiving_session',?)", [$user, $sessionId]);
 
@@ -350,6 +403,8 @@ final class Service
                 'expected_count' => $expectedCount,
                 'received_count' => $receivedCount,
                 'short_count' => $shortCount,
+                'damaged_count' => $damagedCount,
+                'extra_count' => $extraCount,
                 'state' => 'CLOSED',
             ];
         });
@@ -372,7 +427,7 @@ final class Service
         }
 
         $receivedCount = (int)$this->q(
-            "SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition='RECEIVED'",
+            "SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition IN ('RECEIVED','DAMAGED')",
             [$sessionId]
         )->fetchColumn();
         $expectedCount = (int)$this->q(
@@ -380,14 +435,56 @@ final class Service
             [$session['inbound_run_id']]
         )->fetchColumn();
 
+        $counts = $this->q("SELECT disposition,COUNT(*) AS count FROM receiving_items WHERE session_id=? GROUP BY disposition", [$sessionId])->fetchAll(PDO::FETCH_KEY_PAIR);
         return [
             'receiving_session_id' => (string)$session['id'],
             'hub_id' => (string)$session['hub_id'],
             'inbound_run_id' => (string)$session['inbound_run_id'],
             'expected_count' => $expectedCount,
             'received_count' => $receivedCount,
+            'short_count' => (int)($counts['SHORT'] ?? 0),
+            'damaged_count' => (int)($counts['DAMAGED'] ?? 0),
+            'extra_count' => (int)($counts['EXTRA'] ?? 0),
             'state' => $session['status'],
         ];
+    }
+
+    public function listDiscrepancies(string $user): array
+    {
+        $hubId = $this->hubId($user);
+        $rows = $this->q(
+            "SELECT e.id,e.package_id,e.run_id,e.code,e.status,e.notes,e.created_at,e.resolution_code,e.resolved_at,
+                    s.public_reference,p.state AS package_state,p.custodian_type,p.custodian_ref
+             FROM exceptions e JOIN packages p ON p.id=e.package_id JOIN shipments s ON s.id=p.shipment_id
+             WHERE e.organization_id=? AND e.hub_id=? ORDER BY (e.status='OPEN') DESC,e.created_at DESC,e.id DESC",
+            [$this->org(), $hubId]
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return ['items' => array_map(fn(array $r) => [
+            'id'=>(string)$r['id'],'package_id'=>(string)$r['package_id'],'run_id'=>$r['run_id'] === null ? null : (string)$r['run_id'],
+            'public_reference'=>$r['public_reference'],'type'=>$r['code'],'status'=>$r['status'],'notes'=>$r['notes'],
+            'package_state'=>$r['package_state'],'custodian_type'=>$r['custodian_type'],'custodian_ref'=>$r['custodian_ref'],
+            'reported_at'=>$r['created_at'],'resolution_code'=>$r['resolution_code'],'resolved_at'=>$r['resolved_at'],
+        ], $rows)];
+    }
+
+    public function resolveDiscrepancy(string $user, string $exceptionId, array $input, string $key): array
+    {
+        Input::text($exceptionId, 1, 18); Input::text($key, 16, 100);
+        Input::fields($input, ['resolution_code'], ['notes']);
+        $code = Input::text($input['resolution_code'], 1, 64);
+        $notes = array_key_exists('notes', $input) && $input['notes'] !== '' ? Input::text($input['notes'], 1, 1000) : null;
+        return (new Transaction($this->db))->run(function () use ($user,$exceptionId,$code,$notes,$key) {
+            $hubId = $this->hubId($user);
+            $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', ['exception:' . $exceptionId . ':' . $key]);
+            $row = $this->q("SELECT * FROM exceptions WHERE id=? AND organization_id=? AND hub_id=? FOR UPDATE", [$exceptionId,$this->org(),$hubId])->fetch(PDO::FETCH_ASSOC);
+            if (!$row) { throw new Failure(404,'DISCREPANCY_NOT_FOUND','Discrepancy not found.'); }
+            if ($row['status'] !== 'OPEN') { throw new Failure(409,'DISCREPANCY_RESOLVED','Discrepancy is already resolved.'); }
+            $resolution = json_encode(['code'=>$code,'notes'=>$notes], JSON_THROW_ON_ERROR);
+            $this->q("UPDATE exceptions SET status='RESOLVED',resolution=?::jsonb,resolution_code=?,resolved_by=?,resolved_at=now() WHERE id=?", [$resolution,$code,$user,$exceptionId]);
+            $this->q("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?, 'DISCREPANCY_RESOLVED',?,?::jsonb,now())", [$row['package_id'],Secrets::uuid(),$user,$resolution]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'RECEIVING_DISCREPANCY_RESOLVED','exception',?)", [$user,$exceptionId]);
+            return ['id'=>$exceptionId,'status'=>'RESOLVED','resolution_code'=>$code];
+        });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
