@@ -6,86 +6,77 @@
 
 Date: 2026-09-23
 Agent: Codex
-Checkpoint: Package tracking and custody visibility implemented and validated locally
+Checkpoint: Scan contract normalization implemented and validated locally
 
-## Branch / Baseline
+## Branch / Dependency Chain
 
-- Branch: `feature/package-tracking-custody-view`
-- Baseline: merged P3.3 work (`main` includes PR #13 at `07f923e`)
-- Latest feature commit: `a1320b7` (`feat(operations): add package custody tracking`).
-- The two planning documents remain untracked human-authored files and are intentionally preserved.
+- Current branch: `fix/scan-contract-normalization`
+- Latest scan-normalization commit: `d1c1390` (`fix(scan): normalize resolve and inbound scan contracts`).
+- This branch is stacked on P4.1, which is stacked on package tracking.
+- PR #14 package tracking: open, mergeable, all checks passed:
+  https://github.com/zipcodexpress/ZPX_Delivery/pull/14
+- PR #15 P4.1 hub operations UI: open against PR #14's branch, mergeable, all checks passed:
+  https://github.com/zipcodexpress/ZPX_Delivery/pull/15
+- PR #16 scan normalization: open against PR #15's branch; all four GitHub checks passed:
+  https://github.com/zipcodexpress/ZPX_Delivery/pull/16
+- After each dependency merges, rebase/retarget the next branch onto `main`.
+- The two untracked planning documents remain human-authored and intentionally preserved.
 
 ## Current Objective
 
-Deliver privacy-safe customer milestones plus an authoritative, assignment-scoped operations package
-search and custody timeline. This milestone is implemented; the next planned feature is P4.1 hub
-operations UI.
+Normalize shared label resolution and inbound driver scans to the canonical API contract before P4.2.
+Implementation and database validation are complete in the working tree.
 
 ## Completed in Current Work
 
-- Added exact operations package search by public reference, package UUID, shipping identifier (SI),
-  or internal package ID at `GET /operations/packages/search?q=...`.
-- Search reuses organization and current role/location/hub assignment scope; unauthorized and
-  cross-organization identifiers return no results.
-- Extended operations tracking with package identity, current custody/location, package version,
-  and a deterministic timeline assembled from existing authoritative tables.
-- Timeline sources include package events, custody events, accepted/refused scan evidence,
-  receiving dispositions, staging assignments, dispatch calls, and discrepancy creation/resolution.
-- Customer tracking retains only privacy-safe shipment milestones; it does not expose actors,
-  custody references, scan evidence, discrepancy notes, or operations details.
-- Added the operations-web package search and detailed custody timeline to the existing shipment
-  workspace. No parallel tracking screen or duplicate event table was introduced.
-- Updated the canonical OpenAPI contract and regenerated TypeScript types.
+- Changed `/scans/resolve` from legacy GET query input to canonical authenticated POST JSON input.
+- Resolver accepts `label_payload`, `action`, and optional `run_id` and validates strict fields.
+- Resolver now returns canonical `state`, `version`, `si`, `destination_location_id`, and
+  `allowed_actions`; legacy `package_state`/`package_version` response aliases were removed.
+- Resolver filters labels by active organization and authorizes requested actions against current
+  state, manifest/run assignment, driver assignment, and hub assignment/custody.
+- Updated hub receiving and staging UI to use canonical resolve actions and versions.
+- Driver pickup UI now resolves first, then submits canonical RunScan fields:
+  `label_payload`, `action`, `client_event_id`, `run_revision`, and `expected_package_version`.
+- Driver pickup validates UUID client event identity, If-Match/run revision, package version, action,
+  assigned run, and manifest membership before custody mutation.
+- Accepted scan uses the client event UUID as the durable operation identity.
+- Driver scan response now matches canonical ScanResult: result, package/SI/location/version,
+  run/stop context, expected/accepted/pending counts, and load-complete `can_depart` signal.
+- Legacy GET resolver calls and legacy `label_token` driver scan bodies are no longer accepted.
 
-## Tests
+## Validation
 
-- `npm run test-db` passed: full PostgreSQL suite, including the new tracking aggregation,
-  rejected scan, customer redaction, all identifiers, hub scope, and cross-org checks.
-- `npm run check` passed: OpenAPI/generated types, TypeScript, and 9 Node tests.
+- `npm run test-db` passed after normalization: full PostgreSQL suite, canonical resolve fields,
+  action/run authorization, run/package revision checks, idempotency, durable accepted/refused scans,
+  legacy GET rejection, receiving, staging, dispatch, custody, and cross-scope tests.
+- PHP syntax checks passed for all changed PHP source/test files.
+- `npm run check` passed with 74 validated API operations and 9 Node tests.
 - `npm run build` passed for customer-web and operations-web.
-- PHP syntax checks passed for the shipping service/controller/test.
-- `git diff --check` passed.
+- `git diff --check` and the focused diff/security review passed.
 
 ## Important Decisions
 
-- No tracking projection/table was added. Read models are built from authoritative operational data.
-- Existing operations authorization remains the single scope rule: ADMIN/DISPATCHER grants may be
-  network or location scoped; hub staff must have active membership at the package's current hub.
-- Search is exact-match only to reduce accidental disclosure and noisy result sets.
-- Internal actors, custody references, rejected scans, and discrepancy notes are operations-only.
-- Raw label tokens are never queried or returned by tracking/search APIs.
-- Scan contract normalization remains a later dedicated branch.
-
-## API / UI Impact
-
-- New API: `GET /api/delivery/v1/operations/packages/search?q=...`.
-- Extended operations response: `GET /operations/shipments/{id}/tracking` includes optional
-  `package`, `current_custody`, and `events` fields.
-- Customer response shape remains compatible: `shipment_id` plus `milestones`.
-- Operations shipment workspace now supports package lookup and authoritative custody inspection.
+- Canonical contract names are authoritative; compatibility aliases were not retained.
+- Resolve is a read-only precondition operation but still requires authenticated POST, CSRF for
+  browser sessions, and an idempotency key under the shared controller rules.
+- `allowed_actions` is derived server-side and requested actions fail closed when context is invalid.
+- `can_depart` only means inbound loading is complete; actual departure authorization remains P4.2.
+- No raw label token is returned or persisted by resolver/scan APIs.
 
 ## Important Files
 
-- `apps/api/src/Shipping/Service.php`
-- `apps/api/src/Http/ShippingController.php`, `apps/api/route/api.php`
-- `apps/api/tests/shipping.php`
-- `packages/ui/Shipping.tsx`, `packages/ui/shipping.css`
-- `docs/handoff/contracts/openapi.json`, `packages/contracts/generated/api.ts`
-
-## Known Remaining Gaps
-
-- P4.1 still needs a dedicated hub staging/dispatch operations UI.
-- Staging actions are represented by the authoritative assignment and package event; a dedicated
-  staging scan record should be added with P4.1 accepted/refused scan evidence.
-- `/scans/resolve` contract normalization remains pending.
-- P4.2 outbound driver delivery and P7.1 hub/admin/asset management remain later milestones.
+- `apps/api/src/Custody/Service.php`
+- `apps/api/src/Http/DriverController.php`
+- `apps/api/tests/driver-inbound.php`, `apps/api/tests/hub-receiving.php`
+- `apps/api/tests/hub-dispatch.php`
+- `packages/ui/DriverWorkspace.tsx`
+- `packages/ui/HubReceiving.tsx`, `packages/ui/HubOperations.tsx`
 
 ## Next Actions
 
-1. Push the validated package-tracking milestone and open a PR when requested.
-2. After merge, create `feature/P4.1-hub-operations-ui`.
-3. Build receiving/staging/dispatch workbench UI on existing hub services.
-4. Follow with `fix/scan-contract-normalization`, then P4.2 outbound delivery.
+1. Review and merge/rebase the PR chain in order: #14, #15, then #16.
+2. Begin P4.2 outbound driver delivery only after the normalized scan contract lands.
 
 ## Local Notes
 

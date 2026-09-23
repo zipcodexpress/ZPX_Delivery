@@ -602,6 +602,29 @@
       }
     }
   },
+  "/hub/dispatch-calls": {
+    "get": {
+      "operationId": "hub_dispatch_calls_list",
+      "summary": "List dispatch state and load progress for the assigned hub.",
+      "responses": {
+        "200": { "description": "Hub dispatch workbench", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HubDispatchCallList" } } } },
+        "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+      }
+    },
+    "post": {
+      "operationId": "hub_dispatch_calls_create",
+      "summary": "Create a driver dispatch call for a staged slot.",
+      "parameters": [
+        { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } },
+        { "name": "X-CSRF-Token", "in": "header", "required": false, "schema": { "type": "string" } }
+      ],
+      "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HubDispatchCreate" } } } },
+      "responses": {
+        "200": { "description": "Dispatch call created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HubDispatchCreated" } } } },
+        "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+      }
+    }
+  },
   "/hub/slots": {
     "get": {
       "operationId": "delivery_get__hub_slots",
@@ -7042,22 +7065,27 @@
       "code": {
         "type": "string"
       },
-      "hub_id": {
+      "status": {
         "type": "string"
       },
-      "run_id": {
+      "destination": {
         "type": "string"
       },
-      "destination_location_id": {
+      "destination_name": {
         "type": "string"
+      },
+      "staged_count": {
+        "type": "integer",
+        "minimum": 0
       }
     },
     "required": [
       "slot_id",
       "code",
-      "hub_id",
-      "run_id",
-      "destination_location_id"
+      "status",
+      "destination",
+      "destination_name",
+      "staged_count"
     ]
   },
   "HubSlotList": {
@@ -7074,6 +7102,59 @@
     "required": [
       "items"
     ]
+  },
+  "HubDispatchCreate": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "slot_id": { "type": "string" },
+      "minutes_to_pickup": { "type": "integer", "minimum": 5, "maximum": 120 }
+    },
+    "required": ["slot_id", "minutes_to_pickup"]
+  },
+  "HubDispatchCreated": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dispatch_call_id": { "type": "string" },
+      "hub_id": { "type": "string" },
+      "slot_id": { "type": "string" },
+      "destination": { "type": "string" },
+      "package_count": { "type": "integer" },
+      "status": { "type": "string" },
+      "expires_at": { "type": "string", "format": "date-time" },
+      "expected_pickup_at": { "type": "string", "format": "date-time" }
+    },
+    "required": ["dispatch_call_id", "hub_id", "slot_id", "destination", "package_count", "status", "expires_at", "expected_pickup_at"]
+  },
+  "HubDispatchCall": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dispatch_call_id": { "type": "string" },
+      "slot_id": { "type": "string", "nullable": true },
+      "slot_code": { "type": "string", "nullable": true },
+      "destination": { "type": "string" },
+      "destination_name": { "type": "string" },
+      "package_count": { "type": "integer" },
+      "loaded_count": { "type": "integer" },
+      "remaining_count": { "type": "integer" },
+      "status": { "type": "string" },
+      "driver_name": { "type": "string", "nullable": true },
+      "run_id": { "type": "string", "nullable": true },
+      "called_at": { "type": "string", "format": "date-time" },
+      "expires_at": { "type": "string", "format": "date-time" },
+      "confirmed_at": { "type": "string", "format": "date-time", "nullable": true },
+      "expected_pickup_at": { "type": "string", "format": "date-time", "nullable": true },
+      "actual_pickup_at": { "type": "string", "format": "date-time", "nullable": true }
+    },
+    "required": ["dispatch_call_id", "slot_id", "slot_code", "destination", "destination_name", "package_count", "loaded_count", "remaining_count", "status", "driver_name", "run_id", "called_at", "expires_at", "confirmed_at", "expected_pickup_at", "actual_pickup_at"]
+  },
+  "HubDispatchCallList": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/HubDispatchCall" } } },
+    "required": ["items"]
   },
   "HubInventory": {
     "type": "object",

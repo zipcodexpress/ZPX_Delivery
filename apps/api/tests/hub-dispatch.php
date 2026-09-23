@@ -86,6 +86,7 @@ $stageKey = Secrets::uuid();
 $stageResult = $dispatch->stageScan($staffUser, ['label_payload' => $labelTokens[0], 'slot_code' => 'LOT-A'], $stageKey);
 check($stageResult['state'] === 'STAGED', 'package staged');
 check($stageResult['slot_code'] === 'LOT-A', 'staged to LOT-A');
+check((int)$runtime->query("SELECT count(*) FROM scan_events WHERE package_id={$packageIds[0]} AND action='HUB_STAGE' AND result_code='ACCEPTED'")->fetchColumn() === 1, 'accepted staging scan is journaled');
 
 // Test 2: Package state is STAGED
 $pkgState = $runtime->query("SELECT state FROM packages WHERE id={$packageIds[0]}")->fetchColumn();
@@ -97,6 +98,8 @@ $callResult = $dispatch->createDispatchCall($staffUser, ['slot_id' => $slot, 'mi
 check($callResult['status'] === 'PENDING', 'dispatch call created');
 check($callResult['package_count'] === 1, 'one package in call');
 check($callResult['destination'] === 'DEST-DISP', 'destination matches');
+$hubCalls = $dispatch->listDispatchCalls($staffUser);
+check(count($hubCalls['items']) === 1 && $hubCalls['items'][0]['status'] === 'PENDING', 'hub dispatch workbench shows pending call');
 
 // Test 4: Slot status is DISPATCHED
 $slotStatus = $runtime->query("SELECT status FROM hub_slots WHERE id=$slot")->fetchColumn();
@@ -114,6 +117,10 @@ check($acceptResult['status'] === 'ACCEPTED', 'dispatch accepted');
 check($acceptResult['run_id'] !== '', 'outbound run created');
 
 // Test 7: Stage second package
+$wrongDestination = insertId($runtime, "INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($dispOrg,'WRONG-DISP','Wrong Dest','LOCKER','Wrong addr','DELIVERY_ONLY','ACTIVE','{}')");
+$wrongSlot = insertId($runtime, "INSERT INTO hub_slots(hub_id,code,destination_location_id,kind) VALUES ($hub,'LOT-WRONG',$wrongDestination,'STAGING')");
+failsIdentity(fn() => $dispatch->stageScan($staffUser, ['label_payload' => $labelTokens[1], 'slot_code' => 'LOT-WRONG'], Secrets::uuid()), 409, 'wrong destination slot rejected authoritatively');
+check((int)$runtime->query("SELECT count(*) FROM scan_events WHERE package_id={$packageIds[1]} AND action='HUB_STAGE' AND result_code='WRONG_DESTINATION'")->fetchColumn() === 1, 'wrong destination staging refusal survives rollback');
 $stageResult2 = $dispatch->stageScan($staffUser, ['label_payload' => $labelTokens[1], 'slot_code' => 'LOT-A'], Secrets::uuid());
 check($stageResult2['state'] === 'STAGED', 'second package staged');
 
@@ -122,6 +129,9 @@ $loadKey = Secrets::uuid();
 $loadResult = $dispatch->loadPackages($driverUser, $callResult['dispatch_call_id'], $loadKey);
 check($loadResult['loaded_count'] >= 1, 'at least one package loaded');
 check($loadResult['status'] === 'DISPATCHED', 'dispatch status is DISPATCHED');
+$hubCalls = $dispatch->listDispatchCalls($staffUser);
+check($hubCalls['items'][0]['status'] === 'DISPATCHED' && $hubCalls['items'][0]['driver_name'] === 'Dispatch Driver', 'hub workbench shows assigned driver and dispatched state');
+check($hubCalls['items'][0]['loaded_count'] >= 1 && $hubCalls['items'][0]['remaining_count'] === 0, 'hub workbench reports load progress');
 
 // Test 9: Loaded packages are OUTBOUND_CUSTODY
 $loadedState = $runtime->query("SELECT state FROM packages WHERE id={$packageIds[0]}")->fetchColumn();
@@ -145,5 +155,19 @@ failsIdentity(fn() => $dispatch->stageScan($driverUser, ['label_payload' => $lab
 
 // Test 14: Non-driver cannot accept dispatch
 failsIdentity(fn() => $dispatch->acceptDispatch($staffUser, $callResult['dispatch_call_id'], Secrets::uuid()), 403, 'hub staff cannot accept dispatch');
+
+// Hub workbench route supports read and create on the shared collection path.
+[$response, $body] = identityHttp('POST', $base . '/auth/login', ['email' => $staffEmail, 'password' => $staffInput['password'], 'client_kind' => 'BROWSER']);
+preg_match('/zpx_delivery_session=([a-f0-9]{64})/', $response->getHeader('Set-Cookie'), $matches);
+$hubCookies = ['zpx_delivery_session' => $matches[1]];
+$hubCsrf = $body['csrf_token'];
+[$response, $body] = identityHttp('POST', $base . '/scans/resolve', ['label_payload' => $labelTokens[0], 'action' => 'INSPECT'], ['idempotency-key' => Secrets::uuid(), 'x-csrf-token' => $hubCsrf], $hubCookies);
+check($response->getCode() === 200 && isset($body['state'],$body['version'],$body['allowed_actions']) && !isset($body['package_state'],$body['package_version']), 'scan resolver HTTP response uses canonical fields');
+[$response, $body] = identityHttp('GET', $base . '/scans/resolve?label=' . urlencode($labelTokens[0]), [], [], $hubCookies);
+check($response->getCode() !== 200, 'legacy GET scan resolver is rejected');
+[$response, $body] = identityHttp('GET', $base . '/hub/dispatch-calls', [], [], $hubCookies);
+check($response->getCode() === 200 && $body['items'][0]['status'] === 'DISPATCHED', 'hub dispatch HTTP workbench route lists calls');
+[$response, $body] = identityHttp('POST', $base . '/hub/dispatch-calls', ['slot_id' => $slot, 'minutes_to_pickup' => 30], ['idempotency-key' => Secrets::uuid()], $hubCookies);
+check($response->getCode() === 403 && $body['code'] === 'CSRF_REJECTED', 'hub dispatch creation requires browser CSRF');
 
 echo "\nHub dispatch test suite complete.\n";
