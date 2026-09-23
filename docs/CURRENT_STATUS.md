@@ -13,7 +13,7 @@ Checkpoint: P3.3 receiving discrepancy completion implemented and fully validate
 - Branch: `feature/P3.3-discrepancy-completion`
 - Baseline: `main` at `731684b` (`fix(dev): expose deterministic seeded label tokens`)
 - Latest feature commit: `f40d729` (`feat(hub): complete receiving discrepancy workflow`)
-- PR #12 is merged; there are no known open PRs.
+- PR #13 is open against `main`: https://github.com/zipcodexpress/ZPX_Delivery/pull/13
 
 ## Current Objective
 
