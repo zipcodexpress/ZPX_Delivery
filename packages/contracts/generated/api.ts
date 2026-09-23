@@ -85,6 +85,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/operations/packages/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find an exact package identifier within current staff assignments. */
+        get: operations["shipping_operations_package_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operations/shipments/{shipment_id}/tracking": {
         parameters: {
             query?: never;
@@ -1908,6 +1925,36 @@ export interface components {
                 location_name?: string;
             }[];
             exception_summary?: string;
+            package?: {
+                package_id: string;
+                /** Format: uuid */
+                package_uuid: string;
+                public_reference: string;
+                si: string | null;
+                state: string;
+                version: number;
+                origin_name: string;
+                destination_name: string;
+            };
+            current_custody?: {
+                type: string;
+                reference: string;
+                location_id: string | null;
+                location_name: string | null;
+            };
+            events?: {
+                source: string;
+                source_id: string;
+                code: string;
+                result: string | null;
+                /** Format: date-time */
+                occurred_at: string;
+                actor: string | null;
+                location_name: string | null;
+                details: {
+                    [key: string]: unknown;
+                };
+            }[];
         };
         Claim: {
             invitation_token: string;
@@ -2190,6 +2237,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactChallenge"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    shipping_operations_package_search: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized matching shipments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentList"];
                 };
             };
             /** @description Structured error */

@@ -281,6 +281,30 @@
         }
       }
     },
+    "/operations/packages/search": {
+      "get": {
+        "operationId": "shipping_operations_package_search",
+        "summary": "Find an exact package identifier within current staff assignments.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized matching shipments",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ShipmentList" } } }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
     "/operations/shipments/{shipment_id}/tracking": {
       "get": {
         "operationId": "shipping_operations_tracking",
@@ -8926,6 +8950,50 @@
           },
           "exception_summary": {
             "type": "string"
+          },
+          "package": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "package_id": { "type": "string" },
+              "package_uuid": { "type": "string", "format": "uuid" },
+              "public_reference": { "type": "string" },
+              "si": { "type": "string", "nullable": true },
+              "state": { "type": "string" },
+              "version": { "type": "integer" },
+              "origin_name": { "type": "string" },
+              "destination_name": { "type": "string" }
+            },
+            "required": ["package_id", "package_uuid", "public_reference", "si", "state", "version", "origin_name", "destination_name"]
+          },
+          "current_custody": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string" },
+              "reference": { "type": "string" },
+              "location_id": { "type": "string", "nullable": true },
+              "location_name": { "type": "string", "nullable": true }
+            },
+            "required": ["type", "reference", "location_id", "location_name"]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source": { "type": "string" },
+                "source_id": { "type": "string" },
+                "code": { "type": "string" },
+                "result": { "type": "string", "nullable": true },
+                "occurred_at": { "type": "string", "format": "date-time" },
+                "actor": { "type": "string", "nullable": true },
+                "location_name": { "type": "string", "nullable": true },
+                "details": { "type": "object", "additionalProperties": true }
+              },
+              "required": ["source", "source_id", "code", "result", "occurred_at", "actor", "location_name", "details"]
+            }
           }
         },
         "required": [
