@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Zpx\HubDispatch;
 
 use PDO;
+use Zpx\Custody\ScanJournal;
 use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Infrastructure\Database\Transaction;
 use Zpx\Infrastructure\Messaging\Outbox;
@@ -12,6 +13,7 @@ use Zpx\Infrastructure\Messaging\Outbox;
 final class Service
 {
     private Identity $identity;
+    private ?ScanJournal $journal = null;
 
     public function __construct(private PDO $db, private Secrets $crypto)
     {
@@ -24,6 +26,9 @@ final class Service
         $q->execute($values);
         return $q;
     }
+
+    private function journal(): ScanJournal { return $this->journal ??= new ScanJournal($this->db); }
+    private function rejectStage(string $user, ?string $package, string $code): void { $this->journal()->stage($user, null, $package, 'HUB_STAGE', $code); }
 
     private function org(): string
     {
@@ -39,7 +44,7 @@ final class Service
         $slotCode = Input::text($input['slot_code'], 1, 40);
         Input::text($key, 16, 100);
 
-        return (new Transaction($this->db))->run(function () use ($user, $labelToken, $slotCode, $key) {
+        return $this->journal()->transact(function () use ($user, $labelToken, $slotCode, $key) {
             $scope = 'hub:' . $this->org() . ':' . $user . ':stage';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
@@ -52,19 +57,25 @@ final class Service
                 [$tokenHash]
             )->fetch(PDO::FETCH_ASSOC);
 
-            if (!$label) { throw new Failure(404, 'LABEL_NOT_FOUND', 'Label not recognized.'); }
-            if ($label['status'] !== 'ACTIVE') { throw new Failure(410, 'LABEL_REVOKED', 'Label revoked.'); }
+            if (!$label) { $this->rejectStage($user, null, 'LABEL_NOT_FOUND'); throw new Failure(404, 'LABEL_NOT_FOUND', 'Label not recognized.'); }
+            if ($label['status'] !== 'ACTIVE') { $this->rejectStage($user, (string)$label['package_id'], 'LABEL_REVOKED'); throw new Failure(410, 'LABEL_REVOKED', 'Label revoked.'); }
 
             $packageId = (string)$label['package_id'];
 
             // Check package is AT_HUB
             $package = $this->q(
-                "SELECT p.id, p.state, p.version, p.current_location_id FROM packages p WHERE p.id=? FOR UPDATE",
-                [$packageId]
+                "SELECT p.id,p.state,p.version,p.current_location_id,p.custodian_type,p.custodian_ref,
+                        s.destination_location_id,h.location_id AS hub_location_id
+                 FROM packages p JOIN shipments s ON s.id=p.shipment_id JOIN hubs h ON h.id=?
+                 WHERE p.id=? AND s.organization_id=? FOR UPDATE OF p",
+                [$hubId, $packageId, $this->org()]
             )->fetch(PDO::FETCH_ASSOC);
 
-            if ($package['state'] !== 'AT_HUB') {
-                throw new Failure(409, 'WRONG_STATE', 'Package is not at hub. State: ' . $package['state']);
+            if (!$package) { $this->rejectStage($user, null, 'PACKAGE_NOT_FOUND'); throw new Failure(404, 'PACKAGE_NOT_FOUND', 'Package not found.'); }
+            if ($package['state'] !== 'AT_HUB' || $package['custodian_type'] !== 'HUB'
+                || (string)$package['custodian_ref'] !== $hubId || (string)$package['current_location_id'] !== (string)$package['hub_location_id']) {
+                $this->rejectStage($user, $packageId, 'WRONG_STATE');
+                throw new Failure(409, 'WRONG_STATE', 'Package is not at this hub.');
             }
 
             // Find the slot
@@ -73,11 +84,15 @@ final class Service
                 [$hubId, $slotCode]
             )->fetch(PDO::FETCH_ASSOC);
 
-            if (!$slot) { throw new Failure(404, 'SLOT_NOT_FOUND', 'Slot not found at this hub.'); }
+            if (!$slot) { $this->rejectStage($user, $packageId, 'SLOT_NOT_FOUND'); throw new Failure(404, 'SLOT_NOT_FOUND', 'Slot not found at this hub.'); }
+            if ((string)$slot['destination_location_id'] !== (string)$package['destination_location_id']) {
+                $this->rejectStage($user, $packageId, 'WRONG_DESTINATION');
+                throw new Failure(409, 'WRONG_DESTINATION', 'The staging slot does not match the package destination.');
+            }
 
             // Check if already staged
             $existing = $this->q("SELECT id FROM staging_assignments WHERE package_id=?", [$packageId])->fetchColumn();
-            if ($existing) { throw new Failure(409, 'ALREADY_STAGED', 'Package already staged.'); }
+            if ($existing) { $this->rejectStage($user, $packageId, 'ALREADY_STAGED'); throw new Failure(409, 'ALREADY_STAGED', 'Package already staged.'); }
 
             // Create staging assignment
             $assignmentId = $this->insert(
@@ -97,6 +112,7 @@ final class Service
                 "INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?, 'STAGE',?, '{}', now())",
                 [$packageId, Secrets::uuid(), $user]
             );
+            $this->q("INSERT INTO scan_events(operation_uuid,package_id,actor_user_id,action,result_code,received_at) VALUES (?,?,?,'HUB_STAGE','ACCEPTED',now())", [Secrets::uuid(), $packageId, $user]);
 
             // Update slot status
             $this->q("UPDATE hub_slots SET status='OCCUPIED' WHERE id=?", [$slot['id']]);
@@ -196,9 +212,9 @@ final class Service
              JOIN hubs h ON h.id=dc.hub_id
              JOIN locations hl ON hl.id=h.location_id
              JOIN locations l ON l.id=dc.destination_location_id
-             WHERE dc.status='PENDING' AND dc.expires_at > now()
+             WHERE hl.organization_id=? AND dc.status='PENDING' AND dc.expires_at > now()
              ORDER BY dc.expires_at ASC",
-            []
+            [$this->org()]
         )->fetchAll(PDO::FETCH_ASSOC);
 
         return ['items' => array_map(fn($r) => [
@@ -210,6 +226,48 @@ final class Service
             'called_at' => $r['called_at'],
             'expires_at' => $r['expires_at'],
             'expected_pickup_at' => $r['expected_pickup_at'],
+        ], $rows)];
+    }
+
+    // ── Hub Staff: Dispatch workbench ───────────────────────────────
+
+    public function listDispatchCalls(string $user): array
+    {
+        $hubId = $this->hubId($user);
+        $rows = $this->q(
+            "SELECT dc.id,dc.slot_id,dc.package_count,dc.status,dc.called_at,dc.expires_at,
+                    dc.confirmed_at,dc.expected_pickup_at,dc.actual_pickup_at,
+                    destination.code AS destination,destination.name AS destination_name,
+                    hs.code AS slot_code,u.display_name AS driver_name,rr.id AS run_id,
+                    (SELECT COUNT(DISTINCT se.package_id) FROM scan_events se
+                     WHERE se.run_id=rr.id AND se.action='OUTBOUND_LOAD' AND se.result_code='ACCEPTED') AS loaded_count
+             FROM dispatch_calls dc
+             JOIN locations destination ON destination.id=dc.destination_location_id
+             LEFT JOIN hub_slots hs ON hs.id=dc.slot_id
+             LEFT JOIN drivers d ON d.id=dc.driver_id
+             LEFT JOIN users u ON u.id=d.user_id
+             LEFT JOIN route_runs rr ON rr.dispatch_call_id=dc.id
+             WHERE dc.hub_id=? ORDER BY dc.called_at DESC,dc.id DESC LIMIT 100",
+            [$hubId]
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        return ['items' => array_map(static fn($r) => [
+            'dispatch_call_id' => (string)$r['id'],
+            'slot_id' => $r['slot_id'] === null ? null : (string)$r['slot_id'],
+            'slot_code' => $r['slot_code'],
+            'destination' => $r['destination'],
+            'destination_name' => $r['destination_name'],
+            'package_count' => (int)$r['package_count'],
+            'loaded_count' => (int)$r['loaded_count'],
+            'remaining_count' => max(0, (int)$r['package_count'] - (int)$r['loaded_count']),
+            'status' => $r['status'],
+            'driver_name' => $r['driver_name'],
+            'run_id' => $r['run_id'] === null ? null : (string)$r['run_id'],
+            'called_at' => gmdate('c', strtotime($r['called_at'])),
+            'expires_at' => gmdate('c', strtotime($r['expires_at'])),
+            'confirmed_at' => $r['confirmed_at'] === null ? null : gmdate('c', strtotime($r['confirmed_at'])),
+            'expected_pickup_at' => $r['expected_pickup_at'] === null ? null : gmdate('c', strtotime($r['expected_pickup_at'])),
+            'actual_pickup_at' => $r['actual_pickup_at'] === null ? null : gmdate('c', strtotime($r['actual_pickup_at'])),
         ], $rows)];
     }
 
@@ -227,8 +285,8 @@ final class Service
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
             $call = $this->q(
-                "SELECT * FROM dispatch_calls WHERE id=? FOR UPDATE",
-                [$callId]
+                "SELECT dc.* FROM dispatch_calls dc JOIN hubs h ON h.id=dc.hub_id JOIN locations l ON l.id=h.location_id WHERE dc.id=? AND l.organization_id=? FOR UPDATE OF dc",
+                [$callId, $this->org()]
             )->fetch(PDO::FETCH_ASSOC);
 
             if (!$call) { throw new Failure(404, 'CALL_NOT_FOUND', 'Dispatch call not found.'); }
@@ -294,8 +352,8 @@ final class Service
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
             $call = $this->q(
-                "SELECT * FROM dispatch_calls WHERE id=? AND driver_id=? FOR UPDATE",
-                [$callId, $driverId]
+                "SELECT dc.* FROM dispatch_calls dc JOIN hubs h ON h.id=dc.hub_id JOIN locations l ON l.id=h.location_id WHERE dc.id=? AND dc.driver_id=? AND l.organization_id=? FOR UPDATE OF dc",
+                [$callId, $driverId, $this->org()]
             )->fetch(PDO::FETCH_ASSOC);
 
             if (!$call) { throw new Failure(404, 'CALL_NOT_FOUND', 'Dispatch call not found for this driver.'); }

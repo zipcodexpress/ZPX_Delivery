@@ -16,7 +16,8 @@ final class HubDispatchController
         try {
             $method = $request->method(true);
             $expected = match ($action) {
-                'stage', 'dispatch', 'accept', 'load' => 'POST',
+                'stage', 'accept', 'load' => 'POST',
+                'dispatch' => in_array($method, ['GET', 'POST'], true) ? $method : 'GET, POST',
                 'available-calls', 'slots' => 'GET',
                 default => 'GET',
             };
@@ -63,7 +64,7 @@ final class HubDispatchController
 
             $body = match ($action) {
                 'stage' => $service->stageScan($user, $input, $key),
-                'dispatch' => $service->createDispatchCall($user, $input, $key),
+                'dispatch' => $method === 'POST' ? $service->createDispatchCall($user, $input, $key) : $service->listDispatchCalls($user),
                 'available-calls' => $service->listAvailableCalls($user),
                 'accept' => $service->acceptDispatch($user, $id, $key),
                 'load' => $service->loadPackages($user, $id, $key),

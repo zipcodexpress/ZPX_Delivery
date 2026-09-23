@@ -94,7 +94,8 @@ export function Shipping({ profile, audience, onAccount, onLogout, embedded = fa
       else { setSelected(null); setTimeline(null); setPaymentHistory(null); setNotice('No package in your current staff assignment matched that exact identifier.'); }
     });
   }
-  return <main className={"shipping-page" + (embedded ? " embedded-shipping" : "")}>
+  const Root = embedded ? 'div' : 'main';
+  return <Root className={"shipping-page" + (embedded ? " embedded-shipping" : "")}>
     {!embedded && <header><strong>ZipcodeXpress<span className="brand-dot">.</span></strong><nav aria-label="Account"><span>{profile.name}</span><button onClick={onAccount} disabled={busy}>Account</button><button onClick={onLogout} disabled={busy}>Sign out</button></nav></header>}
     <div className="shipping-heading"><div><p className="eyebrow">{operations ? 'NETWORK OPERATIONS' : 'YOUR DELIVERY SPACE'}</p><h1>{operations ? 'Shipment workspace' : 'Send it. Receive it. All here.'}</h1><p>{operations ? 'Follow shipments within your staff assignments.' : 'One customer account, both sides of every delivery.'}</p></div>{!operations && <button className="primary" disabled={busy || !customerAccess} onClick={() => { setCreating(true); setSelected(null); setError(''); setNotice(''); }}>＋ New shipment</button>}</div>
     <p className="development-banner">Development preview · Create shipments, use sandbox checkout and print test labels. No real charges or physical drop-off.</p>
@@ -130,5 +131,5 @@ export function Shipping({ profile, audience, onAccount, onLogout, embedded = fa
         </> : <div className="empty-detail"><p className="eyebrow">{operations ? 'CLEAR HANDOFFS' : 'ONE ACCOUNT. BOTH DIRECTIONS.'}</p><h2>{operations ? 'Select a shipment to inspect its progress.' : 'Your parcel’s story, in one place.'}</h2><p>{operations ? 'Order and payment status are separate from physical parcel progress. A draft or quote never records a handoff.' : 'Create a shipment to send something, or open Receiving to add an incoming delivery. Only shipments you own or have verified are shown.'}</p></div>}
       </section>
     </div><footer>ZipcodeXpress · Austin pilot development · Synthetic sites and test quotes</footer>
-  </main>;
+  </Root>;
 }
