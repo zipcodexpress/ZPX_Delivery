@@ -17,7 +17,7 @@ type ScanResult = {
 type ResolvedLabel = { package_id: string; package_state: string; package_version: number };
 type Discrepancy = { id: string; package_id: string; run_id: string | null; public_reference: string; type: string; status: string; notes: string | null; package_state: string; custodian_type: string; reported_at: string; resolution_code: string | null };
 
-export function HubReceiving({ profile, onLogout }: { profile: components['schemas']['Profile']; onLogout: () => void }) {
+export function HubReceiving({ profile, onLogout, embedded = false, show = 'all' }: { profile: components['schemas']['Profile']; onLogout: () => void; embedded?: boolean; show?: 'all' | 'receiving' | 'exceptions' }) {
   const [session, setSession] = useState<ReceivingSession | null>(null);
   const [hubId, setHubId] = useState('');
   const [runId, setRunId] = useState('');
@@ -104,17 +104,18 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
     finally { setBusy(false); }
   }
 
-  return <main className="hub-page">
-    <header>
+  const Root = embedded ? 'div' : 'main';
+  return <Root className="hub-page">
+    {!embedded && <header>
       <strong>ZipcodeXpress<span className="brand-dot">.</span></strong>
       <span>HUB RECEIVING</span>
       <button className="secondary small" onClick={onLogout}>Sign out</button>
-    </header>
+    </header>}
 
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
 
-    {!session ? <div className="hub-card">
+    {show !== 'exceptions' && (!session ? <div className="hub-card">
       <p className="eyebrow">OPEN RECEIVING SESSION</p>
       <h2>Receive inbound shipment</h2>
       <p className="hub-intro">Open a session to start scanning packages from a driver's inbound run. Each scan transfers custody from the driver to the hub independently.</p>
@@ -170,16 +171,16 @@ export function HubReceiving({ profile, onLogout }: { profile: components['schem
         </div>
         <button onClick={reset}>Open New Session</button>
       </div>}
-    </div>}
+    </div>)}
 
-    <section className="hub-card discrepancy-workbench">
+    {show !== 'receiving' && <section className="hub-card discrepancy-workbench">
       <p className="eyebrow">DISCREPANCY WORKBENCH</p><h2>Receiving issues</h2>
       {discrepancies.length === 0 ? <p className="hub-intro">No receiving discrepancies.</p> : <div className="discrepancy-list">{discrepancies.map(item => <article key={item.id}>
         <div><strong>{item.type} · {item.public_reference}</strong><small>{item.package_state} · custody {item.custodian_type} · {item.status.toLowerCase()}</small>{item.notes && <p>{item.notes}</p>}</div>
         {item.status === 'OPEN' && <button type="button" onClick={() => void resolveDiscrepancy(item.id)} disabled={busy}>Mark reviewed</button>}
       </article>)}</div>}
-    </section>
+    </section>}
 
-    <footer>ZipcodeXpress · Austin pilot · Hub receiving workspace</footer>
-  </main>;
+    {!embedded && <footer>ZipcodeXpress · Austin pilot · Hub receiving workspace</footer>}
+  </Root>;
 }

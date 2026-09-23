@@ -213,6 +213,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hub/dispatch-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List dispatch state and load progress for the assigned hub. */
+        get: operations["hub_dispatch_calls_list"];
+        put?: never;
+        /** Create a driver dispatch call for a staged slot. */
+        post: operations["hub_dispatch_calls_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hub/slots": {
         parameters: {
             query?: never;
@@ -1409,12 +1427,55 @@ export interface components {
         HubSlot: {
             slot_id: string;
             code: string;
-            hub_id: string;
-            run_id: string;
-            destination_location_id: string;
+            status: string;
+            destination: string;
+            destination_name: string;
+            staged_count: number;
         };
         HubSlotList: {
             items: components["schemas"]["HubSlot"][];
+        };
+        HubDispatchCreate: {
+            slot_id: string;
+            minutes_to_pickup: number;
+        };
+        HubDispatchCreated: {
+            dispatch_call_id: string;
+            hub_id: string;
+            slot_id: string;
+            destination: string;
+            package_count: number;
+            status: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            expected_pickup_at: string;
+        };
+        HubDispatchCall: {
+            dispatch_call_id: string;
+            slot_id: string | null;
+            slot_code: string | null;
+            destination: string;
+            destination_name: string;
+            package_count: number;
+            loaded_count: number;
+            remaining_count: number;
+            status: string;
+            driver_name: string | null;
+            run_id: string | null;
+            /** Format: date-time */
+            called_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            confirmed_at: string | null;
+            /** Format: date-time */
+            expected_pickup_at: string | null;
+            /** Format: date-time */
+            actual_pickup_at: string | null;
+        };
+        HubDispatchCallList: {
+            items: components["schemas"]["HubDispatchCall"][];
         };
         HubInventory: {
             items: components["schemas"]["ResolvedPackage"][];
@@ -2481,6 +2542,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReceivingSession"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    hub_dispatch_calls_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hub dispatch workbench */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubDispatchCallList"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    hub_dispatch_calls_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HubDispatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Dispatch call created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubDispatchCreated"];
                 };
             };
             /** @description Structured error */
