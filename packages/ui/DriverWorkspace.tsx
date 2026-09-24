@@ -263,9 +263,10 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     setBusy(true); setError(''); setNotice('');
     try {
       const labelPayload=scanInput.trim(); const clientEventId=crypto.randomUUID();
-      const resolved=await api<ResolvedScan>('/scans/resolve', { label_payload: labelPayload, action: 'INBOUND_PICKUP', run_id: selected.id }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      const action=selected.kind === 'OUTBOUND' ? 'OUTBOUND_LOAD' : 'INBOUND_PICKUP';
+      const resolved=await api<ResolvedScan>('/scans/resolve', { label_payload: labelPayload, action, run_id: selected.id }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       const result = await api<ScanResult>('/runs/' + selected.id + '/scans', {
-        label_payload: labelPayload, action: 'INBOUND_PICKUP', client_event_id: clientEventId,
+        label_payload: labelPayload, action, client_event_id: clientEventId,
         run_revision: selected.revision, expected_package_version: resolved.version,
       }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '', 'If-Match': `"${selected.revision}"` });
       setScanResult(result);
@@ -273,6 +274,19 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
       setNotice(`Package scanned. ${result.counts.accepted}/${result.counts.expected} loaded.`);
       await openRun(selected.id);
     } catch (e) { setError(e instanceof Error ? e.message : 'Scan failed.'); }
+    finally { setBusy(false); }
+  }
+
+  async function depart() {
+    if (!selected || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api('/runs/' + selected.id + '/depart', { expected_revision: selected.revision }, {
+        'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '', 'If-Match': `"${selected.revision}"`,
+      });
+      setNotice('Load verified. Run departed and the ordered route is active.');
+      await openRun(selected.id);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Departure was blocked.'); }
     finally { setBusy(false); }
   }
 
@@ -326,8 +340,10 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
           {selected.state === 'PUBLISHED' && <div className="action-bar"><p>Acknowledge to begin scanning.</p><button onClick={() => void acknowledge()} disabled={busy}>{busy ? 'Please wait…' : 'Acknowledge run'}</button></div>}
           {(selected.state === 'ACKNOWLEDGED' || selected.state === 'IN_PROGRESS') && <form className="scan-bar" onSubmit={scanPackage}>
             <label>Scan or enter label token<input value={scanInput} onChange={e => setScanInput(e.target.value)} placeholder="ZPX1:L:..." autoFocus disabled={busy} /></label>
-            <button type="submit" disabled={busy || !scanInput.trim()}>{busy ? 'Scanning…' : 'Scan package'}</button>
+            <button type="submit" disabled={busy || !scanInput.trim() || Boolean(selected.departed_at)}>{busy ? 'Scanning…' : selected.kind === 'OUTBOUND' ? 'Load package' : 'Scan package'}</button>
           </form>}
+          {selected.kind === 'OUTBOUND' && !selected.departed_at && <div className="action-bar"><p>Departure requires every unique manifest package in your custody. Duplicate scans never increase the count.</p><button onClick={() => void depart()} disabled={busy || selected.manifest.length === 0 || selected.manifest.some(item => item.state !== 'LOADED')}>{busy ? 'Verifying…' : 'Verify load and depart'}</button></div>}
+          {selected.kind === 'OUTBOUND' && selected.departed_at && <div className="action-bar"><p>Departed {new Date(selected.departed_at).toLocaleString()}. Follow the stops in the displayed order.</p></div>}
           {scanResult && <div className="scan-result"><span className={scanResult.result === 'ACCEPTED' ? 'scan-ok' : 'scan-fail'}>{scanResult.result}</span><span>Package {scanResult.package_id} · version {scanResult.package_version}</span><span>{scanResult.counts.accepted}/{scanResult.counts.expected} loaded</span></div>}
           <div className="manifest-stops">{selected.stops.map(stop => {
             const items = selected.manifest.filter(m => m.stop_sequence === stop.sequence);

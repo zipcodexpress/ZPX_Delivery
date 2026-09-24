@@ -6,77 +6,71 @@
 
 Date: 2026-09-23
 Agent: Codex
-Checkpoint: Scan contract normalization implemented and validated locally
+Checkpoint: P4.2 outbound load and departure foundation implemented and validated
 
-## Branch / Dependency Chain
+## Branch / Baseline
 
-- Current branch: `fix/scan-contract-normalization`
-- Latest scan-normalization commit: `d1c1390` (`fix(scan): normalize resolve and inbound scan contracts`).
-- This branch is stacked on P4.1, which is stacked on package tracking.
-- PR #14 package tracking: open, mergeable, all checks passed:
-  https://github.com/zipcodexpress/ZPX_Delivery/pull/14
-- PR #15 P4.1 hub operations UI: open against PR #14's branch, mergeable, all checks passed:
-  https://github.com/zipcodexpress/ZPX_Delivery/pull/15
-- PR #16 scan normalization: open against PR #15's branch; all four GitHub checks passed:
-  https://github.com/zipcodexpress/ZPX_Delivery/pull/16
-- After each dependency merges, rebase/retarget the next branch onto `main`.
-- The two untracked planning documents remain human-authored and intentionally preserved.
+- Branch: `feature/P4.2-outbound-driver-delivery`
+- Baseline: `main` at `211b9a9` (PR #17 integrated P4.1 and scan normalization).
+- Latest feature commit: `1d4bda9` (`feat(driver): enforce scanned outbound load before departure`).
+- PR #18 is open against `main`; all four GitHub checks passed:
+  https://github.com/zipcodexpress/ZPX_Delivery/pull/18
+- The two planning documents remain untracked human-authored files and are intentionally preserved.
 
 ## Current Objective
 
-Normalize shared label resolution and inbound driver scans to the canonical API contract before P4.2.
-Implementation and database validation are complete in the working tree.
+Deliver P4.2 outbound load and ordered-stop driver workflow with server-authoritative unique-package
+departure eligibility. P5.1 final deposit remains out of scope.
 
 ## Completed in Current Work
 
-- Changed `/scans/resolve` from legacy GET query input to canonical authenticated POST JSON input.
-- Resolver accepts `label_payload`, `action`, and optional `run_id` and validates strict fields.
-- Resolver now returns canonical `state`, `version`, `si`, `destination_location_id`, and
-  `allowed_actions`; legacy `package_state`/`package_version` response aliases were removed.
-- Resolver filters labels by active organization and authorizes requested actions against current
-  state, manifest/run assignment, driver assignment, and hub assignment/custody.
-- Updated hub receiving and staging UI to use canonical resolve actions and versions.
-- Driver pickup UI now resolves first, then submits canonical RunScan fields:
-  `label_payload`, `action`, `client_event_id`, `run_revision`, and `expected_package_version`.
-- Driver pickup validates UUID client event identity, If-Match/run revision, package version, action,
-  assigned run, and manifest membership before custody mutation.
-- Accepted scan uses the client event UUID as the durable operation identity.
-- Driver scan response now matches canonical ScanResult: result, package/SI/location/version,
-  run/stop context, expected/accepted/pending counts, and load-complete `can_depart` signal.
-- Legacy GET resolver calls and legacy `label_token` driver scan bodies are no longer accepted.
+- Dispatch acceptance freezes the staged physical package set into a versioned outbound manifest.
+- Outbound route stops and manifest items are materialized instead of relying on slot state alone.
+- Driver scans each outbound package through the canonical run scan endpoint with resolve-first,
+  run revision, package version, client event UUID, idempotency, and If-Match preconditions.
+- Successful load transfers custody exactly once from the assigned hub to the assigned driver,
+  records scan/custody/package/outbox evidence, and marks only that manifest item loaded.
+- Wrong driver, wrong run, off-manifest package, wrong hub custody, stale version/revision, revoked
+  label, and duplicate physical package scans fail closed.
+- `POST /runs/{run_id}/depart` authorizes only the assigned outbound driver and counts unique
+  manifest package IDs whose package custody agrees with the loaded manifest state.
+- Departure marks the run/dispatch pickup and releases the hub slot only after the exact manifest
+  is loaded; nine unique packages plus a duplicate cannot depart.
+- Driver UI chooses inbound versus outbound scan action, enables departure only after the visible
+  manifest is fully loaded, and displays the ordered stop/package groups.
 
 ## Validation
 
-- `npm run test-db` passed after normalization: full PostgreSQL suite, canonical resolve fields,
-  action/run authorization, run/package revision checks, idempotency, durable accepted/refused scans,
-  legacy GET rejection, receiving, staging, dispatch, custody, and cross-scope tests.
-- PHP syntax checks passed for all changed PHP source/test files.
-- `npm run check` passed with 74 validated API operations and 9 Node tests.
+- Full `npm run test-db` passed after implementation.
+- Exact plan scenario passes: 10 packages, ordered 6 + 4 stop grouping, 9 unique + duplicate blocked,
+  tenth unique load eligible, then departure succeeds.
+- Existing inbound, receiving, discrepancy, staging, dispatch, tracking, identity, payment, and
+  cross-scope PostgreSQL coverage continues to pass.
+- PHP syntax passed for every changed PHP source/test file; `git diff --check` passed.
+- `npm run check` passed with 74 canonical API operations and 9 Node tests.
 - `npm run build` passed for customer-web and operations-web.
-- `git diff --check` and the focused diff/security review passed.
 
 ## Important Decisions
 
-- Canonical contract names are authoritative; compatibility aliases were not retained.
-- Resolve is a read-only precondition operation but still requires authenticated POST, CSRF for
-  browser sessions, and an idempotency key under the shared controller rules.
-- `allowed_actions` is derived server-side and requested actions fail closed when context is invalid.
-- `can_depart` only means inbound loading is complete; actual departure authorization remains P4.2.
-- No raw label token is returned or persisted by resolver/scan APIs.
+- Departure eligibility is derived from authoritative manifest rows joined to current package
+  state/custody; scan-event count alone is never sufficient.
+- A dispatch call currently creates its own outbound run, but the run/manifest model supports
+  multiple ordered stops. Broader multi-call route planning remains an operations planning concern.
+- The legacy bulk-load route/service was removed so no API can bypass individual physical scans.
+- P5.1 owns final deposit and recipient pickup; P4.2 does not fabricate delivery completion.
 
 ## Important Files
 
 - `apps/api/src/Custody/Service.php`
-- `apps/api/src/Http/DriverController.php`
-- `apps/api/tests/driver-inbound.php`, `apps/api/tests/hub-receiving.php`
+- `apps/api/src/HubDispatch/Service.php`
+- `apps/api/src/Http/DriverController.php`, `apps/api/route/api.php`
 - `apps/api/tests/hub-dispatch.php`
 - `packages/ui/DriverWorkspace.tsx`
-- `packages/ui/HubReceiving.tsx`, `packages/ui/HubOperations.tsx`
 
 ## Next Actions
 
-1. Review and merge/rebase the PR chain in order: #14, #15, then #16.
-2. Begin P4.2 outbound driver delivery only after the normalized scan contract lands.
+1. Review and merge PR #18.
+2. Continue ordered-stop progress behavior without entering P5.1 final deposit scope.
 
 ## Local Notes
 

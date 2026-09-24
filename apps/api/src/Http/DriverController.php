@@ -21,6 +21,7 @@ final class DriverController
                 'acknowledge' => 'POST',
                 'resolve' => 'POST',
                 'scan' => 'POST',
+                'depart' => 'POST',
                 default => 'GET',
             };
             if ($method !== $expected) { throw new Failure(405, 'METHOD_NOT_ALLOWED', 'Unsupported method.'); }
@@ -70,7 +71,10 @@ final class DriverController
                 'run-detail' => $custody->getRun($user, $runId),
                 'acknowledge' => $custody->acknowledgeRun($user, $runId, $key),
                 'resolve' => $custody->resolveScan($user, Input::text($input['label_payload'] ?? '', 1, 500), Input::text($input['action'] ?? '', 1, 40), isset($input['run_id']) ? Input::text($input['run_id'], 1, 18) : null),
-                'scan' => $custody->inboundPickupScan($user, $runId, $input, $key, $request->header('if-match','')),
+                'scan' => ($input['action'] ?? '') === 'OUTBOUND_LOAD'
+                    ? $custody->outboundLoadScan($user, $runId, $input, $key, $request->header('if-match',''))
+                    : $custody->inboundPickupScan($user, $runId, $input, $key, $request->header('if-match','')),
+                'depart' => $custody->departRun($user, $runId, $input, $key, $request->header('if-match','')),
             };
 
             return Reply::json(200, $body, $requestId);
