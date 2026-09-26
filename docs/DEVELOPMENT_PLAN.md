@@ -150,3 +150,18 @@ This planning session obtained a pinned text snapshot through the GitHub connect
 # Terminal scope amendment
 
 Read [decision 0002](decisions/0002-new-terminal-platform.md) before using this plan. Richard clarified that the old terminal is reference-only for locker/API behavior and door-control/status protocols. Build a new terminal with Android as the preferred direction; historical Windows/C# compatibility builds and Zippora dependencies below are superseded. Shared-site ownership and single-command-gate requirements remain applicable.
+
+## Phase 1 business-flow amendment — 2026-09-26
+
+Use [phase1_END_TO_END_DELIVERY_FLOW.md](phase1_END_TO_END_DELIVERY_FLOW.md) as the canonical Phase 1 product flow.
+
+Planning changes:
+- Insert P2.3 size-only pricing/locker-side upgrade: SMALL/MEDIUM/LARGE, published dimensions, default development rates $1/$2/$3, and successful price-difference payment before a larger origin door can open.
+- Insert P3.0 Pickup Demand / Driver Offer between confirmed origin deposit and inbound run execution.
+- Phase 1 inbound dispatch is no longer limited to preassigned fixed runs: nearby AVAILABLE drivers may receive offers; first valid acceptance wins; one driver may accept multiple nearby origin lockers and the backend assembles the exact INBOUND run.
+- Individual package scans/custody transfers remain unchanged.
+- Outbound P4.2 remains dispatcher/run based and already implemented.
+- Sender may equal recipient; sender-as-recipient may intentionally share a one-time pickup grant with a trusted bearer.
+- SI is the stable public ZPX tracking identifier; label token remains replaceable; SI is never an access credential.
+- Preferred-route / rideshare-style matching is Phase 2+ and must build on Pickup Demand / Driver Offer rather than changing Phase 1 custody architecture.
+
