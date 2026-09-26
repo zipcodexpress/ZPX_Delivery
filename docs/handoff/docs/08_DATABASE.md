@@ -43,3 +43,32 @@ Create new DB with utf8mb4 and explicit identifier comparison semantics; fresh i
 Restricted runtime role cannot update/delete custody/scan/device/audit history. Normal roles cannot overwrite ownership or bulk release occupied doors. Append compensating events; no cascading deletes of physical history. Retention/purge for contact PII is policy-controlled without deleting required custody identity references.
 
 MySQL validation gate: empty migration, upgrade/rollback plan, unique active-label duplicate test, allocation race, expired-before-dispatch vs unknown-after-dispatch reservation behavior, manifest revision concurrency, webhook replay, rollback between event/projection/outbox, restricted-role write denial. SQLite is not a substitute for MySQL concurrency tests.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Add/extend the PostgreSQL application schema with:
+
+- package/shipment `size_class`: SMALL/MEDIUM/LARGE;
+- size policy table containing published interior limits and optional safety weight ceiling;
+- versioned size-only rate card (integer cents);
+- quote/payment adjustment linkage for origin size upgrade;
+- `pickup_demands`;
+- `pickup_demand_items`;
+- `driver_availability`;
+- `driver_offers`;
+- optional grouped opportunity/inbound-run linkage where needed;
+- notification metadata/template for READY_FOR_PICKUP;
+- audit metadata for intentionally shared one-time pickup grant without storing plaintext grant.
+
+Required constraints:
+- one active pickup-demand membership per package;
+- one active accepted assignment per demand item/package;
+- offer acceptance optimistic version/idempotency protection;
+- accepted offer cannot silently include packages already assigned elsewhere;
+- package final size class must be one supported Phase 1 class;
+- larger-door authorization cannot be committed before successful required price-difference payment.
+
+Historical MySQL validation text in this document is superseded by the current PostgreSQL platform decision.
+
