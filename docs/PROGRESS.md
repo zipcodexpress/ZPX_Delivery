@@ -74,3 +74,16 @@ Older statements in this repository that describe the project as only a scaffold
 5. Operational hardening and supervised physical pilot.
 
 See [PHASE1_REMAINING_WORK.md](PHASE1_REMAINING_WORK.md) for the remaining critical path and [CURRENT_STATUS.md](CURRENT_STATUS.md) for the active coding handoff.
+
+## Product-flow update — 2026-09-26
+
+The canonical Phase 1 flow is now [phase1_END_TO_END_DELIVERY_FLOW.md](phase1_END_TO_END_DELIVERY_FLOW.md).
+
+New Phase 1 work added before end-to-end completion:
+- P2.3 SMALL/MEDIUM/LARGE size-only rate policy and origin size-upgrade payment difference.
+- P3.0 Pickup Demand / Driver Offer with nearby availability, atomic acceptance and multi-locker inbound run assembly.
+
+This does not invalidate completed P3 scan/custody, hub, or P4.2 outbound work. It fills the business/dispatch gap between `AT_ORIGIN` and the existing inbound collection workflow.
+
+Future preferred-route/carpool-style matching is deferred to Phase 2+.
+
