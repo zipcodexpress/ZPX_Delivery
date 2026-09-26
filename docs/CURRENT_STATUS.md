@@ -6,7 +6,7 @@
 
 Date: 2026-09-25
 Agent: ChatGPT project review
-Checkpoint: PR #18 merged; P4.2 outbound load/departure is the feature baseline; P5.1 final destination deposit is next.
+Checkpoint: PR #18 merged; P4.2 remains the implemented feature baseline. Next coding starts with Customer Shipment Initialization E2E, then origin deposit/size upgrade, then Pickup Demand / Driver Offer.
 
 ## Branch / Baseline
 
@@ -29,27 +29,33 @@ Checkpoint: PR #18 merged; P4.2 outbound load/departure is the feature baseline;
 - Acceptance scenario: 10 packages grouped 6 + 4; 9 unique scans plus a duplicate cannot depart; tenth unique accepted scan enables departure.
 - Legacy bulk outbound-load bypass removed.
 
-## NOW — P5.1 final destination deposit
+## NOW — Customer Shipment Initialization E2E
 
-Build the next bounded vertical slice from the merged P4.2 baseline:
+Do not start by rebuilding P1/P2. First audit the existing customer application/API/database against the canonical flow and classify every required capability as IMPLEMENTED / PARTIAL / MISSING.
 
-1. Driver progresses to an assigned ordered stop.
-2. Resolve and scan each package for final deposit.
-3. Server validates organization, run, assigned driver, manifest item, package state/version/custody and exact destination.
-4. Authorize only the correct destination locker/compartment through the terminal/device boundary.
-5. Correlate door/deposit evidence before committing physical delivery state.
-6. Transfer custody exactly once from `DRIVER` to `DESTINATION_LOCKER`.
-7. Expose stop/package progress without allowing client-calculated completion.
-8. Preserve refused/ambiguous evidence and idempotent retry behavior.
+Then close only the gaps needed for one complete customer initialization journey:
 
-P5.1 must reuse existing custody, scan journal, versioning, idempotency and tracking architecture rather than creating a parallel delivery state model.
+1. Register/login/verification/profile works for a new customer.
+2. Create recipient contact/address or choose "Send to myself".
+3. Select origin locker/location.
+4. Search/select destination locker.
+5. Select SMALL/MEDIUM/LARGE using published interior dimensions.
+6. Show the authoritative size-only price.
+7. Complete server-confirmed payment.
+8. Create/finalize shipment/package.
+9. Issue one stable SI and printable/scannable primary label.
+10. Show shipment as READY_FOR_ORIGIN_DEPOSIT.
+
+Phase 1 does not require a full stored-card wallet before continuing. Payment-method storage is optional; the required capability is reliable quote/payment plus later size-upgrade payment adjustment.
 
 ## NEXT
 
-1. Recipient claim/pickup grant and single-use retrieval: `DESTINATION_LOCKER -> RECIPIENT`.
-2. Failed delivery and return reconciliation: full/offline/inaccessible locker, ambiguous door action, undelivered package, return-to-hub and unresolved end-of-run custody.
-3. Android terminal/hardware integration with durable journal, one command gate and real scanner/controller tests.
-4. Operational hardening, monitoring/restore evidence and supervised pilot.
+1. Origin deposit + size reconciliation: app/locker pairing, label scan, compatible compartment reservation, SMALL→MEDIUM/LARGE or MEDIUM→LARGE upgrade with price-difference payment before a larger door opens, then authoritative `AT_ORIGIN`.
+2. Pickup Demand / Driver Offer: create demand from `AT_ORIGIN`, notify nearby AVAILABLE drivers, atomic acceptance, multi-locker inbound run assembly.
+3. Reuse existing P3/P4 inbound/hub/outbound custody flow.
+4. P5 final destination deposit.
+5. Recipient notification/pickup and return/reconciliation.
+6. Android terminal/hardware integration and supervised pilot.
 
 ## P4.2 validation inherited by baseline
 
