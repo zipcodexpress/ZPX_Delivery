@@ -379,3 +379,51 @@ Before calling Phase 1 end-to-end complete:
 6. Commission Android terminal/physical hardware and supervised pilot.
 
 The new pickup-demand layer must integrate with the existing run/manifest/custody model rather than replacing it.
+## 21. Codex implementation start — current next work
+
+Before building later legs of the route, complete the customer-side initiation vertical slice because it defines the authoritative shipment, recipient, destination, size, price, payment, SI and label consumed by every downstream step.
+
+### Step A — audit before code
+
+Inspect the current customer web, API, migrations, contracts and tests. For each item below classify IMPLEMENTED / PARTIAL / MISSING and cite the code path:
+
+- account registration/login/contact verification/profile;
+- recipient contact/address and "Send to myself";
+- origin location selection;
+- destination locker search/selection;
+- SMALL/MEDIUM/LARGE size policy and published dimensions;
+- size-only price quote;
+- server-confirmed payment;
+- shipment/package finalization;
+- stable SI;
+- primary label/PDF/QR;
+- READY_FOR_ORIGIN_DEPOSIT customer status.
+
+Do not redesign or duplicate existing P1/P2 features that already work.
+
+### Step B — Customer Shipment Initialization E2E milestone
+
+Close only the missing gaps until this acceptance case passes:
+
+A brand-new customer registers and verifies, creates a shipment to a friend or themselves, selects origin and destination lockers, selects SMALL/MEDIUM/LARGE, sees the authoritative price, pays successfully, receives one stable SI plus printable/scannable label, and sees the shipment in READY_FOR_ORIGIN_DEPOSIT.
+
+A full stored-payment-method wallet is not a prerequisite. Phase 1 requires reliable payment confirmation and the ability to charge a later size-upgrade difference.
+
+### Step C — only after Step B
+
+Implement origin deposit + size upgrade:
+
+- app/locker pairing;
+- label scan;
+- compatible compartment selection;
+- paid size mismatch upgrade;
+- price-difference payment before larger door authorization;
+- physical evidence;
+- authoritative `AT_ORIGIN`.
+
+Only confirmed `AT_ORIGIN` creates Pickup Demand eligibility.
+
+### Step D — then Pickup Demand / Driver Offer
+
+After origin deposit is complete, implement nearby driver offers, atomic acceptance and multi-locker inbound run assembly. Existing P3/P4 custody, hub and outbound code must be reused.
+
