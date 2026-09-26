@@ -45,3 +45,27 @@ Accessibility: large scan targets, audible plus visible feedback, manual typed-l
 ## Component plan
 
 Shared package: API DTOs, identifier parser, error codes and status labels. Separate platform implementations for CameraScanner, SecureTokenStore, PrintLabel, NavigationLauncher, PendingCommandStore. Domain rules stay on backend. Unit-test parsers/state presentation; end-to-end tests exercise server authorization and driver workflow with simulator, not just mocked success screens.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Customer UX additions:
+- Shipment wizard explicitly captures recipient contact/address, selected destination locker, and SMALL/MEDIUM/LARGE estimated size.
+- Support "Send to myself".
+- Show published interior dimensions/examples for each size.
+- Show exact size-only price before payment (development defaults $1/$2/$3).
+- Origin-deposit UX supports upgrade payment difference before a larger compartment can open.
+- Tracking uses SI as the public ZPX tracking reference.
+- Sender may obtain/revoke/share a one-time pickup grant when sender is also recipient.
+
+Driver UX additions required in Phase 1:
+- Availability control: AVAILABLE/BUSY/OFFLINE.
+- Nearby pickup opportunities / offers.
+- Offer detail includes origin locker(s), package count/size summary, hub, pickup window/deadline.
+- Atomic accept/decline; stale/expired offers cannot assign work.
+- Driver may accept multiple nearby origin lockers and receive one assembled INBOUND run to the hub.
+- Package custody still transfers one package at a time during scan/removal.
+
+Future preferred-route/carpool-style matching is Phase 2+ and must reuse the Pickup Demand / Driver Offer model.
+
