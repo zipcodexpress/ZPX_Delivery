@@ -48,3 +48,19 @@ Use versioned configurable rate cards and a fake payment provider in local tests
 ## Scope limits
 
 No arbitrary door-to-door delivery, hazardous/perishable shipments or refrigerated workflow in pilot. Max dimensions/weight and allowed-item rules are configurable site/service policies, to be supplied before public launch. Cutoffs and delivery promises derive from staffed hub waves and available route capacity. Stop accepting quotes that cannot be serviced rather than silently promising a deadline.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md) as the canonical Phase 1 business flow.
+
+Changes/clarifications:
+- SI is the customer-facing ZPX tracking identifier for the full journey. Do not add a second ZPX tracking-number namespace for Phase 1.
+- Sender and recipient may be the same person. A sender may intentionally receive the final one-time pickup grant and securely share it with a trusted friend who physically retrieves the parcel.
+- Recipient account/app is not required before shipment creation. Recipient contact/address snapshot and selected destination locker are separate concepts.
+- Sender explicitly selects destination locker before payment/label issuance.
+- Phase 1 pricing is size-only: SMALL/MEDIUM/LARGE, default development rates $1/$2/$3. Weight is not a pricing input, though safety weight limits may still exist.
+- Publish customer-readable compartment dimensions so senders can estimate size.
+- At origin, an already-paid SMALL/MEDIUM shipment may upgrade to a larger supported class only after the server successfully charges the price difference. No larger door opens first.
+- Phase 1 stops at LARGE. Oversized packages are rejected and referred to other delivery methods.
+- Confirmed origin deposit creates pickup-demand eligibility.
+
