@@ -72,3 +72,33 @@ T20 backup/restore with active physical parcels reconciles current custody, does
 ## Test layers
 
 Contract/schema tests first; domain unit tests; real MySQL transactional tests; API/web/mobile/terminal-simulator integration; physical hardware-in-loop; staffed pilot acceptance. The document validation script only verifies handoff files/refs/fixtures; it cannot substitute for any production behavior test above.
+
+## Phase 1 canonical backlog amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Insert the following required Phase 1 work before end-to-end completion:
+
+### P2.3 — Size-only pricing and locker-side size upgrade
+Dependencies: P2.1/P2.2.
+Deliverable: SMALL/MEDIUM/LARGE policy, published dimensions, default development rates $1/$2/$3, origin upgrade payment difference.
+Evidence: SMALL->MEDIUM opens no larger door until successful additional $1 payment; oversized beyond LARGE rejected.
+
+### P3.0 — Pickup Demand / Driver Offer
+Dependencies: origin deposit capability, driver identity/availability.
+Deliverable: pickup_demands/items, driver availability/offers, nearby offer selection, atomic acceptance and exact INBOUND run assembly across multiple nearby origin lockers.
+Evidence: two drivers race one offer and one wins; one driver accepts multiple nearby origins; custody stays at origin until individual pickup scans.
+
+P3.2 inbound scan/custody behavior remains valid and follows the assigned run created from accepted demand.
+
+Additional acceptance scenarios:
+- sender may equal recipient;
+- non-app recipient contact may be used at shipment creation;
+- SI is the stable customer-facing tracking reference while label token may be replaced;
+- sender-as-recipient may intentionally share one-time pickup grant; SI-only pickup is denied;
+- origin deposit generates OPEN pickup demand;
+- expired/stale offer cannot steal assigned packages;
+- READY_FOR_PICKUP notification occurs only after final physical deposit evidence commits AT_DESTINATION.
+
+Preferred-route / rideshare-style matching is explicitly deferred beyond Phase 1.
+
