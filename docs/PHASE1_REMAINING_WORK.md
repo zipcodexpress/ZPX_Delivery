@@ -68,3 +68,17 @@ Before public launch, finalize service area/cutoffs, parcel limits, pricing/refu
 2. Implement final destination deposit as the next bounded vertical slice, preserving existing scan/custody/idempotency/version invariants.
 3. Follow immediately with recipient pickup and exception/return reconciliation so the first package can complete sender-to-recipient with authoritative custody throughout.
 4. Update `CURRENT_STATUS.md` before context/token exhaustion and after every merged milestone; update this file only when the remaining critical path materially changes.
+
+## Canonical flow update — 2026-09-26
+
+[phase1_END_TO_END_DELIVERY_FLOW.md](phase1_END_TO_END_DELIVERY_FLOW.md) is now the canonical Phase 1 business flow.
+
+Before Phase 1 can be considered end-to-end complete, add two items ahead of/alongside the existing P5 work:
+
+1. P2.3 size-only pricing and origin size upgrade payment adjustment (SMALL/MEDIUM/LARGE; development defaults $1/$2/$3; no EXTRA_LARGE in Phase 1).
+2. P3.0 Pickup Demand / Driver Offer with nearby AVAILABLE drivers, atomic acceptance and multi-locker inbound run assembly.
+
+P4.2 remains valid and should not be redesigned. P5 final deposit/recipient pickup then completes the physical journey.
+
+Future preferred-route / carpool-style driver matching is Phase 2+ and should reuse the Pickup Demand / Driver Offer foundation.
+
