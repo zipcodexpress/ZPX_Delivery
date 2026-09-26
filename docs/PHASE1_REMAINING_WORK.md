@@ -1,65 +1,70 @@
 # Phase 1 remaining work and owner inputs
 
-Purpose: explain the implementation sequence and decisions needed from Richard.
-Audience: project owner and developers. Status: active planning; Phase 1 is not launch-ready.
-Owner: Richard for business/site inputs; engineering execution owner unassigned. Last reviewed: 2026-09-18.
+Purpose: identify only the work still required to reach a supervised Phase 1 pilot.
+Audience: project owner, Codex, Qwen Code, and developers.
+Status: active; software custody flow is complete through outbound departure, but Phase 1 is not launch-ready.
+Owner: Richard for business/site inputs; engineering execution currently AI-assisted/local.
+Last reviewed: 2026-09-25.
 
-Task status remains in GitHub Issues; this document explains dependencies. See [progress](PROGRESS.md), [ordered backlog and T01–T20](handoff/docs/11_BACKLOG_AND_ACCEPTANCE.md), and [implementation review](https://github.com/zipcodexpress/ZPX_Delivery/pull/4).
+## Authoritative baseline
 
-Terminal scope correction: [decision 0002](decisions/0002-new-terminal-platform.md) supersedes old Windows migration/build requirements. The old terminal is reference-only; develop a new kiosk with Android as the preferred direction.
+- GitHub `main` is the shared remote baseline. Local development remains the working source of truth between pushes.
+- Baseline reviewed here: `b74a0f1` — PR #18 merged P4.2 outbound load/departure on 2026-09-24.
+- PostgreSQL + ThinkPHP 8 + React is the accepted platform baseline.
+- The old Windows terminal is reference-only. New kiosk/terminal development targets Android.
+- Earlier planning text that describes P1/P2/P3/P4 as not implemented is historical and must not be used to restart completed work.
+- Use [CURRENT_STATUS.md](CURRENT_STATUS.md) first for the active checkpoint and [PROGRESS.md](PROGRESS.md) for milestone history.
 
-Database update: Richard selected PostgreSQL. [Decision 0003](decisions/0003-postgresql-backend.md) and [backend architecture](BACKEND_DATABASE_ARCHITECTURE.md) supersede earlier MySQL directions. Tracked migrations, migration/runtime role separation and initial database constraint/transaction tests are now implemented; P1.1 still requires the seed command and broader domain tests. Current evidence is in [P1.1 verification](verification/P1.1-postgresql.md).
+## Completed baseline — do not redesign
 
-## What works today
+The following foundations are implemented and validated sufficiently to continue forward:
 
-Customer and operations web shells, PHP health endpoints, local Docker/MySQL setup and a persistent normalized locker simulator exist. Linux CI verified startup, initialization of 73 draft tables and HTTP readiness. The next increment adds OpenAPI structural validation, deterministic shared TypeScript definitions and a stale-output check in CI. These are development foundations, not usable shipping or driver products. The schema still needs tracked migrations, permission constraints and transactional tests.
+- PostgreSQL migrations, seed/test infrastructure, runtime/migration role separation, transactional and scope tests.
+- Customer/staff/driver identity foundations and scoped authorization.
+- Shipment/payment sandbox, SI/labels, customer tracking foundations and provider integration work.
+- Driver registration/profile/wallet plus inbound run acceptance and package-by-package pickup.
+- Hub independent receiving, SHORT/DAMAGED/EXTRA discrepancy handling and custody preservation.
+- Operations package search and authoritative custody timeline.
+- Hub staging, dispatch workspace and normalized resolve/scan contracts.
+- Outbound manifest freeze, package-by-package driver loading, custody transfer, ordered stop grouping and server-authoritative departure.
+- P4.2 acceptance scenario: 10 packages grouped 6 + 4; 9 unique scans plus a duplicate cannot depart; the tenth unique accepted scan enables departure.
 
-## Development sequence
+These areas may receive fixes discovered by later end-to-end testing, but they are not the current feature-development target.
 
-| Order / tasks | Remaining implementation | Required evidence before completion |
+## Current critical path
+
+| Order | Milestone | Remaining implementation | Exit evidence |
+|---|---|---|---|
+| 1 | P5.1 final destination deposit | Driver stop arrival/progress, destination validation, individual final-deposit scan, compartment authorization, correlated door/deposit evidence, custody `DRIVER -> DESTINATION_LOCKER` | Correct run/driver/package/destination succeeds once; wrong locker/driver/package/replay fails closed; custody timeline matches physical event |
+| 2 | P5.1/P5.2 recipient pickup | Recipient claim/pickup grant, single-use authorization, terminal pickup flow, correlated door evidence, custody `DESTINATION_LOCKER -> RECIPIENT`, package completion | Valid recipient retrieves once; expired/revoked/replayed grant denied; package reaches terminal completed state |
+| 3 | P5.2 exception and return reconciliation | Full/offline/inaccessible locker, failed/ambiguous door action, undelivered parcel, return-to-hub, unresolved-run visibility and reconciliation | No failure invents delivery; every parcel retains an accountable location/custodian; run cannot silently close with unresolved parcels |
+| 4 | P6 hardware/coexistence | Android terminal, scanner/controller transport, durable local journal, one command gate, fixed ownership partitions and legacy-writer guards | Simulator plus representative physical origin/destination tests survive restart/network/power/duplicate events without unauthorized opens |
+| 5 | P7 operational readiness | Remaining admin/policies, monitoring, provider hardening, reports/finance export, backup/restore, deployment/support runbooks | Operational alerts/reconciliation and restore tests pass; production roles/secrets/builds are controlled |
+| 6 | P8 supervised pilot | One representative end-to-end physical route, then staged 2 -> 5 -> 10 -> 20 site rollout | T01-T20 evidence as applicable; zero unresolved critical custody/ownership defect before each expansion |
+
+Do not divert the critical path into route optimization, broad dashboard polishing, marketing pages, complex analytics, or nonessential CRUD before the complete package journey and exception reconciliation are proven.
+
+## Application coverage now
+
+| Surface | Present baseline | Still required for Phase 1 |
 |---|---|---|
-| 1 — M0 / P0.1–P0.3 | Finish framework/reuse decision, ThinkPHP scaffold, migration runner, exact image/SDK pins, mobile shells, terminal dependency inventory and actual protocol fixtures | API/web/mobile builds, tracked repeatable migrations, generated client compilation, platform-specific results |
-| 2 — P1.1–P1.3 | Restricted DB roles; synthetic seed loader; customer/staff/driver identities; verified contacts; role/site/assignment authorization; device enrollment; location and compartment ownership | Cross-user/site denial, immutable audit permissions and last-compartment concurrency test |
-| 3 — P2.1–P2.2 | Shipment draft, quote and payment sandbox; stable shipping identifier; versioned QR/PDF label; scan resolver; customer website/mobile shipping and tracking | SI before deposit; printable/decodable label; replaced label revoked without changing parcel identity |
-| 4 — P3.1–P3.3 | Terminal deposit and durable journal; assigned inbound driver route and individual scans; hub independent receipt and discrepancy handling | Simulator journey origin → driver → hub, power-loss recovery, four of five received leaves one with driver |
-| 5 — P4.1–P5.2 | Hub sorting/staging; dispatcher route publishing; driver loading and ordered stops; destination deposit; recipient retrieval; returns/quarantine | Ten distinct scans; 6+4 two-stop route; nine plus duplicate cannot depart; correct custody through failed delivery |
-| 6 — P6.1–P6.2 | Guard every legacy allocation/open/reset path; one terminal command gate; commission fixed partitions at one apartment and one public site | Physical mapping/protocol evidence, no cross-system collision, apartment deposit/pickup regression |
-| 7 — P7.1–P8.1 | Admin policies, staff/vehicles, reporting, finance export, provider adapters, monitoring, backup/restore and rehearsal | Full T01–T20 evidence, supervised hardware checks, rollback and operational signoff |
+| API backend | Auth, shipping, payment/provider foundations, custody, receiving, discrepancies, staging, dispatch, tracking, outbound load/departure | Final deposit, recipient pickup, returns/reconciliation, hardware authorization, operational hardening |
+| Customer website | Registration/sign-in, shipping/payment/labels/tracking foundations | Complete recipient claim/pickup UX and final delivery/exception states |
+| Driver experience | Operations-web driver workspace with profile/wallet/runs, inbound scans, outbound load/departure and ordered stops | Stop execution, final deposit, failed-delivery/return flow; native/mobile hardening later |
+| Hub staff | Receiving, discrepancies, staging, dispatch and history workspace | Return/reconciliation refinements discovered during P5 |
+| Admin/operations | Scoped operational views, package search/custody timeline, payment/driver foundations | Remaining launch policies, device/site commissioning, monitoring/reporting/support controls |
+| Terminal | Locker simulator and protocol-oriented foundation; legacy terminal is reference-only | Android kiosk, durable journal, origin/final deposit and recipient pickup against real hardware |
+| Public/marketing | Not critical to custody path | Coverage/how-to/support content before public launch |
 
-## Application coverage
+## Owner inputs that now matter
 
-| Surface | Present | Still required |
-|---|---|---|
-| API backend | PHP health bootstrap | ThinkPHP modules, auth, migrations, transactions, idempotency/outbox, business endpoints and provider integrations |
-| Customer website | React shell | Register/verify contacts and address, location selection, shipping/payment, printable labels, tracking and recipient claim |
-| Customer/driver mobile | None yet | Shared native app with role navigation; customer flows; assigned driver runs, camera scans, ordered stops/maps and pending offline queue |
-| Hub staff | Operations shell only | Individual receipt, discrepancies, destination staging, label reprint, manifests and dispatch handoff |
-| Admin | Shared operations shell only | Sites/hardware/users/roles/drivers, ownership, routing, rates, exceptions, audit, reporting and finance |
-| Terminal | Normalized simulator only | New kiosk (Android preferred), delivery/receive/pickup flows, required apartment continuity, one command gate, durable journal and hardware transport integration |
-| Public website | No marketing pages | Service coverage, how-to-send/pickup, support and approved operating policies |
+Software can continue with synthetic fixtures, but physical commissioning needs: controller model/protocol and connection method; scanner/printer details; proposed Android kiosk hardware; legacy services/admin tools that allocate/open/reset compartments; first hub plus representative apartment/public test locations; access hours and delivery-only compartment allocation.
 
-Phase 1 routing is dispatcher-published ordered stops via a hub. A driver scans every parcel when collecting, loading and delivering. Hub staff independently scan receipt. Map estimates and driver preferences never authorize an unassigned package or substitute for a complete manifest. A route optimization solver is not a launch prerequisite.
-
-## What Richard can provide now
-
-Software work continues with synthetic fixtures while these are gathered. Do not send live passwords, signing keys, tokens or customer records in chat.
-
-| Priority | Requested input | Why / next action |
-|---|---|---|
-| First local run | Use the SSD plan from the September 16 conversation: `/Volumes/Development`, APFS/GUID; run the [Mac setup](LOCAL_DEVELOPMENT_MAC.md) when convenient | Reformat completion was not confirmed in retrieved context. The script verifies actual storage; record M4 startup results |
-| Terminal hardware, when needed | Controller model, USB/serial/network connection, protocol settings, scanner/printer connections and any proposed Android kiosk model | Select the new transport adapter and test it against a designated locker; no old Windows build or screenshot is required |
-| Legacy coexistence | Schema-only DB export without records or secrets, plus list of services/admin tools that allocate, open, reset or maintain compartments | Audit every writer before enabling delivery compartments at apartment sites |
-| Pilot design | Proposed hub and first apartment/public test sites, operating/access hours, available compartment sizes and proposed delivery-only doors | Start with two sites for commissioning, then expand toward the 20-location Austin pilot |
-
-## Decisions needed later, before launch
-
-Provide the complete pilot location list; service area, pickup/delivery cutoffs, hub waves and staff/driver roles; parcel size/weight limits; price/refund/claims/prohibited-item policies; label-printing availability at home, hub and selected sites; chosen payment, SMS/email and map providers; Android driver-device models and iOS requirements; app ownership/signing/distribution; staging/production hosting and operational responsibility. Use sandbox credentials through the eventual secrets setup, not Markdown.
-
-The development defaults remain synthetic sites, generated local credentials, sandbox/fake providers and no real billing or door commands. Apartment residents will not be bulk-copied into the new authentication database. Existing production stays separate, with fixed compartment ownership and the shared command gate required before any physical pilot.
+Before public launch, finalize service area/cutoffs, parcel limits, pricing/refunds/claims/prohibited items, notification/map providers, device distribution/signing, hosting, support ownership and pilot rollout rules. Keep credentials and customer records out of Markdown.
 
 ## Next engineering handoff
 
-1. Verify the API contract gate and generated types in CI; keep changes in PR 4 until reviewed.
-2. Complete the backend reuse decision and introduce tracked MySQL migrations with failure/re-run and constraint tests.
-3. Add identity/topology as the first business slice, then shipment/SI/labels, then the driver/hub custody journey.
-4. Keep [PROGRESS.md](PROGRESS.md) and verification notes current with actual evidence and blockers; do not mark scaffolded screens or synthetic hardware tests as production completion.
+1. Start P5.1 from `main` after `b74a0f1`; do not reopen P1-P4 feature work unless a regression is demonstrated.
+2. Implement final destination deposit as the next bounded vertical slice, preserving existing scan/custody/idempotency/version invariants.
+3. Follow immediately with recipient pickup and exception/return reconciliation so the first package can complete sender-to-recipient with authoritative custody throughout.
+4. Update `CURRENT_STATUS.md` before context/token exhaustion and after every merged milestone; update this file only when the remaining critical path materially changes.
