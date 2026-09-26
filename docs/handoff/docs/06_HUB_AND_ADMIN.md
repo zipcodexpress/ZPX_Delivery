@@ -49,3 +49,26 @@ RBAC roles: CUSTOMER, DRIVER, HUB_RECEIVER, HUB_SORTER, DISPATCHER, SUPPORT, FIN
 ## Required reports
 
 Unaccounted parcels by current custodian; receiving shortages; hub dwell time; runs expected/scanned/delivered/returned; unknown compartment sessions; scans rejected by reason; label replacement history; on-time performance; route cost and capacity; legacy/delivery partition utilization separately. Every run close and shift close shows remaining driver-held parcels and prevents silent loss.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+The earlier "assigned drivers, fixed route order, no gig marketplace" description is narrowed:
+- Outbound Phase 1 remains dispatcher/run based as designed.
+- Inbound Phase 1 now requires Pickup Demand / Driver Offer before run materialization.
+- Confirmed origin deposits create pickup-demand items.
+- Compatible items may aggregate by origin locker, hub and pickup window.
+- Multiple eligible nearby AVAILABLE drivers may receive the same offer, but first valid atomic acceptance wins the affected demand/package set.
+- One driver may accept several nearby origin lockers and the backend assembles/updates an exact INBOUND run.
+- Phase 1 does not use bidding, dynamic auctions or preferred-route optimization.
+- Preferred-route / rideshare-style matching is future Phase 2+.
+
+Admin additions:
+- size classes and published interior dimensions;
+- size-only versioned rate card;
+- pickup demand queue/SLA;
+- driver availability/offer monitoring;
+- stale-demand re-offer/dispatcher override;
+- offer/acceptance audit.
+
