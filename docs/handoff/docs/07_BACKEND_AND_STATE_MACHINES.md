@@ -42,3 +42,30 @@ event_id UUID; schema_version 1; event_type; organization_id; package_id; aggreg
 ## Payment and reporting
 
 Payment provider signatures verified; webhook uniqueness before processing; amount/currency/quote must match; refunds keyed and bounded by captured amount minus prior approved refunds. Integer cents only. Use protected references for documents/photos; report queries use projections/read models, never mutate history. Payroll export approved route/shift records only, no automated driver withdrawals in Phase 1.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Add application modules/services for PickupDemand and DriverOffer (or equivalent bounded services inside RouteDispatch).
+
+New non-custody workflow states:
+
+Pickup demand:
+`OPEN -> PARTIALLY_ASSIGNED/ASSIGNED -> PICKED_UP`, with `EXPIRED/CANCELLED` terminal alternatives.
+
+Driver offer:
+`OFFERED -> VIEWED -> ACCEPTED`, with `DECLINED/EXPIRED/CANCELLED` alternatives.
+
+Rules:
+- `AT_ORIGIN` confirmation creates/activates pickup-demand membership transactionally or through durable outbox processing.
+- Offer acceptance must be atomic and version/idempotency protected. Two drivers racing the same package set produce one winner.
+- Accepting an offer creates/updates an exact INBOUND run/manifest; it never transfers custody by itself.
+- Custody remains `ORIGIN_LOCKER` until the assigned driver physically removes/scans each package.
+- Multi-locker opportunity grouping must not permit bulk custody transfer.
+
+Pricing change:
+- package price derives from SMALL/MEDIUM/LARGE class, not weight/distance.
+- origin size upgrade requires successful payment adjustment before larger compartment authorization.
+- final accepted size class becomes authoritative for destination compatibility.
+
