@@ -1,83 +1,76 @@
 # Development progress
 
-Purpose: milestone/session summary; task status belongs in GitHub Issues/Projects.
-Audience: ZPX owner, developers and Codex.
-Status: PostgreSQL, local identity and customer/operator shipping slices verified; M0/M1 remain incomplete.
-Owner: unassigned. Last reviewed: 2026-09-19.
+Purpose: milestone/session summary. `CURRENT_STATUS.md` is the active handoff; this file records durable progress.
+Audience: ZPX owner, developers, Codex, and Qwen Code.
+Status: P4.2 merged; software flow is implemented through outbound driver departure. P5 final deposit/pickup is next.
+Last reviewed: 2026-09-25.
 
-## Current development
+## Current baseline
 
-Foundation: branch `feature/P1.1-postgresql-foundation`, [PR 6](https://github.com/zipcodexpress/ZPX_Delivery/pull/6),
-[P1.1 issue 5](https://github.com/zipcodexpress/ZPX_Delivery/issues/5).
-Richard approved PostgreSQL + ThinkPHP + React; Fleetbase evaluation is no longer a prerequisite.
-See [platform decision](decisions/0004-platform-baseline.md).
+- Repository: `zipcodexpress/ZPX_Delivery`
+- Branch baseline: `main`
+- Reviewed feature baseline: `b74a0f1` — merge of PR #18 on 2026-09-24.
+- Platform: PostgreSQL + ThinkPHP 8 + React; Android is the preferred new terminal direction.
+- Development policy: local checkout is the working source of truth; GitHub `main` is the shared remote baseline after push/merge.
 
-## Implemented and verified locally
+## Milestone progress
 
-- Authenticated shell Git/GitHub CLI checkout on the external writable APFS Document SSD.
-- Colima with SSD storage, Node 24.19.0, PostgreSQL 17.11 and PHP 8.3.33 arm64 containers.
-- ThinkPHP 8.1.4 HTTP lifecycle, explicit routes, safe JSON failures and locked Composer dependencies.
-- Canonical 73-table PostgreSQL schema plus checksum ledger and separate migration/runtime credentials.
-- Additive ownership migration binds compartments to the correct locker and manifest generation.
-- Development-only transactional seed loader: six synthetic identities, twenty locker sites,
-  one hub, two drivers, forty frozen compartments and ten unpaid draft parcels.
-- Repeat seed preserves edited records and credentials. Failures roll back all seeded records.
-- Two-process last-compartment contention test proves one winner without overwriting its claim.
-- React customer/operations foundation shells and authenticated durable synthetic locker simulator.
-- Contract/type checks, web builds, Python setup tests, ThinkPHP routing/error tests,
-  PostgreSQL constraints/permissions/rollback/concurrency tests and six HTTP readiness checks.
+| Area | Status | Evidence / result |
+|---|---|---|
+| P0/P1 foundation | Implemented baseline | PostgreSQL migrations/seed, restricted roles, transactional/concurrency tests, ThinkPHP lifecycle, React shells, simulator, identity/RBAC/topology foundations |
+| P2 shipping/providers | Implemented baseline | Shipment/customer flows, SI/labels, test/sandbox payment and provider work, tracking foundations |
+| P3 inbound custody | Implemented and merged | Driver individual pickup scans, custody transfer, hub independent receiving, discrepancy workflow; PRs through #13 |
+| Package tracking | Implemented and merged | Assignment-scoped package search and authoritative custody timeline; PR #14 |
+| P4.1 hub operations | Implemented and merged | Staging/dispatch workspace and scan normalization integrated to main; PRs #15-#17 |
+| P4.2 outbound delivery | Implemented and merged | Exact outbound manifest, individual load scans, hub-to-driver custody, ordered stops, departure gate; PR #18 |
+| P5 final mile | NEXT | Destination locker deposit, recipient pickup, failed-delivery/return reconciliation |
+| P6 hardware/coexistence | Pending | Android terminal and real locker/controller commissioning; legacy ownership/command-gate validation |
+| P7/P8 release/pilot | Pending | Operational hardening, T01-T20 evidence, supervised staged rollout |
 
-See [local setup](LOCAL_DEVELOPMENT_MAC.md), [Mac environment evidence](verification/P1.1-mac-local-2026-09-19.md)
-and [backend architecture](BACKEND_DATABASE_ARCHITECTURE.md).
-Local generated credentials remain in Git-ignored `.local/seed-credentials.txt` with owner-only access.
-The customer page now supports registration, sign-in and contact verification; operations has staff sign-in.
-See [identity evidence](verification/P1.2-identity.md). Synthetic demo contacts are added
-with `python3 scripts/dev.py demo-accounts`, preserving their generated passwords.
+## Latest verified delivery behavior
 
-## Next dependency
+PR #18 completed the current software frontier:
 
-Richard confirmed one ZPX-operated network: customers may use eligible public
-sites; staff access is scoped by site/hub. Identity work continues on
-`feature/P1.2-identity`, based on the verified foundation. No customer may choose
-an organization or staff role during public registration.
+- Dispatch acceptance freezes the staged physical package set into a versioned outbound manifest.
+- Every outbound physical package must be individually scanned; the legacy bulk-load bypass was removed.
+- Successful load transfers custody exactly once from the assigned hub to the assigned driver.
+- Wrong driver/run, off-manifest package, wrong hub custody, stale revision/version, revoked label and invalid duplicate behavior fail closed.
+- Departure eligibility is derived from authoritative manifest rows plus current package custody, not scan-event count.
+- The acceptance scenario passes with 10 packages in ordered 6 + 4 stop groups: 9 unique accepted scans plus one duplicate remain blocked; the tenth unique scan enables departure.
+- Driver UI exposes outbound load progress and ordered stop/package groups.
 
-P1.2 now includes registration, encrypted contacts, local verification, cookie/native sessions,
-CSRF, refresh replay protection and scoped-role primitives. Real verification delivery awaits
-Richard's email/SMS provider decision. Password recovery, device enrollment and legacy
-account linking remain P1.2 work. Next comes P1.3 authorized topology/reservations,
-then shipment/payment/labels and custody workflows.
-The database reservation test is not a completed reservation service or physical door test.
-Native mobile/Android kiosk apps, protocol fixtures, providers and hardware commissioning
-remain outstanding. Use synthetic data/fake providers until actual configuration is approved.
+Validation recorded with the P4.2 work: `npm run test-db`, `npm run check`, `npm run build`, changed PHP syntax checks and `git diff --check`.
 
-## Historical evidence
+## Current development focus
 
-Earlier MySQL and P0.1 results are retained in [M0 evidence](verification/M0-foundation.md)
-and [contract evidence](verification/M0-contracts.md). They are not PostgreSQL results.
-The old terminal is reference-only per [decision 0002](decisions/0002-new-terminal-platform.md).
-No production access, physical door commands, PR merge or production deployment occurred.
+The next objective is P5.1/P5.2: complete one authoritative sender-to-recipient journey.
 
-## P2.1/P2.2 shipping increment
+Target custody path:
 
-Branch `feature/P2.1-shipping` adds Sending/Receiving under one CUSTOMER account,
-shipment-bound recipient proof, operator scope inspection, local test checkout and
-authenticated printable labels. See [decision 0006](decisions/0006-customer-shipping-and-test-checkout.md)
-and [shipping evidence](verification/P2.1-shipping.md). No real charge or physical
-transfer occurs. Authorize.net is selected; its adapter and sandbox validation remain.
-Driver pickup and hub receiving remain distinct P3 work, with no new broad staff permissions.
+`ORIGIN_LOCKER -> INBOUND_DRIVER -> HUB -> OUTBOUND_DRIVER -> DESTINATION_LOCKER -> RECIPIENT`
 
-## Provider integration update — 2026-09-19
+The next implementation must add final destination deposit with server-side run/driver/package/destination validation and correlated locker evidence, then recipient single-use pickup, followed by full/offline/ambiguous-door and return reconciliation. No failure path may fabricate a completed delivery or lose accountable custody.
 
-P2.1/P2.2 remain IN_PROGRESS on `feature/P2.2-providers-operations`.
-Authorize.net sandbox authentication, hosted form token creation, transaction reporting,
-a real sandbox test-card capture, server verification and PDF generation passed.
-Operations now shows scoped payment history. SMTP authentication and the single
-user-authorized diagnostic email passed. The mail worker is implemented and tested,
-but automatic sends remain disabled pending the user's explicit opt-in.
-See [provider evidence](verification/P2.2-providers.md) and [decision 0007](decisions/0007-sandbox-payments-mail.md).
-Earlier statements about missing payment/email credentials are superseded by this update.
-No native shipping app, physical deposit, driver pickup or hub receipt is claimed complete.
+## Important architectural invariants
 
-The user subsequently approved email activation. The local mail profile is now
-running, restricted to the approved recipient, with SMTP authentication and routing
-verified. No old local-only messages were sent; no account was automatically created.
+- Physical package scans are individual and idempotent; scan count alone never establishes custody or departure.
+- Custody changes are server-authoritative and must agree with package/run/manifest/location scope.
+- Raw production label tokens are not exposed or persisted in operational responses.
+- Hub staff independently receive packages; drivers cannot self-certify hub receipt.
+- Locker authorization must be destination/device scoped and correlated to physical door evidence.
+- Ambiguous hardware outcomes remain unresolved until reconciled; never auto-reopen or silently mark delivered.
+- Route optimization is not an authorization mechanism and is not on the current critical path.
+
+## Documentation drift correction
+
+Older statements in this repository that describe the project as only a scaffold, P1/P2 as the active branch, P3 driver/hub custody as unbuilt, or PR #18 as open are superseded by this checkpoint. Historical verification documents remain evidence for their original milestone and should not be rewritten as current status.
+
+## Next milestones
+
+1. P5.1 final destination deposit and stop progress.
+2. Recipient claim/pickup with single-use authorization and custody completion.
+3. Failed-delivery, return-to-hub and end-of-run reconciliation.
+4. Android terminal plus real locker/controller integration.
+5. Operational hardening and supervised physical pilot.
+
+See [PHASE1_REMAINING_WORK.md](PHASE1_REMAINING_WORK.md) for the remaining critical path and [CURRENT_STATUS.md](CURRENT_STATUS.md) for the active coding handoff.
