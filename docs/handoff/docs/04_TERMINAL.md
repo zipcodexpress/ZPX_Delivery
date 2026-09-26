@@ -41,3 +41,20 @@ Wrap every BoxHelper.OpenBox, direct controller.OpenLocker, maintenance open and
 ## Hardware/build acceptance
 
 Resolve missing ZipporaService source/reference, actual DLLs (including SQLite/printing/audio dependencies), x86/x64 behavior, terminal OS image, protocol variants and scanners. Verify split/combined serial frames, corrupt CRC, wrong-address response, disconnect, two quick scans, printer jam, non-ASCII labels, power loss between journal and send, and restart with door open. Test real apartment deposit/pickup alongside new transactions on partitioned doors before rollout.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Origin deposit now includes size reconciliation:
+- Customer arrives with a paid SMALL/MEDIUM/LARGE class.
+- If the parcel does not fit, the terminal/app may request an upgrade only (SMALL->MEDIUM/LARGE, MEDIUM->LARGE).
+- Server must quote/collect the price difference before reserving or opening the larger compartment.
+- No automatic downgrade/refund at the locker in Phase 1.
+- If no larger compatible door exists or payment adjustment fails, no larger door opens and the package remains undeposited.
+- Persist the final accepted size class for destination capacity compatibility.
+
+Recipient pickup may use a one-time transferable pickup grant intentionally shared by the sender-as-recipient. SI alone never opens a door.
+
+Historical Windows-host implementation notes are reference material; Android remains the preferred new terminal direction per current project decisions.
+
