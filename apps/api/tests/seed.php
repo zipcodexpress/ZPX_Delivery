@@ -20,6 +20,7 @@ try {
         check(password_verify($credential['password'], $q->fetchColumn()), 'seed stores a verifiable password hash');
     }
     check((int)$runtime->query("SELECT count(*) FROM locations WHERE organization_id=$org")->fetchColumn() === 21, 'seed creates twenty sites and one hub');
+    check((int)$runtime->query("SELECT count(*) FROM user_addresses a JOIN users u ON u.id=a.user_id WHERE u.organization_id=$org AND a.kind='PROFILE'")->fetchColumn() === 6, 'seeded accounts can use send to myself');
     check((int)$runtime->query("SELECT count(*) FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='CREATED' AND s.payment_status='UNPAID'")->fetchColumn() === 5, 'seed leaves five unpaid parcels with sender');
     check((int)$runtime->query("SELECT count(*) FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='AT_ORIGIN' AND s.payment_status='PAID'")->fetchColumn() === 5, 'seed transitions five parcels to origin for driver pickup');
     check((int)$runtime->query("SELECT count(*) FROM route_runs WHERE organization_id=$org AND kind='INBOUND' AND state='PUBLISHED'")->fetchColumn() === 1, 'seed creates one published inbound run');
@@ -48,7 +49,7 @@ try {
         putenv($previousOrganization === false ? 'ZPX_ORGANIZATION_ID' : 'ZPX_ORGANIZATION_ID=' . $previousOrganization);
     }
     check($resolved['package_id'] === (string)$seededPackages[0], 'TEST-LABEL-001 resolves to the first seeded DRIVER-IN package');
-    check((int)$runtime->query("SELECT count(*) FROM compartments c JOIN lockers k ON k.id=c.locker_id JOIN locations l ON l.id=k.location_id WHERE l.organization_id=$org AND c.status='FROZEN'")->fetchColumn() === 40, 'seed does not commission physical doors');
+    check((int)$runtime->query("SELECT count(*) FROM compartments c JOIN lockers k ON k.id=c.locker_id JOIN locations l ON l.id=k.location_id WHERE l.organization_id=$org AND c.status='FROZEN'")->fetchColumn() === 60, 'seed does not commission physical doors');
     $runtime->exec("UPDATE users SET display_name='Preserve local edit' WHERE organization_id=$org");
     $runtime->exec("UPDATE package_labels SET token_hash=decode(repeat('ab',32),'hex') WHERE package_id={$seededPackages[0]}");
     $again = $seed->run($fixture);

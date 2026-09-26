@@ -12,7 +12,7 @@ $calls=0;$transaction=[];
 $gateway=new AuthorizeNet(function ($request) use (&$calls,&$transaction) {
  $calls++;$method=array_key_first($request);$body=$request[$method];
  check($body['merchantAuthentication']['transactionKey']==='synthetic','gateway supplies configured credentials');
- if ($method==='getHostedPaymentPageRequest') { check($body['transactionRequest']['amount']==='6.00' && $body['transactionRequest']['transactionType']==='authCaptureTransaction','hosted request uses stored quote');return ['messages'=>['resultCode'=>'Ok'],'token'=>'synthetic-hosted-token-123456789']; }
+ if ($method==='getHostedPaymentPageRequest') { check($body['transactionRequest']['amount']==='1.00' && $body['transactionRequest']['transactionType']==='authCaptureTransaction','hosted request uses stored quote');return ['messages'=>['resultCode'=>'Ok'],'token'=>'synthetic-hosted-token-123456789']; }
  if ($method==='getTransactionDetailsRequest') { return ['messages'=>['resultCode'=>'Ok'],'transaction'=>$transaction]; }
  if ($method==='getUnsettledTransactionListRequest') { return ['messages'=>['resultCode'=>'Ok'],'transactions'=>[['invoiceNumber'=>$transaction['order']['invoiceNumber'],'transId'=>$transaction['transId']]]]; }
  return ['messages'=>['resultCode'=>'Ok']];
@@ -31,9 +31,9 @@ check($checkout->prepare($sender,$pid)===$session && $calls===1,'hosted token is
 $encrypted=$runtime->query("SELECT hosted_token_ciphertext FROM payments WHERE id=$pid")->fetchColumn();check(!str_contains($encrypted,'synthetic-hosted') && $crypto->decrypt($encrypted)===$session['checkout_token'],'hosted token encrypted at rest');
 failsIdentity(fn()=>$checkout->status($recipient,$pid),404,'another customer cannot retrieve hosted token');
 failsIdentity(fn()=>$shipping->confirmPayment($sender,$pid,['outcome'=>'SUCCEEDED'],Secrets::uuid()),409,'local simulator cannot confirm sandbox payment');
-$transaction=['transId'=>'9912345678','order'=>['invoiceNumber'=>$invoice],'authAmount'=>'6.00','settleAmount'=>'6.00','transactionType'=>'authCaptureTransaction','responseCode'=>1,'transactionStatus'=>'capturedPendingSettlement','submitTimeUTC'=>gmdate('Y-m-d\TH:i:s\Z')];
-$transaction['authAmount']='6.01';failsIdentity(fn()=>$checkout->reconcile($sender,$pid,'9912345678'),409,'provider amount mismatch fails closed');
-$transaction['authAmount']='6.00';$transaction['order']['invoiceNumber']='OTHER';failsIdentity(fn()=>$checkout->reconcile($sender,$pid,'9912345678'),409,'another invoice cannot pay order');
+$transaction=['transId'=>'9912345678','order'=>['invoiceNumber'=>$invoice],'authAmount'=>'1.00','settleAmount'=>'1.00','transactionType'=>'authCaptureTransaction','responseCode'=>1,'transactionStatus'=>'capturedPendingSettlement','submitTimeUTC'=>gmdate('Y-m-d\TH:i:s\Z')];
+$transaction['authAmount']='1.01';failsIdentity(fn()=>$checkout->reconcile($sender,$pid,'9912345678'),409,'provider amount mismatch fails closed');
+$transaction['authAmount']='1.00';$transaction['order']['invoiceNumber']='OTHER';failsIdentity(fn()=>$checkout->reconcile($sender,$pid,'9912345678'),409,'another invoice cannot pay order');
 $transaction['order']['invoiceNumber']=$invoice;$transaction['transactionStatus']='declined';failsIdentity(fn()=>$checkout->reconcile($sender,$pid,'9912345678'),409,'declined capture does not enable label');
 $transaction['transactionStatus']='capturedPendingSettlement';
 check($checkout->reconcile($sender,$pid)['status']==='PAID','server reconciliation confirms sandbox capture');
