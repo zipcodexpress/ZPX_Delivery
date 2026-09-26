@@ -35,14 +35,15 @@ These areas may receive fixes discovered by later end-to-end testing, but they a
 
 | Order | Milestone | Remaining implementation | Exit evidence |
 |---|---|---|---|
-| 1 | P5.1 final destination deposit | Driver stop arrival/progress, destination validation, individual final-deposit scan, compartment authorization, correlated door/deposit evidence, custody `DRIVER -> DESTINATION_LOCKER` | Correct run/driver/package/destination succeeds once; wrong locker/driver/package/replay fails closed; custody timeline matches physical event |
-| 2 | P5.1/P5.2 recipient pickup | Recipient claim/pickup grant, single-use authorization, terminal pickup flow, correlated door evidence, custody `DESTINATION_LOCKER -> RECIPIENT`, package completion | Valid recipient retrieves once; expired/revoked/replayed grant denied; package reaches terminal completed state |
-| 3 | P5.2 exception and return reconciliation | Full/offline/inaccessible locker, failed/ambiguous door action, undelivered parcel, return-to-hub, unresolved-run visibility and reconciliation | No failure invents delivery; every parcel retains an accountable location/custodian; run cannot silently close with unresolved parcels |
-| 4 | P6 hardware/coexistence | Android terminal, scanner/controller transport, durable local journal, one command gate, fixed ownership partitions and legacy-writer guards | Simulator plus representative physical origin/destination tests survive restart/network/power/duplicate events without unauthorized opens |
-| 5 | P7 operational readiness | Remaining admin/policies, monitoring, provider hardening, reports/finance export, backup/restore, deployment/support runbooks | Operational alerts/reconciliation and restore tests pass; production roles/secrets/builds are controlled |
-| 6 | P8 supervised pilot | One representative end-to-end physical route, then staged 2 -> 5 -> 10 -> 20 site rollout | T01-T20 evidence as applicable; zero unresolved critical custody/ownership defect before each expansion |
+| 1 | Customer Shipment Initialization E2E | Audit existing customer app/API/schema first; complete account/login/verification, recipient or Send to Myself, origin + destination locker selection, SMALL/MEDIUM/LARGE, authoritative price, payment, shipment finalization, stable SI and label | Brand-new customer reaches READY_FOR_ORIGIN_DEPOSIT without manual DB/admin intervention |
+| 2 | Origin deposit + size upgrade | Phone/locker pairing, label scan, compatible compartment, upgrade payment difference before larger door opens, physical evidence, custody to origin locker | Correct deposit reaches AT_ORIGIN; under-sized estimate upgrades safely; failed adjustment opens no larger door |
+| 3 | Pickup Demand / Driver Offer | Demand creation from AT_ORIGIN, driver availability, nearby offers, atomic acceptance, multi-locker inbound run assembly | Two-driver race yields one winner; one driver can accept multiple nearby origins; custody remains at origin until scans |
+| 4 | Existing P3/P4 journey | Reuse current inbound pickup, hub receiving/discrepancy, staging, outbound load/departure | Existing tests remain green; no redesign unless regression is demonstrated |
+| 5 | P5 final destination deposit | Driver stop progress, exact destination validation, final-deposit scan/session/device evidence, custody DRIVER -> DESTINATION_LOCKER | Wrong destination blocked before open; physical evidence required |
+| 6 | Recipient pickup + reconciliation | Ready notification, single-use grant, sender-as-recipient sharing, pickup, failed-delivery return/reconciliation | Replay denied; package reaches COLLECTED or accountable return state |
+| 7 | P6-P8 hardware/operations/pilot | Android terminal, legacy guards, monitoring, backup/restore, supervised staged rollout | Physical T01-T20 evidence and no unresolved critical custody defects |
 
-Do not divert the critical path into route optimization, broad dashboard polishing, marketing pages, complex analytics, or nonessential CRUD before the complete package journey and exception reconciliation are proven.
+Do not divert into route optimization, broad dashboard polishing, marketing pages, complex analytics, or nonessential CRUD before this vertical path is complete.
 
 ## Application coverage now
 
@@ -64,10 +65,15 @@ Before public launch, finalize service area/cutoffs, parcel limits, pricing/refu
 
 ## Next engineering handoff
 
-1. Start P5.1 from `main` after `b74a0f1`; do not reopen P1-P4 feature work unless a regression is demonstrated.
-2. Implement final destination deposit as the next bounded vertical slice, preserving existing scan/custody/idempotency/version invariants.
-3. Follow immediately with recipient pickup and exception/return reconciliation so the first package can complete sender-to-recipient with authoritative custody throughout.
-4. Update `CURRENT_STATUS.md` before context/token exhaustion and after every merged milestone; update this file only when the remaining critical path materially changes.
+Codex must start here:
+
+1. Pull current `main` and read `AGENTS.md`, `docs/CURRENT_STATUS.md`, and `docs/phase1_END_TO_END_DELIVERY_FLOW.md`.
+2. Audit the existing customer-web + API + PostgreSQL implementation for Customer Shipment Initialization. Produce a concise IMPLEMENTED / PARTIAL / MISSING checklist before changing code.
+3. Reuse existing identity, shipping, Authorize.net/payment, SI/label and tracking code. Do not rebuild completed P1/P2 foundations.
+4. Implement only the missing pieces needed for the acceptance journey: new customer -> recipient/Send to Myself -> origin/destination locker -> size -> price -> payment -> SI/label -> READY_FOR_ORIGIN_DEPOSIT.
+5. Add automated acceptance coverage for that journey.
+6. After that milestone is green, move to origin deposit + size upgrade; only then implement Pickup Demand / Driver Offer.
+7. Update `CURRENT_STATUS.md` before context/token exhaustion and after every merged milestone.
 
 ## Canonical flow update — 2026-09-26
 
