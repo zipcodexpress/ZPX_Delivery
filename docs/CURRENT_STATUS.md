@@ -87,3 +87,18 @@ P5.1 must reuse existing custody, scan journal, versioning, idempotency and trac
 - Seed/re-seed: `python3 scripts/dev.py seed`; DRIVER-IN labels are `TEST-LABEL-001`…`005`.
 - `scripts/dev.py test-db` uses a unique disposable Docker stack and preserves dev volumes.
 - Before ending a substantial Codex/Qwen session, update this file with completed work, verification, blockers and the exact next action.
+
+## Product-flow correction — 2026-09-26
+
+Canonical business flow: [phase1_END_TO_END_DELIVERY_FLOW.md](phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Before proceeding as if P5 were the only remaining feature lane, incorporate:
+- P2.3 size-only SMALL/MEDIUM/LARGE pricing, published dimensions and origin size-upgrade payment difference;
+- P3.0 Pickup Demand / Driver Offer, nearby-driver availability/offers and multi-locker inbound run assembly.
+
+P4.2 outbound load/departure remains the implemented feature baseline.
+
+Sender may equal recipient. A sender-as-recipient may intentionally share a one-time pickup grant with a trusted friend; SI remains public tracking identity and never opens a locker.
+
+Preferred-route / rideshare-style matching is future Phase 2+.
+
