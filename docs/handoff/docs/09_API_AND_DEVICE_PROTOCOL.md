@@ -41,3 +41,39 @@ Payment webhook endpoint accepts provider raw payload for signature verification
 ## Legacy adapter contract (internal, separately deployed)
 
 ReadTopology(site) returns cabinet/body/box IDs, electrical addresses, type/dimensions where known, operational status and config version. ReadEligibility(linkProof, site) returns approved/expired membership assertion, not a resident list. ApplyOwnershipGeneration is a privileged configuration deployment with validation and ACK, not a customer HTTP API. Legacy operations get owner-filtered availability and command authorization. Never proxy new shipment create/payment/hub data into o_store.
+
+## Phase 1 canonical amendment — 2026-09-26
+
+Read [phase1_END_TO_END_DELIVERY_FLOW.md](../../phase1_END_TO_END_DELIVERY_FLOW.md).
+
+Add API families/contracts for:
+
+Customer:
+- list active size classes, interior dimensions and prices;
+- create/update shipment with recipient snapshot, destination locker and estimated size;
+- "send to myself";
+- request origin size upgrade;
+- create/confirm payment adjustment before larger compartment session;
+- authenticated tracking using SI;
+- create/revoke/share pickup grant where sender-as-recipient policy allows.
+
+Driver:
+- set/read availability;
+- list/request nearby pickup opportunities;
+- receive/read offers;
+- accept/decline offer atomically with offer revision/idempotency key;
+- read assembled multi-locker INBOUND run.
+
+Operations:
+- list/re-offer/override pickup demands;
+- inspect offer/assignment history;
+- configure size/rate policy.
+
+Worker/events:
+- `ORIGIN_DEPOSIT_CONFIRMED` -> pickup demand creation/aggregation;
+- pickup offer issued/expired/accepted;
+- demand assigned/re-offered;
+- `FINAL_DEPOSIT_CONFIRMED` -> READY_FOR_PICKUP notification.
+
+SI remains a public identifier and tracking key; it is never a pickup credential.
+
