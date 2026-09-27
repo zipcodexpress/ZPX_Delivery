@@ -60,7 +60,9 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 python3 docs/handoff/tests/validate_handoff.py
 ```
 
-`npm run test-db` and `npm run test-e2e` require the local Docker stack. They verify disposable PostgreSQL domain/security/concurrency checks and live HTTP readiness, respectively. The complete physical parcel journey remains unimplemented.
+`npm run test-db` verifies domain, security, and concurrency behavior in disposable PostgreSQL containers. `npm run test-smoke` checks readiness and proxy behavior on the running local stack. `npm run test-e2e` creates and removes a separate seeded Docker stack, then runs headless browser checks for inbound pickup, hub receiving and dispatch, outbound loading and arrival, admin approvals, and customer/recipient shipment history. It requires Docker and a Playwright Chromium browser (`npx playwright install chromium` on Linux; local Chrome is used on macOS).
+
+The development seed also includes two separate historical outcomes: an assumed destination deposit and an assumed recipient pickup. Their shipment references end in `DEPOSIT-DEMO` and `PICKUP-DEMO`; their events identify them as synthetic assumptions with no device evidence. Rerunning `python3 scripts/dev.py seed` adds them to an existing local fixture without changing its active parcels or credentials. This supports portal development; locker commands and physical verification are still outside this repository's implemented flow.
 
 ## Design and collaboration
 

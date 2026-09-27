@@ -16,7 +16,7 @@ final class HubReceivingController
         try {
             $method = $request->method(true);
             $expected = match ($action) {
-                'open' => 'POST',
+                'open' => in_array($method, ['GET', 'POST'], true) ? $method : 'GET, POST',
                 'scan' => 'POST',
                 'close' => 'POST',
                 'status' => 'GET',
@@ -66,7 +66,7 @@ final class HubReceivingController
             }
 
             $body = match ($action) {
-                'open' => $service->openSession($user, $input, $key),
+                'open' => $method === 'GET' ? $service->listSessions($user) : $service->openSession($user, $input, $key),
                 'scan' => $service->receiveScan($user, $input, $key),
                 'close' => $service->closeSession($user, $sessionId, $key),
                 'status' => $service->getSession($user, $sessionId),

@@ -412,6 +412,29 @@ final class Service
 
     // ── Session Status ───────────────────────────────────────────────
 
+    public function listSessions(string $user): array
+    {
+        $hubId = $this->hubId($user);
+        $rows = $this->q(
+            "SELECT r.id AS run_id,rs.id AS session_id,rs.status,
+                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id) AS expected_count,
+                    (SELECT COUNT(*) FROM receiving_items ri WHERE ri.session_id=rs.id AND ri.disposition IN ('RECEIVED','DAMAGED')) AS received_count
+             FROM route_runs r LEFT JOIN receiving_sessions rs ON rs.inbound_run_id=r.id AND rs.hub_id=r.hub_id
+             WHERE r.hub_id=? AND r.organization_id=? AND r.kind='INBOUND'
+               AND (rs.status='OPEN' OR (rs.id IS NULL AND r.state IN ('ACKNOWLEDGED','IN_PROGRESS')))
+             ORDER BY r.planned_start DESC,r.id DESC LIMIT 100",
+            [$hubId,$this->org()]
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return ['items' => array_map(static fn($r) => [
+            'run_id' => (string)$r['run_id'],
+            'hub_id' => $hubId,
+            'session_id' => $r['session_id'] === null ? null : (string)$r['session_id'],
+            'status' => $r['status'],
+            'expected_count' => (int)$r['expected_count'],
+            'received_count' => (int)$r['received_count'],
+        ], $rows)];
+    }
+
     public function getSession(string $user, string $sessionId): array
     {
         Input::text($sessionId, 1, 18);

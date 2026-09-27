@@ -9,6 +9,7 @@ import platform
 import plistlib
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -97,6 +98,19 @@ def smoke(timeout=180):
                 pass
         if pending: time.sleep(1)
     if pending: raise RuntimeError('Services not ready: ' + ', '.join(pending) + '. Run the logs command.')
+    # This GET was added with resumable receiving. An older API image returns 405 even while health is green.
+    route = 'http://127.0.0.1:5174/api/delivery/v1/hub/receiving-sessions'
+    try:
+        urllib.request.urlopen(route, timeout=2)
+    except urllib.error.HTTPError as error:
+        try:
+            if error.code != 401:
+                raise RuntimeError(f'Operations API is out of date: receiving route returned HTTP {error.code}. Rebuild with dev.py up.') from error
+            print('PASS receiving route revision')
+        finally:
+            error.close()
+    else:
+        raise RuntimeError('Unauthenticated receiving route did not require sign-in.')
     print('Foundation smoke passed; this is not a parcel-delivery end-to-end test.')
 
 def test_db():
@@ -107,6 +121,61 @@ def test_db():
         compose('-p', project, 'run', '--rm', 'db-tests')
     finally:
         compose('-p', project, 'down', '--volumes', '--remove-orphans')
+
+def test_browser():
+    # An isolated seeded stack avoids consuming or resetting the developer's parcel workflow.
+    project = 'zpx-delivery-browser-' + secrets.token_hex(6)
+    def free_port():
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            return listener.getsockname()[1]
+    ports = [free_port() for _ in range(4)]
+    if len(set(ports)) != 4:
+        raise RuntimeError('Could not reserve distinct browser-test ports; retry.')
+    names = ('ZPX_API_PORT', 'ZPX_CUSTOMER_PORT', 'ZPX_OPERATIONS_PORT', 'ZPX_SIMULATOR_PORT')
+    previous = {name: os.environ.get(name) for name in (*names, 'ZPX_AUTH_ALLOWED_ORIGINS', 'ZPX_ORGANIZATION_ID')}
+    try:
+        for name, port in zip(names, ports): os.environ[name] = str(port)
+        os.environ['ZPX_ORGANIZATION_ID'] = '1'
+        os.environ['ZPX_AUTH_ALLOWED_ORIGINS'] = ','.join(f'http://{host}:{port}' for port in ports[1:3] for host in ('localhost', '127.0.0.1'))
+        compose('-p', project, 'build')
+        compose('-p', project, 'up', '-d', 'postgres')
+        compose('-p', project, 'run', '--rm', 'migrate')
+        compose('-p', project, 'up', '-d')
+        deadline = time.monotonic() + 180
+        for port in (ports[1], ports[2]):
+            while True:
+                try:
+                    with urllib.request.urlopen(f'http://127.0.0.1:{port}/health/ready', timeout=2) as response:
+                        if response.status == 200 and b'"database":"ready"' in response.read(): break
+                except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.RemoteDisconnected):
+                    pass
+                if time.monotonic() >= deadline: raise RuntimeError('Browser test stack did not become ready.')
+                time.sleep(1)
+        seed_output = compose('-p', project, 'run', '--rm', 'seed', capture=True)
+        seeded = None
+        for stream in (seed_output.stdout, seed_output.stderr):
+            for index, character in enumerate(stream):
+                if character != '{': continue
+                try: candidate, _ = json.JSONDecoder().raw_decode(stream[index:])
+                except json.JSONDecodeError: continue
+                if isinstance(candidate, dict) and 'credentials' in candidate:
+                    seeded = candidate
+                    break
+            if seeded is not None: break
+        if seeded is None: raise RuntimeError('Synthetic seed did not return credentials; no private output displayed.')
+        if not seeded.get('created') or len(seeded.get('credentials', [])) < 4:
+            raise RuntimeError('Browser test requires a fresh isolated synthetic seed.')
+        env = os.environ.copy()
+        env['ZPX_E2E_CREDENTIALS'] = json.dumps(seeded['credentials'])
+        env['ZPX_E2E_OPERATIONS_URL'] = f'http://127.0.0.1:{ports[2]}'
+        env['ZPX_E2E_CUSTOMER_URL'] = f'http://127.0.0.1:{ports[1]}'
+        subprocess.run(['npx', 'playwright', 'test', 'tests/browser/operations.spec.mjs'], cwd=ROOT, env=env, check=True)
+    finally:
+        compose('-p', project, 'down', '--volumes', '--remove-orphans')
+        for name, value in previous.items():
+            if value is None: os.environ.pop(name, None)
+            else: os.environ[name] = value
 
 def inbox():
     result = compose('exec', '-T', 'api', 'php', 'bin/messages.php', capture=True)
@@ -125,7 +194,7 @@ def inbox():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','config','migrate','seed','demo-accounts','inbox'])
+    parser.add_argument('command', choices=['init','doctor','up','down','logs','smoke','test-db','test-browser','config','migrate','seed','demo-accounts','inbox'])
     args = parser.parse_args()
     if args.command == 'init': return init_env()
     check_storage()
@@ -135,6 +204,7 @@ def main():
         print('Docker available. Named volumes use the active container engine disk storage, not automatically the repo SSD.'); return
     if args.command == 'up':
         init_env(); compose('build'); compose('up', '-d', 'postgres'); compose('run', '--rm', 'migrate'); compose('up', '-d'); smoke(); return
+    if args.command == 'test-browser': return test_browser()
     if not env_path().exists(): raise RuntimeError('Run python3 scripts/dev.py init first.')
     if args.command == 'down': compose('down'); print('Stopped. Database and simulator volumes retained.')
     elif args.command == 'logs': compose('logs', '--tail', '100')

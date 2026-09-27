@@ -32,6 +32,9 @@ final class Seed
         if (count($ids) > 1) { throw new RuntimeException('Ambiguous seed organization; no data changed'); }
         if ($ids) {
             $this->syncDriverInLabelHashes((string)$ids[0]);
+            $this->ensureDemoShifts((string)$ids[0]);
+            $this->ensureDemoSlots((string)$ids[0]);
+            $this->ensureAssumedLockerOutcomes((string)$ids[0]);
             $this->syncSizePolicy((string)$ids[0]);
             $this->syncLargeCompartments((string)$ids[0]);
             $this->syncProfileAddresses((string)$ids[0]);
@@ -130,7 +133,89 @@ final class Seed
             $this->insert("INSERT INTO manifest_items(manifest_id,run_id,package_id,stop_id,state) VALUES (?,?,?,?, 'EXPECTED')", [$manifest, $run, $pkg['id'], $stopId]);
         }
 
+        $this->ensureDemoShifts((string)$org);
+        $this->ensureDemoSlots((string)$org);
+        $this->ensureAssumedLockerOutcomes((string)$org);
         return ['created' => true, 'organization_id' => $org, 'credentials' => $credentials];
+    }
+
+    /** Historical UI fixtures only. These do not commission doors or assert device evidence. */
+    private function ensureAssumedLockerOutcomes(string $org): void
+    {
+        $user = $this->db->prepare('SELECT id FROM users WHERE organization_id=? AND external_auth_id=?');
+        $location = $this->db->prepare('SELECT id FROM locations WHERE organization_id=? AND code=?');
+        $user->execute([$org, 'synthetic:' . $this->namespace . ':CUSTOMER']);
+        $sender = $user->fetchColumn();
+        $user->execute([$org, 'synthetic:' . $this->namespace . ':RECIPIENT']);
+        $recipient = $user->fetchColumn();
+        $location->execute([$org, $this->namespace . ':AUS-001']);
+        $origin = $location->fetchColumn();
+        $location->execute([$org, $this->namespace . ':AUS-004']);
+        $destination = $location->fetchColumn();
+        $locker = $this->db->prepare('SELECT id FROM lockers WHERE location_id=?');
+        $locker->execute([$destination]);
+        $lockerId = $locker->fetchColumn();
+        if (!$sender || !$recipient || !$origin || !$destination || !$lockerId) {
+            throw new RuntimeException('Synthetic locker outcome prerequisites are missing');
+        }
+        $existing = $this->db->prepare('SELECT id FROM shipments WHERE organization_id=? AND public_reference=?');
+        $crypto = new \Zpx\Identity\Secrets();
+        $evidence = json_encode(['synthetic_fixture'=>true,'assumed_mature_product'=>true,'device_evidence'=>false], JSON_THROW_ON_ERROR);
+        foreach (['DEPOSIT-DEMO' => false, 'PICKUP-DEMO' => true] as $name => $collected) {
+            $reference = 'SYNTHETIC-' . $this->namespace . '-' . $name;
+            $existing->execute([$org, $reference]);
+            if ($existing->fetchColumn()) { continue; } // Never overwrite local demo edits.
+            $shipment = $this->insert("INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status,development_only) VALUES (?,?,?,?,?,'STANDARD','READY','PAID',true)", [$org,$sender,$reference,$origin,$destination]);
+            $this->db->prepare("INSERT INTO shipment_parties(shipment_id,party_role,user_id,contact_encrypted) VALUES (?,'RECIPIENT',?,?)")
+                ->execute([$shipment,$recipient,$crypto->encrypt('{"synthetic_fixture":true}')]);
+            $package = $this->insert('INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,state,custodian_type,custodian_ref,current_location_id,version) VALUES (?,?,1,100,100,100,500,?,?,?,?,?)',
+                [$shipment,self::uuid(),$collected?'COLLECTED':'AT_DESTINATION',$collected?'RECIPIENT':'LOCKER',$collected?$recipient:$lockerId,$collected?null:$destination,$collected?2:1]);
+            $this->db->prepare("INSERT INTO custody_events(package_id,operation_uuid,package_version,actor_user_id,event_type,previous_custodian_type,previous_custodian_ref,new_custodian_type,new_custodian_ref,location_id,evidence,occurred_at) VALUES (?,?,1,NULL,'SYNTHETIC_ASSUMED_TRANSFER','DRIVER','synthetic-history','LOCKER',?,?,?::jsonb,now()-interval '1 hour')")
+                ->execute([$package,self::uuid(),$lockerId,$destination,$evidence]);
+            $this->db->prepare("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,'DEMO_FINAL_DEPOSIT_ASSUMED',NULL,?::jsonb,now()-interval '1 hour')")
+                ->execute([$package,self::uuid(),$evidence]);
+            if ($collected) {
+                $this->db->prepare("INSERT INTO custody_events(package_id,operation_uuid,package_version,actor_user_id,event_type,previous_custodian_type,previous_custodian_ref,new_custodian_type,new_custodian_ref,location_id,evidence,occurred_at) VALUES (?,?,2,?,'SYNTHETIC_ASSUMED_TRANSFER','LOCKER',?,'RECIPIENT',?,NULL,?::jsonb,now())")
+                    ->execute([$package,self::uuid(),$recipient,$lockerId,$recipient,$evidence]);
+                $this->db->prepare("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,'DEMO_RECIPIENT_PICKUP_ASSUMED',?,?::jsonb,now())")
+                    ->execute([$package,self::uuid(),$recipient,$evidence]);
+            }
+        }
+    }
+
+    private function ensureDemoSlots(string $org): void
+    {
+        $hub = $this->db->prepare('SELECT h.id FROM hubs h JOIN locations l ON l.id=h.location_id WHERE l.organization_id=? AND l.code=?');
+        $hub->execute([$org, $this->namespace . ':HUB-AUS-01']);
+        $hubId = $hub->fetchColumn();
+        if (!$hubId) { return; }
+        $location = $this->db->prepare('SELECT id FROM locations WHERE organization_id=? AND code=?');
+        $insert = $this->db->prepare("INSERT INTO hub_slots(hub_id,code,destination_location_id,kind) VALUES (?,?,?,'STAGING') ON CONFLICT(hub_id,code) DO NOTHING");
+        foreach (['AUS-004', 'AUS-005'] as $code) {
+            $location->execute([$org, $this->namespace . ':' . $code]);
+            $destination = $location->fetchColumn();
+            if ($destination) { $insert->execute([$hubId, 'LOT-' . $code, $destination]); }
+        }
+    }
+
+    private function ensureDemoShifts(string $org): void
+    {
+        $vehicle = $this->db->prepare('SELECT id FROM vehicles WHERE organization_id=? AND code=?');
+        $driver = $this->db->prepare('SELECT d.id FROM drivers d JOIN users u ON u.id=d.user_id WHERE u.organization_id=? AND u.external_auth_id=?');
+        $active = $this->db->prepare('SELECT id FROM driver_shifts WHERE driver_id=? AND starts_at<=now() AND ends_at>now()');
+        foreach (['DRIVER-IN' => 'VEH-IN-01', 'DRIVER-OUT' => 'VEH-OUT-01'] as $account => $code) {
+            $driver->execute([$org, 'synthetic:' . $this->namespace . ':' . $account]);
+            $driverId = $driver->fetchColumn();
+            if (!$driverId) { continue; }
+            $active->execute([$driverId]);
+            if ($active->fetchColumn()) { continue; }
+            $vehicle->execute([$org, $code]);
+            $vehicleId = $vehicle->fetchColumn();
+            if (!$vehicleId) {
+                $vehicleId = $this->insert('INSERT INTO vehicles(organization_id,code,max_weight_g,max_volume_mm3,max_packages) VALUES (?,?,50000,1000000000,20)', [$org, $code]);
+            }
+            $this->db->prepare("INSERT INTO driver_shifts(driver_id,vehicle_id,starts_at,ends_at) VALUES (?,?,now()-interval '1 hour',now()+interval '8 hours')")->execute([$driverId, $vehicleId]);
+        }
     }
 
     private function syncSizePolicy(string $org): void

@@ -47,8 +47,8 @@ services:
       AUTHORIZE_NET_SIGNATURE_KEY: ${AUTHORIZE_NET_SIGNATURE_KEY:-}
       MAIL_DELIVERY_MODE: ${MAIL_DELIVERY_MODE:-local}
       MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
-      AUTH_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
-    ports: ["127.0.0.1:8000:8000"]
+      AUTH_ALLOWED_ORIGINS: ${ZPX_AUTH_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174}
+    ports: ["127.0.0.1:${ZPX_API_PORT:-8000}:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
   mail-worker:
@@ -119,7 +119,7 @@ services:
     volumes:
       - .:/workspace
       - customer_modules:/workspace/node_modules
-    ports: ["127.0.0.1:5173:5173"]
+    ports: ["127.0.0.1:${ZPX_CUSTOMER_PORT:-5173}:5173"]
   operations-web:
     image: node:24.19.0-bookworm-slim
     working_dir: /workspace
@@ -128,7 +128,7 @@ services:
     volumes:
       - .:/workspace
       - operations_modules:/workspace/node_modules
-    ports: ["127.0.0.1:5174:5174"]
+    ports: ["127.0.0.1:${ZPX_OPERATIONS_PORT:-5174}:5174"]
   simulator:
     image: node:24.19.0-bookworm-slim
     working_dir: /workspace
@@ -140,7 +140,7 @@ services:
     volumes:
       - ./simulators:/workspace/simulators:ro
       - simulator_data:/state
-    ports: ["127.0.0.1:8090:8090"]
+    ports: ["127.0.0.1:${ZPX_SIMULATOR_PORT:-8090}:8090"]
 volumes:
   postgres_data:
   simulator_data:

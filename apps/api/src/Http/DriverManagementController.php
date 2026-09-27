@@ -70,7 +70,7 @@ final class DriverManagementController
                 'register' => $service->register($user, $input, $key),
                 'update-profile' => $service->updateProfile($user, $input, $key),
                 'approve' => $service->approve($user, $id, $key),
-                'reject' => $service->reject($user, $input, $id, $key),
+                'reject' => $service->reject($user, $id, $input, $key),
                 'profile' => $service->profile($user),
                 'wallet' => $service->wallet($user),
                 'transactions' => $service->transactions($user, Input::text($request->get('cursor', ''), 0, 18)),

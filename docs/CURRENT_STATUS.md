@@ -6,11 +6,11 @@
 
 Date: 2026-09-26
 Agent: Codex
-Checkpoint: Customer Shipment Initialization E2E is implemented and verified in development on `codex/customer-init-phase1`. Audit: `docs/CUSTOMER_INITIALIZATION_AUDIT.md`. Next feature lane is origin locker deposit with size reconciliation.
+Checkpoint: Customer Shipment Initialization E2E and the portal/driver follow-up are implemented and verified in development. PR #19 should merge first, then PR #20. Next feature lane is origin locker deposit with size reconciliation.
 
 ## Branch / Baseline
 
-- Active local feature branch: `codex/customer-init-phase1`, based on `main` at `b0f7134`.
+- Active local integration branch: `codex/portal-driver-followup`, based on `main` at `b0f7134` and containing `codex/customer-init-phase1` for conflict-free sequential merging.
 - Feature baseline: `b74a0f1` — merge of PR #18 (`feat(driver): enforce scanned outbound load before departure`) on 2026-09-24.
 - PR #18 is merged. Do not treat `feature/P4.2-outbound-driver-delivery` as the active baseline.
 - Branch started from `main` at `b0f7134`. Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` were preserved.
@@ -96,3 +96,10 @@ P4.2 outbound load/departure remains the implemented feature baseline.
 Sender may equal recipient. A sender-as-recipient may intentionally share a one-time pickup grant with a trusted friend; SI remains public tracking identity and never opens a locker.
 
 Preferred-route / rideshare-style matching is future Phase 2+.
+
+## Portal and outbound follow-up branch — 2026-09-26
+
+- Agent: Codex. Branch: `codex/portal-driver-followup`, based on `main` at `b0f7134`. This clean branch carries the seven post-PR-#18 portal/driver commits from `feature/P4.2-outbound-driver-delivery` without reverting the newer canonical Phase 1 planning documents. PR #19 is merged into this branch locally; merge #19 into `main` before #20.
+- Completed here: scoped driver approvals, hub receiving resume, driver dispatch acceptance and stop-arrival progress, customer tracking for reported arrival, browser regression coverage, and development-only assumed destination/pickup outcomes. Assumed outcomes are fixtures, not evidence of a real locker handoff.
+- Verification on the combined branch: disposable `npm run test-db` passed; `npm run check` passed (76 API operations and 9 Node tests); `npm run build` passed; isolated `npm run test-e2e` passed all four browser tests; `git diff --check` passed.
+- Exact next action after review/merge of this branch and PR #19: start origin deposit and size-upgrade payment on a new branch from updated `main`. Do not infer completed physical delivery from the synthetic outcome fixtures.

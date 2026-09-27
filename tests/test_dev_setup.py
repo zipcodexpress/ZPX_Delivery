@@ -42,9 +42,19 @@ class SetupTests(unittest.TestCase):
         response.__enter__.return_value = response
         response.status = 200
         response.read.return_value = b'"database":"ready" ZPX Customer ZPX Operations "synthetic":true'
-        with patch.object(dev.urllib.request, 'urlopen', side_effect=[dev.http.client.RemoteDisconnected()] + [response] * 6) as request, patch.object(dev.time, 'sleep'):
+        unauthenticated = dev.urllib.error.HTTPError('http://localhost', 401, 'Unauthorized', {}, None)
+        with patch.object(dev.urllib.request, 'urlopen', side_effect=[dev.http.client.RemoteDisconnected()] + [response] * 6 + [unauthenticated]) as request, patch.object(dev.time, 'sleep'):
             dev.smoke(timeout=5)
-        self.assertEqual(request.call_count, 7)
+        self.assertEqual(request.call_count, 8)
+    def test_smoke_detects_stale_receiving_route(self):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = b'"database":"ready" ZPX Customer ZPX Operations "synthetic":true'
+        stale = dev.urllib.error.HTTPError('http://localhost', 405, 'Method Not Allowed', {}, None)
+        with patch.object(dev.urllib.request, 'urlopen', side_effect=[response] * 6 + [stale]), patch.object(dev.time, 'sleep'):
+            with self.assertRaisesRegex(RuntimeError, 'out of date'):
+                dev.smoke(timeout=5)
     def test_storage_queries_mount_instead_of_checkout(self):
         root = Path('/Volumes/Development SSD/Developer/ZPX_Delivery')
         info = {'FilesystemType': 'apfs', 'Internal': False}

@@ -10,6 +10,7 @@ type Run = {
   expected_count: number; loaded_count: number;
 };
 type RunList = { items: Run[] };
+type DispatchCall = { dispatch_call_id: string; hub_name: string; destination: string; package_count: number; expires_at: string };
 type ManifestItem = {
   manifest_item_id: string; package_id: string; package_uuid: string;
   public_reference: string; si: string | null;
@@ -75,7 +76,7 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
+  const initialForm = {
     name: p.name, email: p.email || '', phone: p.phone || '',
     license_number: p.license?.number || '', license_state: p.license?.state || '', license_expiry: p.license?.expiry?.slice(0, 10) || '',
     date_of_birth: p.date_of_birth?.slice(0, 10) || '',
@@ -89,15 +90,14 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
     vehicle_insurance_provider: p.vehicle?.insurance_provider || '', vehicle_insurance_policy: p.vehicle?.insurance_policy || '',
     vehicle_insurance_expiry: p.vehicle?.insurance_expiry?.slice(0, 10) || '',
     insurance_reference: p.insurance_reference || '', notes: p.notes || '',
-  });
+  };
+  const [form, setForm] = useState(initialForm);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true); onError(''); onNotice('');
     try {
-      const body: Record<string, string> = {};
-      for (const [k, v] of Object.entries(form)) { if (v !== '') body[k] = v; }
-      const result = await api<DriverProfile>('/driver/profile/update', body, {
+      const result = await api<DriverProfile>('/driver/profile/update', form, {
         'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': csrfToken,
       });
       onSaved(result);
@@ -109,7 +109,7 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
 
   const field = (label: string, key: keyof typeof form, type = 'text', placeholder = '') => (
     <label className="profile-input"><span>{label}</span>
-      <input type={type} value={form[key]} placeholder={placeholder} disabled={!editing || saving}
+      <input type={type} value={form[key]} placeholder={placeholder} required={key === 'name'} disabled={!editing || saving}
         onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))} />
     </label>
   );
@@ -120,7 +120,7 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
       <div className="profile-actions">
         {badge(p.status)}
         {!editing ? <button onClick={() => setEditing(true)}>Edit Profile</button>
-          : <><button className="secondary" onClick={() => setEditing(false)}>Cancel</button></>}
+          : <><button className="secondary" onClick={() => { setForm(initialForm); setEditing(false); }}>Cancel</button></>}
       </div>
     </div>
     <form onSubmit={save}>
@@ -191,10 +191,12 @@ function ProfileForm({ profile: p, busy, onError, onNotice, onSaved, csrfToken }
 export function DriverWorkspace({ profile, onLogout }: { profile: components['schemas']['Profile']; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('runs');
   const [runs, setRuns] = useState<Run[]>([]);
+  const [availableCalls, setAvailableCalls] = useState<DispatchCall[]>([]);
   const [selected, setSelected] = useState<RunDetail | null>(null);
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsCursor, setTransactionsCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -204,7 +206,10 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
 
   const loadRuns = useCallback(async () => {
     setLoading(true); setError('');
-    try { setRuns((await api<RunList>('/driver/runs')).items); }
+    try {
+      const [assigned, available] = await Promise.all([api<RunList>('/driver/runs'), api<{ items: DispatchCall[] }>('/hub/dispatch-calls/available')]);
+      setRuns(assigned.items); setAvailableCalls(available.items);
+    }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load runs.'); }
     finally { setLoading(false); }
   }, []);
@@ -225,7 +230,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
 
   const loadTransactions = useCallback(async () => {
     setLoading(true); setError('');
-    try { setTransactions((await api<TransactionList>('/driver/transactions')).items); }
+    try { const result = await api<TransactionList>('/driver/transactions'); setTransactions(result.items); setTransactionsCursor(result.next_cursor); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load transactions.'); }
     finally { setLoading(false); }
   }, []);
@@ -253,7 +258,21 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
       });
       setNotice('Run acknowledged. You can start scanning.');
       await openRun(selected.id);
+      await loadRuns();
     } catch (e) { setError(e instanceof Error ? e.message : 'Acknowledgment failed.'); }
+    finally { setBusy(false); }
+  }
+
+  async function acceptDispatch(callId: string) {
+    if (busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api('/hub/dispatch-calls/' + callId + '/accept', {}, {
+        'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '',
+      });
+      setNotice('Dispatch accepted. Your outbound run is ready.');
+      await loadRuns();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not accept dispatch.'); }
     finally { setBusy(false); }
   }
 
@@ -273,6 +292,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
       setScanInput('');
       setNotice(`Package scanned. ${result.counts.accepted}/${result.counts.expected} loaded.`);
       await openRun(selected.id);
+      await loadRuns();
     } catch (e) { setError(e instanceof Error ? e.message : 'Scan failed.'); }
     finally { setBusy(false); }
   }
@@ -286,7 +306,22 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
       });
       setNotice('Load verified. Run departed and the ordered route is active.');
       await openRun(selected.id);
+      await loadRuns();
     } catch (e) { setError(e instanceof Error ? e.message : 'Departure was blocked.'); }
+    finally { setBusy(false); }
+  }
+
+  async function arriveAtStop(stopId: string) {
+    if (!selected || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api('/runs/' + selected.id + '/stops/' + stopId + '/arrive', { expected_revision: selected.revision }, {
+        'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '',
+        'If-Match': `"${selected.revision}"`,
+      });
+      setNotice('Arrival recorded. Packages remain in your custody until a verified handoff.');
+      await openRun(selected.id);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not record stop arrival.'); }
     finally { setBusy(false); }
   }
 
@@ -311,6 +346,13 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     {tab === 'runs' && <div className="driver-layout">
       <aside className="driver-sidebar">
         <h2>Your Runs</h2>
+        <button type="button" disabled={loading || busy} onClick={() => void loadRuns()}>Refresh runs and dispatch calls</button>
+        <h3>Available dispatch calls</h3>
+        {availableCalls.length === 0 ? <p className="muted">No available calls.</p> : <ul className="run-list">{availableCalls.map(call => <li key={call.dispatch_call_id}>
+          <strong>{call.hub_name} → {call.destination}</strong>
+          <span className="run-meta">{call.package_count} packages · respond by {new Date(call.expires_at).toLocaleTimeString()}</span>
+          <button type="button" disabled={busy} onClick={() => void acceptDispatch(call.dispatch_call_id)}>Accept dispatch</button>
+        </li>)}</ul>}
         {loading && !runs.length ? <p role="status">Loading…</p> : runs.length === 0 ? <p className="muted">No assigned runs.</p> : (
           <ul className="run-list">{runs.map(r => (
             <li key={r.id} className={selected?.id === r.id ? 'active' : ''} onClick={() => void openRun(r.id)}>
@@ -348,7 +390,11 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
           <div className="manifest-stops">{selected.stops.map(stop => {
             const items = selected.manifest.filter(m => m.stop_sequence === stop.sequence);
             const showTestLabels = items.some(item => item.development_label_token);
-            return <div key={stop.id} className="stop-group"><h3>Stop {stop.sequence} · {stop.location.name} <small>{stop.location.code}</small></h3>
+            const isNext = selected.stops.filter(s => s.sequence < stop.sequence).every(s => s.state === 'COMPLETED');
+            return <div key={stop.id} className="stop-group"><h3>Stop {stop.sequence} · {stop.location.name} <small>{stop.location.code}</small> {badge(stop.state)}</h3>
+              {selected.kind === 'OUTBOUND' && selected.state === 'IN_PROGRESS' && stop.state === 'EXPECTED' && isNext &&
+                <button type="button" disabled={busy} onClick={() => void arriveAtStop(stop.id)}>Report arrival at stop {stop.sequence}</button>}
+              {stop.state === 'ARRIVED' && <p>Arrival reported. Packages remain with you until a verified destination handoff.</p>}
               <table className="manifest-table"><thead><tr><th>Package</th><th>SI</th>{showTestLabels && <th>Test label</th>}<th>Destination</th><th>State</th></tr></thead>
                 <tbody>{items.map(item => (<tr key={item.manifest_item_id} className={item.state === 'LOADED' ? 'loaded' : ''}><td><code>{item.public_reference}</code></td><td>{item.si || '—'}</td>{showTestLabels && <td>{item.development_label_token ? <button type="button" className="test-label-token" onClick={() => setScanInput(item.development_label_token || '')} title="Use this synthetic label in the scan field">{item.development_label_token}</button> : '—'}</td>}<td>{item.destination.code}</td><td>{badge(item.state)}</td></tr>))}</tbody></table></div>;
           })}</div>
@@ -382,7 +428,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     </section>}
 
     {tab === 'transactions' && <section className="driver-main">
-      {loading ? <p role="status">Loading…</p> : transactions.length === 0 ? <div className="empty-state"><h2>No transactions yet</h2><p>Transaction history will appear here after completed runs are compensated.</p></div> : (
+      {loading ? <p role="status">Loading…</p> : transactions.length === 0 ? <div className="empty-state"><h2>No transactions yet</h2><p>Transaction history will appear here after completed runs are compensated.</p></div> : <>
         <table className="manifest-table"><thead><tr><th>Date</th><th>Type</th><th>Run</th><th>Amount</th><th>Status</th></tr></thead>
           <tbody>{transactions.map(t => (<tr key={t.transaction_id}>
             <td>{new Date(t.created_at).toLocaleDateString()}</td>
@@ -391,7 +437,13 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
             <td><strong>{money(t.amount_cents)}</strong></td>
             <td>{t.settled_at ? <span className="badge badge-ok">settled</span> : <span className="badge badge-pending">pending</span>}</td>
           </tr>))}</tbody></table>
-      )}
+        {transactionsCursor && <button type="button" disabled={busy} onClick={() => void (async () => {
+          setBusy(true); setError('');
+          try { const next = await api<TransactionList>('/driver/transactions?cursor=' + encodeURIComponent(transactionsCursor)); setTransactions(items => [...items, ...next.items]); setTransactionsCursor(next.next_cursor); }
+          catch (e) { setError(e instanceof Error ? e.message : 'Unable to load older transactions.'); }
+          finally { setBusy(false); }
+        })()}>Load older transactions</button>}
+      </>}
     </section>}
 
     <footer>ZipcodeXpress · Austin pilot · No live shipping or physical custody</footer>
