@@ -32,10 +32,14 @@ final class Seed
         if (count($ids) > 1) { throw new RuntimeException('Ambiguous seed organization; no data changed'); }
         if ($ids) {
             $this->syncDriverInLabelHashes((string)$ids[0]);
+            $this->syncSizePolicy((string)$ids[0]);
+            $this->syncLargeCompartments((string)$ids[0]);
+            $this->syncProfileAddresses((string)$ids[0]);
             return ['created' => false, 'organization_id' => $ids[0], 'credentials' => []];
         }
 
         $org = $this->insert('INSERT INTO organizations(name) VALUES (?)', [self::ORGANIZATION . ':' . $this->namespace]);
+        $this->syncSizePolicy($org);
         $accounts = ['ADMIN' => 'ADMIN', 'CUSTOMER' => 'CUSTOMER', 'RECIPIENT' => 'CUSTOMER', 'HUB-STAFF' => 'HUB_STAFF', 'DRIVER-IN' => 'DRIVER', 'DRIVER-OUT' => 'DRIVER'];
         $users = []; $credentials = []; $roles = [];
         foreach (array_unique(array_values($accounts)) as $role) {
@@ -61,6 +65,7 @@ final class Seed
             $this->db->prepare("INSERT INTO user_contacts(user_id,kind,value_ciphertext,lookup_hmac,key_version,verified_at) VALUES (?,'PHONE',?,decode(?,'hex'),1,now())")->execute([$user, $crypto->encrypt($phone), $phoneLookup]);
             $credentials[] = ['identity' => $login, 'password' => $password, 'email' => $email, 'phone' => $phone];
         }
+        $this->syncProfileAddresses($org);
         $hubLocation = $this->location($org, $fixture['hub']['id'], 'HUB', 'DELIVERY_ONLY');
         $hub = $this->insert("INSERT INTO hubs(location_id,status) VALUES (?,'ACTIVE')", [$hubLocation]);
         $q = $this->db->prepare('INSERT INTO hub_staff(hub_id,user_id) VALUES (?,?)'); $q->execute([$hub, $users['HUB-STAFF']]);
@@ -76,7 +81,7 @@ final class Seed
             $location = $this->location($org, $site['id'], 'LOCKER', $site['site_mode']);
             $locations[$site['id']] = $location;
             $locker = $this->insert('INSERT INTO lockers(location_id,capabilities) VALUES (?,?)', [$location, '{"synthetic":true,"physical_commands_enabled":false}']);
-            foreach (['S' => [200, 200, 300, 2000], 'M' => [400, 400, 500, 10000]] as $code => $size) {
+            foreach (['S' => [200, 200, 300, 2000], 'M' => [400, 400, 500, 10000], 'L' => [600, 600, 700, 30000]] as $code => $size) {
                 // Frozen until ownership/commissioning is explicitly configured. No invented board addresses.
                 $this->insert("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status) VALUES (?,?,?,?,?,?,'FROZEN')", [$locker, $code, ...$size]);
             }
@@ -126,6 +131,35 @@ final class Seed
         }
 
         return ['created' => true, 'organization_id' => $org, 'credentials' => $credentials];
+    }
+
+    private function syncSizePolicy(string $org): void
+    {
+        $rules = ['classes' => [
+            ['code' => 'SMALL', 'amount_cents' => 100, 'max_width_mm' => 180, 'max_height_mm' => 180, 'max_depth_mm' => 280, 'max_weight_g' => 2000],
+            ['code' => 'MEDIUM', 'amount_cents' => 200, 'max_width_mm' => 360, 'max_height_mm' => 360, 'max_depth_mm' => 480, 'max_weight_g' => 10000],
+            ['code' => 'LARGE', 'amount_cents' => 300, 'max_width_mm' => 550, 'max_height_mm' => 550, 'max_depth_mm' => 650, 'max_weight_g' => 30000],
+        ]];
+        $this->db->prepare("INSERT INTO pricing_policies(organization_id,code,version,rules,effective_at) VALUES (?,'PHASE1_SIZE',1,?::jsonb,now()) ON CONFLICT(organization_id,code,version) DO NOTHING")
+            ->execute([$org, json_encode($rules, JSON_THROW_ON_ERROR)]);
+    }
+
+    private function syncLargeCompartments(string $org): void
+    {
+        $this->db->prepare("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status)
+            SELECT k.id,'L',600,600,700,30000,'FROZEN' FROM lockers k JOIN locations l ON l.id=k.location_id
+            WHERE l.organization_id=? AND l.kind='LOCKER' AND l.access_policy->>'synthetic'='true'
+              AND NOT EXISTS (SELECT 1 FROM compartments c WHERE c.locker_id=k.id AND c.code='L')")
+            ->execute([$org]);
+    }
+    private function syncProfileAddresses(string $org): void
+    {
+        $q=$this->db->prepare("SELECT u.id FROM users u WHERE u.organization_id=? AND u.external_auth_id LIKE ? AND NOT EXISTS (SELECT 1 FROM user_addresses a WHERE a.user_id=u.id AND a.kind='PROFILE')");
+        $q->execute([$org,'synthetic:'.$this->namespace.':%']);
+        $address=['line1'=>'Synthetic test address — not a real destination','city'=>'Austin','region'=>'TX','postal_code'=>'00000','country_code'=>'US'];
+        $cipher=(new \Zpx\Identity\Secrets())->encrypt(json_encode($address,JSON_THROW_ON_ERROR));
+        $insert=$this->db->prepare("INSERT INTO user_addresses(user_id,kind,address_ciphertext,country_code,key_version) VALUES (?,'PROFILE',?,'US',1)");
+        foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $user) { $insert->execute([$user,$cipher]); }
     }
 
     /** Upgrade pre-existing local fixtures whose original random label plaintext was discarded. */

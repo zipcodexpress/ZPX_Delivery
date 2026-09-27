@@ -28,9 +28,15 @@ final class Service
         return $row['kind']==='LOCKER' && $row['status']==='ACTIVE' && $row['site_mode']!=='LEGACY_ONLY'
             && ($this->local($row) || ($policy['public_shipping_enabled'] ?? false)===true);
     }
+    private function sizePolicy(): array {
+        $row=$this->q("SELECT version,rules FROM pricing_policies WHERE organization_id=? AND code='PHASE1_SIZE' AND effective_at<=now() AND (retired_at IS NULL OR retired_at>now()) ORDER BY version DESC LIMIT 1",[$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new Failure(503,'RATE_POLICY_UNAVAILABLE','The size rate card is not configured.'); }
+        $rules=json_decode($row['rules'],true,512,JSON_THROW_ON_ERROR);
+        return ['version'=>'SIZE-'.$row['version'],'currency'=>'USD','classes'=>$rules['classes']];
+    }
     public function locations(): array {
         $rows=$this->q("SELECT * FROM locations WHERE organization_id=? AND kind='LOCKER' AND status='ACTIVE' ORDER BY code",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
-        return ['items'=>array_values(array_map(function ($r) {
+        return ['size_policy'=>$this->sizePolicy(),'items'=>array_values(array_map(function ($r) {
             $policy=json_decode($r['access_policy'] ?? '{}',true);
             $position=null;
             if ($r['latitude']!==null && $r['longitude']!==null) { $position=['latitude'=>(float)$r['latitude'],'longitude'=>(float)$r['longitude'],'illustrative'=>$this->local($r)]; }
@@ -76,7 +82,7 @@ final class Service
         (new Outbox($this->db))->append(Secrets::uuid(),'shipment',(string)$row['id'],'shipping.'.strtolower($type),['shipment_id'=>(string)$row['id']]);
     }
     private function select(): string {
-        return 'SELECT s.*,p.id AS package_id,p.package_uuid,p.version AS package_version,p.state AS package_state,p.width_mm,p.height_mm,p.depth_mm,p.weight_g,p.current_location_id,p.custodian_type,p.custodian_ref,si.si,o.name AS origin_name,d.name AS destination_name,cl.name AS current_location_name FROM shipments s JOIN packages p ON p.shipment_id=s.id AND p.sequence_no=1 JOIN locations o ON o.id=s.origin_location_id JOIN locations d ON d.id=s.destination_location_id LEFT JOIN locations cl ON cl.id=p.current_location_id LEFT JOIN shipping_identifiers si ON si.package_id=p.id';
+        return "SELECT s.*,p.id AS package_id,p.package_uuid,p.version AS package_version,p.state AS package_state,p.width_mm,p.height_mm,p.depth_mm,p.weight_g,p.size_class,p.current_location_id,p.custodian_type,p.custodian_ref,si.si,EXISTS(SELECT 1 FROM package_labels pl WHERE pl.package_id=p.id AND pl.status='ACTIVE' AND pl.expires_at>now())::int AS has_label,o.name AS origin_name,d.name AS destination_name,cl.name AS current_location_name FROM shipments s JOIN packages p ON p.shipment_id=s.id AND p.sequence_no=1 JOIN locations o ON o.id=s.origin_location_id JOIN locations d ON d.id=s.destination_location_id LEFT JOIN locations cl ON cl.id=p.current_location_id LEFT JOIN shipping_identifiers si ON si.package_id=p.id";
     }
     private function operationsWhere(string $user,array &$values): string {
         $values[]=$user;
@@ -99,9 +105,10 @@ final class Service
         return ['shipment_id'=>(string)$r['id'],'public_reference'=>$r['public_reference'],'package_id'=>(string)$r['package_id'],
             'origin_location_id'=>(string)$r['origin_location_id'],'destination_location_id'=>(string)$r['destination_location_id'],
             'origin_name'=>$r['origin_name'],'destination_name'=>$r['destination_name'],'order_status'=>$r['order_status'],'payment_status'=>$r['payment_status'],
-            'package_state'=>$r['package_state'],'version'=>(int)$r['version'],'service_level'=>$r['service_level'],
+            'package_state'=>$r['package_state'],'journey_status'=>$r['order_status']==='READY' && $r['package_state']==='CREATED' ? ((int)$r['has_label']===1?'READY_FOR_ORIGIN_DEPOSIT':'LABEL_REQUIRED') : $r['package_state'],
+            'si'=>$r['si'],'version'=>(int)$r['version'],'service_level'=>$r['service_level'],
             'relationship'=>$view==='operations'?'OPERATIONS':($r['sender_user_id']===$user?'SENDER':'RECIPIENT'),
-            'package'=>array_map('intval',array_intersect_key($r,array_flip(['width_mm','height_mm','depth_mm','weight_g']))),
+            'package'=>array_merge(array_map('intval',array_intersect_key($r,array_flip(['width_mm','height_mm','depth_mm','weight_g']))),['size_class'=>$r['size_class']]),
             'development_only'=>(bool)$r['development_only'],'created_at'=>gmdate('c',strtotime($r['created_at']))];
     }
     public function list(string $user,string $view,string $cursor=''): array {
@@ -138,12 +145,19 @@ final class Service
         $origin=self::id($input['origin_location_id']); $destination=self::id($input['destination_location_id']);
         if ($origin===$destination || $input['service_level']!=='STANDARD') { throw new Failure(422,'INVALID_ROUTE','Choose different origin and destination lockers and standard service.'); }
         if (!is_array($input['recipient']) || !is_array($input['package'])) { throw new Failure(422,'INVALID_INPUT','Recipient and parcel details are required.'); }
-        Input::fields($input['recipient'],['name','email','phone']);
-        $recipient=['name'=>trim(Input::text($input['recipient']['name'],1,160)),'email'=>Input::contact('EMAIL',$input['recipient']['email']),'phone'=>Input::contact('PHONE',$input['recipient']['phone'])];
+        Input::fields($input['recipient'],['name','email','phone','address']);
+        $recipient=['name'=>trim(Input::text($input['recipient']['name'],1,160)),'email'=>Input::contact('EMAIL',$input['recipient']['email']),'phone'=>Input::contact('PHONE',$input['recipient']['phone']),'address'=>Input::address($input['recipient']['address'])];
         if ($recipient['name']==='') { throw new Failure(422,'INVALID_INPUT','Recipient name is required.'); }
-        Input::fields($input['package'],['width_mm','height_mm','depth_mm','weight_g']);
-        foreach ($input['package'] as $v) { if (!is_int($v) || $v<1 || $v>100000) { throw new Failure(422,'INVALID_PACKAGE','Use positive whole-number parcel measurements.'); } }
+        Input::fields($input['package'],['size_class','width_mm','height_mm','depth_mm','weight_g']);
+        if (!in_array($input['package']['size_class'],['SMALL','MEDIUM','LARGE'],true)) { throw new Failure(422,'INVALID_PACKAGE','Choose a supported parcel size.'); }
+        foreach (['width_mm','height_mm','depth_mm','weight_g'] as $field) { $v=$input['package'][$field]; if (!is_int($v) || $v<1 || $v>100000) { throw new Failure(422,'INVALID_PACKAGE','Use positive whole-number parcel measurements.'); } }
         return $this->once($user,'create',$key,$input,fn()=>$this->customer($user),function () use ($user,$input,$origin,$destination,$recipient) {
+            $policy=$this->sizePolicy(); $p=$input['package'];
+            $size=current(array_filter($policy['classes'],fn($class)=>$class['code']===$p['size_class']));
+            if (!$size) { throw new Failure(503,'RATE_POLICY_UNAVAILABLE','This parcel size is not configured.'); }
+            foreach (['width_mm','height_mm','depth_mm','weight_g'] as $field) {
+                if ($p[$field]>$size['max_'.$field]) { throw new Failure(422,'PACKAGE_TOO_LARGE','The parcel exceeds the selected size limit. Choose a larger size or another delivery method.'); }
+            }
             $allLocal=true;
             foreach ([$origin,$destination] as $location) {
                 $r=$this->q('SELECT * FROM locations WHERE id=? AND organization_id=? FOR SHARE',[$location,$this->org()])->fetch(PDO::FETCH_ASSOC);
@@ -155,12 +169,20 @@ final class Service
             }
             $id=(string)$this->q("INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status) VALUES (?,?,?,?,?,'STANDARD','DRAFT','UNPAID') RETURNING id",[$this->org(),$user,'ZPX-ORDER-'.strtoupper(bin2hex(random_bytes(12))),$origin,$destination])->fetchColumn();
             $this->q('UPDATE shipments SET development_only=? WHERE id=?',[$allLocal?'true':'false',$id]);
-            $p=$input['package'];
-            $this->q("INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,state,custodian_type,custodian_ref) VALUES (?,?,1,?,?,?,?,'CREATED','SENDER',?)",[$id,Secrets::uuid(),$p['width_mm'],$p['height_mm'],$p['depth_mm'],$p['weight_g'],$user]);
-            $this->q("INSERT INTO shipment_parties(shipment_id,party_role,contact_encrypted,email_lookup,phone_lookup) VALUES (?,'RECIPIENT',?,decode(?,'hex'),decode(?,'hex'))",[$id,$this->crypto->encrypt(json_encode($recipient,JSON_THROW_ON_ERROR)),$this->crypto->digest('contact:EMAIL',$recipient['email']),$this->crypto->digest('contact:PHONE',$recipient['phone'])]);
+            $package=(string)$this->q("INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,size_class,state,custodian_type,custodian_ref) VALUES (?,?,1,?,?,?,?,?,'CREATED','SENDER',?) RETURNING id",[$id,Secrets::uuid(),$p['width_mm'],$p['height_mm'],$p['depth_mm'],$p['weight_g'],$p['size_class'],$user])->fetchColumn();
+            $this->issueSi($package,$destination);
+            $sender=$this->identity->profile($user);
+            $self=$sender['email']===$recipient['email'] && $sender['phone']===$recipient['phone'];
+            $this->q("INSERT INTO shipment_parties(shipment_id,party_role,user_id,contact_encrypted,email_lookup,phone_lookup) VALUES (?,'RECIPIENT',?,?,decode(?,'hex'),decode(?,'hex'))",[$id,$self?$user:null,$this->crypto->encrypt(json_encode($recipient,JSON_THROW_ON_ERROR)),$this->crypto->digest('contact:EMAIL',$recipient['email']),$this->crypto->digest('contact:PHONE',$recipient['phone'])]);
             $row=$this->row($user,$id); $this->event($user,$row,'SHIPMENT_CREATED');
             return $this->present($row,$user);
         });
+    }
+    private function issueSi(string $package,string $destination): void {
+        $suffix=''; $alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; foreach (str_split(random_bytes(20)) as $b) { $suffix.=$alphabet[ord($b)&31]; }
+        $code=$this->q('SELECT code FROM locations WHERE id=?',[$destination])->fetchColumn();
+        $code=preg_replace('/[^A-Z0-9-]/','',strtoupper((string)$code));
+        $this->q('INSERT INTO shipping_identifiers(package_id,si,destination_location_id) VALUES (?,?,?)',[$package,'ZPX-'.$code.'-'.$suffix,$destination]);
     }
     private function version(array $row,string $match): void {
         if ($match!=='"'.$row['version'].'"') { throw new Failure(409,'VERSION_CONFLICT','This shipment changed. Refresh and try again.'); }
@@ -176,10 +198,13 @@ final class Service
             }
             // Existing synthetic seed drafts acquire the explicit test marker when first quoted.
             $this->q('UPDATE shipments SET development_only=true WHERE id=?',[$id]);
-            $amount=500+100*(int)ceil((int)$row['weight_g']/1000);
-            $q=$this->q("INSERT INTO pricing_quotes(shipment_id,policy_version,amount_cents,expires_at,shipment_version) VALUES (?,'DEMO-2026-01',?,now()+interval '15 minutes',?) RETURNING id,expires_at",[$id,$amount,$row['version']])->fetch(PDO::FETCH_ASSOC);
+            $policy=$this->sizePolicy();
+            $size=current(array_filter($policy['classes'],fn($class)=>$class['code']===$row['size_class']));
+            if (!$size) { throw new Failure(409,'QUOTE_UNAVAILABLE','This draft has no valid size class. Create a new shipment.'); }
+            $amount=$size['amount_cents'];
+            $q=$this->q("INSERT INTO pricing_quotes(shipment_id,policy_version,amount_cents,expires_at,shipment_version) VALUES (?,?,?,now()+interval '15 minutes',?) RETURNING id,expires_at",[$id,$policy['version'],$amount,$row['version']])->fetch(PDO::FETCH_ASSOC);
             $this->event($user,$row,'QUOTE_CREATED');
-            return ['quote_id'=>(string)$q['id'],'amount_cents'=>$amount,'currency'=>'USD','expires_at'=>gmdate('c',strtotime($q['expires_at'])),'policy_version'=>'DEMO-2026-01','development_only'=>true];
+            return ['quote_id'=>(string)$q['id'],'amount_cents'=>$amount,'currency'=>'USD','expires_at'=>gmdate('c',strtotime($q['expires_at'])),'policy_version'=>$policy['version'],'development_only'=>true];
         });
     }
     public function cancel(string $user,string $id,array $input,string $key,string $match): array {
@@ -256,7 +281,7 @@ final class Service
         $result=$this->once($user,'payment:'.$id,$key,[$input,$match],fn()=>$this->sender($user,$id),function () use ($user,$id,$input,$match) {
             $row=$this->sender($user,$id,true); $this->localShipment($row); $this->version($row,$match);
             if ($row['order_status']!=='DRAFT' || !in_array($row['payment_status'],['UNPAID','FAILED'],true)) { throw new Failure(409,'PAYMENT_UNAVAILABLE','This shipment cannot start a checkout.'); }
-            $quote=$this->q("SELECT * FROM pricing_quotes WHERE id=? AND shipment_id=? AND shipment_version=? AND expires_at>now() AND policy_version='DEMO-2026-01'",[$input['quote_id'],$id,$row['version']])->fetch(PDO::FETCH_ASSOC);
+            $quote=$this->q("SELECT * FROM pricing_quotes WHERE id=? AND shipment_id=? AND shipment_version=? AND expires_at>now() AND policy_version LIKE 'SIZE-%'",[$input['quote_id'],$id,$row['version']])->fetch(PDO::FETCH_ASSOC);
             if (!$quote) { throw new Failure(409,'QUOTE_EXPIRED','Request a new quote before checkout.'); }
             $provider=getenv('PAYMENT_PROVIDER') ?: 'LOCAL_TEST';
             if (!in_array($provider,['LOCAL_TEST','AUTHORIZE_NET_SANDBOX'],true)) { throw new Failure(503,'PAYMENT_NOT_CONFIGURED','Unsupported development payment provider.'); }
@@ -314,10 +339,7 @@ final class Service
                 if ($this->q('SELECT id FROM package_labels WHERE package_id=?',[$package])->fetchColumn()) { throw new Failure(409,'LABEL_REPLACEMENT_REQUIRED','A revoked label requires a supervised replacement workflow.'); }
                 $payload='ZPX1:L:'.rtrim(strtr(base64_encode(random_bytes(18)),'+/','-_'),'=');
                 $label=$this->q("INSERT INTO package_labels(package_id,label_version,token_hash,status,token_ciphertext,expires_at) VALUES (?,1,decode(?,'hex'),'ACTIVE',?,now()+interval '30 days') RETURNING *",[$package,hash('sha256',$payload),$this->crypto->encrypt($payload)])->fetch(PDO::FETCH_ASSOC);
-                $suffix=''; $alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; foreach (str_split(random_bytes(20)) as $b) { $suffix.=$alphabet[ord($b)&31]; }
-                $code=$this->q('SELECT code FROM locations WHERE id=?',[$row['destination_location_id']])->fetchColumn();
-                $code=preg_replace('/[^A-Z0-9-]/','',strtoupper(substr(strrchr(':'.$code,':'),1)));
-                $this->q('INSERT INTO shipping_identifiers(package_id,si,destination_location_id) VALUES (?,?,?)',[$package,'ZPX-'.$code.'-'.$suffix,$row['destination_location_id']]);
+                if (!$row['si']) { $this->issueSi($package,(string)$row['destination_location_id']); }
             }
             if (strtotime($label['expires_at'])<=time()) { throw new Failure(409,'LABEL_EXPIRED','This test label has expired.'); }
             $this->q("INSERT INTO label_print_jobs(label_id,requested_by,status) VALUES (?,?,'REQUESTED')",[$label['id'],$user]);

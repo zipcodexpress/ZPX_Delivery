@@ -1636,16 +1636,43 @@ export interface components {
             } | null;
         };
         LocationList: {
+            size_policy: components["schemas"]["SizePolicy"];
             items: components["schemas"]["Location"][];
             next_cursor: string | null;
         };
+        SizeClass: {
+            /** @enum {string} */
+            code: "SMALL" | "MEDIUM" | "LARGE";
+            amount_cents: number;
+            max_width_mm: number;
+            max_height_mm: number;
+            max_depth_mm: number;
+            max_weight_g: number;
+        };
+        SizePolicy: {
+            version: string;
+            /** @enum {string} */
+            currency: "USD";
+            classes: components["schemas"]["SizeClass"][];
+        };
         PackageSpec: {
+            /** @enum {string|null} */
+            size_class: "SMALL" | "MEDIUM" | "LARGE" | null;
+            width_mm: number;
+            height_mm: number;
+            depth_mm: number;
+            weight_g: number;
+        };
+        CreatePackageSpec: {
+            /** @enum {string} */
+            size_class: "SMALL" | "MEDIUM" | "LARGE";
             width_mm: number;
             height_mm: number;
             depth_mm: number;
             weight_g: number;
         };
         Recipient: {
+            address: components["schemas"]["Address"];
             name: string;
             /** Format: email */
             email: string;
@@ -1657,10 +1684,12 @@ export interface components {
             /** @description Opaque identifier; serialize as string. */
             destination_location_id: string;
             recipient: components["schemas"]["Recipient"];
-            package: components["schemas"]["PackageSpec"];
+            package: components["schemas"]["CreatePackageSpec"];
             service_level: string;
         };
         Shipment: {
+            si: string | null;
+            journey_status: string;
             /** @description Opaque identifier; serialize as string. */
             shipment_id: string;
             /** @description Opaque identifier; serialize as string. */
