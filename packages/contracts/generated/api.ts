@@ -1,5 +1,90 @@
 // Generated from docs/handoff/contracts/openapi.json. Do not edit.
 export interface paths {
+    "/development/origin-deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pair a sender to a virtual origin compartment after scanning the paid primary label. Development only; no physical command. */
+        post: operations["development_origin_deposit_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/development/origin-deposits/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append a synthetic door event to a virtual origin session; never invokes physical hardware. */
+        post: operations["development_origin_deposit_event"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/development/origin-deposits/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** After synthetic open/close evidence, sender attests placement and commits simulated locker custody and pickup demand. */
+        post: operations["development_origin_deposit_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/packages/{package_id}/origin-upgrade-quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quote a measured origin size upgrade at the original paid rate card; no door authorization. */
+        post: operations["origin_upgrade_quote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/packages/{package_id}/origin-upgrade-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a price-difference checkout; no larger door can open until payment is confirmed. */
+        post: operations["origin_upgrade_payment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/packages/{package_id}/origin-size-options": {
         parameters: {
             query?: never;
@@ -1737,6 +1822,7 @@ export interface components {
             payment_status: string;
             package_state: string;
             version: number;
+            package_version: number;
             public_reference: string;
             origin_name: string;
             destination_name: string;
@@ -2200,6 +2286,254 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    development_origin_deposit_start: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    package_id: string;
+                    location_id: string;
+                    label_payload: string;
+                    expected_package_version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Virtual pairing and command journaled, with no door opened */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session_id: string;
+                        /** Format: uuid */
+                        command_id: string;
+                        compartment_code: string;
+                        /** @enum {string} */
+                        status: "READY";
+                        package_version: number;
+                        /** @enum {boolean} */
+                        development_only: true;
+                        /** @enum {boolean} */
+                        physical_hardware_verified: false;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    development_origin_deposit_event: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    event: "OPEN_OBSERVED" | "CLOSE_OBSERVED" | "UNKNOWN";
+                };
+            };
+        };
+        responses: {
+            /** @description Synthetic event journaled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session_id: string;
+                        /** @enum {string} */
+                        status: "OPEN" | "CLOSED" | "UNKNOWN";
+                        /** @enum {boolean} */
+                        development_only: true;
+                        /** @enum {boolean} */
+                        physical_hardware_verified: false;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    development_origin_deposit_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {boolean} */
+                    placed: true;
+                };
+            };
+        };
+        responses: {
+            /** @description Synthetic origin deposit and pickup demand committed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session_id: string;
+                        package_id: string;
+                        /** @enum {string} */
+                        package_state: "AT_ORIGIN";
+                        package_version: number;
+                        pickup_demand_id: string;
+                        /** @enum {boolean} */
+                        development_only: true;
+                        /** @enum {boolean} */
+                        physical_hardware_verified: false;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    origin_upgrade_quote: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    target_size_class: "MEDIUM" | "LARGE";
+                    width_mm: number;
+                    height_mm: number;
+                    depth_mm: number;
+                    weight_g: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Development-only difference quote */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        quote_id: string;
+                        package_id: string;
+                        target_size_class: string;
+                        additional_amount_cents: number;
+                        currency: string;
+                        policy_version: string;
+                        /** Format: date-time */
+                        expires_at: string;
+                        development_only: boolean;
+                        /** @enum {boolean} */
+                        door_authorized: false;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    origin_upgrade_payment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    quote_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Provider checkout session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     origin_size_options: {
         parameters: {
             query?: never;

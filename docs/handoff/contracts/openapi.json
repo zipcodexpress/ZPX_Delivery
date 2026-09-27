@@ -19,6 +19,108 @@
     }
   ],
   "paths": {
+    "/development/origin-deposits": {
+      "post": {
+        "operationId": "development_origin_deposit_start",
+        "summary": "Pair a sender to a virtual origin compartment after scanning the paid primary label. Development only; no physical command.",
+        "parameters": [{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "package_id": { "type": "string" }, "location_id": { "type": "string" }, "label_payload": { "type": "string" },
+          "expected_package_version": { "type": "integer", "minimum": 0 }
+        }, "required": ["package_id", "location_id", "label_payload", "expected_package_version"] } } } },
+        "responses": {
+          "200": { "description": "Virtual pairing and command journaled, with no door opened", "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "session_id": { "type": "string" }, "command_id": { "type": "string", "format": "uuid" }, "compartment_code": { "type": "string" },
+            "status": { "type": "string", "enum": ["READY"] }, "package_version": { "type": "integer" },
+            "development_only": { "type": "boolean", "enum": [true] }, "physical_hardware_verified": { "type": "boolean", "enum": [false] }
+          }, "required": ["session_id", "command_id", "compartment_code", "status", "package_version", "development_only", "physical_hardware_verified"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/development/origin-deposits/{session_id}/events": {
+      "post": {
+        "operationId": "development_origin_deposit_event",
+        "summary": "Append a synthetic door event to a virtual origin session; never invokes physical hardware.",
+        "parameters": [
+          { "name": "session_id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "event": { "type": "string", "enum": ["OPEN_OBSERVED", "CLOSE_OBSERVED", "UNKNOWN"] }
+        }, "required": ["event"] } } } },
+        "responses": {
+          "200": { "description": "Synthetic event journaled", "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "session_id": { "type": "string" }, "status": { "type": "string", "enum": ["OPEN", "CLOSED", "UNKNOWN"] },
+            "development_only": { "type": "boolean", "enum": [true] }, "physical_hardware_verified": { "type": "boolean", "enum": [false] }
+          }, "required": ["session_id", "status", "development_only", "physical_hardware_verified"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/development/origin-deposits/{session_id}/confirm": {
+      "post": {
+        "operationId": "development_origin_deposit_confirm",
+        "summary": "After synthetic open/close evidence, sender attests placement and commits simulated locker custody and pickup demand.",
+        "parameters": [
+          { "name": "session_id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "placed": { "type": "boolean", "enum": [true] }
+        }, "required": ["placed"] } } } },
+        "responses": {
+          "200": { "description": "Synthetic origin deposit and pickup demand committed", "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "session_id": { "type": "string" }, "package_id": { "type": "string" }, "package_state": { "type": "string", "enum": ["AT_ORIGIN"] },
+            "package_version": { "type": "integer" }, "pickup_demand_id": { "type": "string" },
+            "development_only": { "type": "boolean", "enum": [true] }, "physical_hardware_verified": { "type": "boolean", "enum": [false] }
+          }, "required": ["session_id", "package_id", "package_state", "package_version", "pickup_demand_id", "development_only", "physical_hardware_verified"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/packages/{package_id}/origin-upgrade-quotes": {
+      "post": {
+        "operationId": "origin_upgrade_quote",
+        "summary": "Quote a measured origin size upgrade at the original paid rate card; no door authorization.",
+        "parameters": [
+          { "name": "package_id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } },
+          { "name": "If-Match", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "target_size_class": { "type": "string", "enum": ["MEDIUM", "LARGE"] },
+          "width_mm": { "type": "integer", "minimum": 1 }, "height_mm": { "type": "integer", "minimum": 1 },
+          "depth_mm": { "type": "integer", "minimum": 1 }, "weight_g": { "type": "integer", "minimum": 1 }
+        }, "required": ["target_size_class", "width_mm", "height_mm", "depth_mm", "weight_g"] } } } },
+        "responses": {
+          "200": { "description": "Development-only difference quote", "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "quote_id": { "type": "string" }, "package_id": { "type": "string" }, "target_size_class": { "type": "string" },
+            "additional_amount_cents": { "type": "integer" }, "currency": { "type": "string" }, "policy_version": { "type": "string" },
+            "expires_at": { "type": "string", "format": "date-time" }, "development_only": { "type": "boolean" }, "door_authorized": { "type": "boolean", "enum": [false] }
+          }, "required": ["quote_id", "package_id", "target_size_class", "additional_amount_cents", "currency", "policy_version", "expires_at", "development_only", "door_authorized"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/packages/{package_id}/origin-upgrade-payment": {
+      "post": {
+        "operationId": "origin_upgrade_payment",
+        "summary": "Start a price-difference checkout; no larger door can open until payment is confirmed.",
+        "parameters": [
+          { "name": "package_id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } },
+          { "name": "If-Match", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "quote_id": { "type": "string" }
+        }, "required": ["quote_id"] } } } },
+        "responses": {
+          "200": { "description": "Provider checkout session", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentSession" } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
     "/packages/{package_id}/origin-size-options": {
       "get": {
         "operationId": "origin_size_options",
@@ -8084,6 +8186,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "package_version": {
+            "type": "integer",
+            "minimum": 0
+          },
           "public_reference": {
             "type": "string"
           },
@@ -8126,6 +8232,7 @@
           "payment_status",
           "package_state",
           "version",
+          "package_version",
           "public_reference",
           "origin_name",
           "destination_name",

@@ -58,7 +58,7 @@ final class HostedCheckout
     }
     private function apply(string $id,array $transaction): void {
         (new Transaction($this->db))->run(function () use ($id,$transaction) {
-            $r=$this->q("SELECT p.*,s.organization_id,s.sender_user_id,s.order_status,s.development_only,q.expires_at AS quote_expires_at,k.id AS package_id FROM payments p JOIN shipments s ON s.id=p.shipment_id JOIN pricing_quotes q ON q.id=p.quote_id JOIN packages k ON k.shipment_id=s.id AND k.sequence_no=1 WHERE p.id=? AND p.provider='AUTHORIZE_NET_SANDBOX' AND s.organization_id=? FOR UPDATE OF s,p",[$id,getenv('ZPX_ORGANIZATION_ID') ?: '0'])->fetch(PDO::FETCH_ASSOC);
+            $r=$this->q("SELECT p.*,s.organization_id,s.sender_user_id,s.order_status,s.payment_status,s.version AS shipment_version,s.development_only,q.expires_at AS quote_expires_at,q.purpose,q.shipment_version AS quote_shipment_version,q.target_size_class,q.measured_width_mm,q.measured_height_mm,q.measured_depth_mm,q.measured_weight_g,k.id AS package_id,k.state AS package_state FROM payments p JOIN shipments s ON s.id=p.shipment_id JOIN pricing_quotes q ON q.id=p.quote_id JOIN packages k ON k.shipment_id=s.id AND k.sequence_no=1 WHERE p.id=? AND p.provider='AUTHORIZE_NET_SANDBOX' AND s.organization_id=? FOR UPDATE OF s,p,k",[$id,getenv('ZPX_ORGANIZATION_ID') ?: '0'])->fetch(PDO::FETCH_ASSOC);
             if (!$r || !$r['development_only']) { throw new Failure(404,'PAYMENT_NOT_FOUND','Payment not found.'); }
             $transactionId=(string)($transaction['transId'] ?? '');
             if (($transaction['order']['invoiceNumber'] ?? '')!==$r['provider_reference'] || AuthorizeNet::cents($transaction['authAmount'] ?? null)!==(int)$r['amount_cents'] || (isset($transaction['currencyCode']) && $transaction['currencyCode']!=='USD') || ($transaction['transactionType'] ?? '')!=='authCaptureTransaction') { throw new Failure(409,'PAYMENT_MISMATCH','The provider transaction does not match this checkout.'); }
@@ -66,17 +66,27 @@ final class HostedCheckout
                 if ($r['provider_transaction_id']!==$transactionId) { throw new Failure(409,'PAYMENT_CONFLICT','A different transaction already paid this order.'); }
                 return;
             }
-            if ($r['status']!=='PENDING' || $r['order_status']!=='DRAFT') { throw new Failure(409,'PAYMENT_CONFLICT','This checkout is not pending.'); }
+            $upgrade=$r['purpose']==='ORIGIN_UPGRADE';
+            if ($r['status']!=='PENDING' || ($upgrade
+                ? ($r['order_status']!=='READY' || $r['payment_status']!=='PAID' || $r['package_state']!=='CREATED' || (int)$r['shipment_version']!==(int)$r['quote_shipment_version'])
+                : $r['order_status']!=='DRAFT')) { throw new Failure(409,'PAYMENT_CONFLICT','This checkout is not pending.'); }
             if (!in_array($transaction['transactionStatus'] ?? '',['capturedPendingSettlement','settledSuccessfully'],true) || (string)($transaction['responseCode'] ?? '')!=='1') { throw new Failure(409,'PAYMENT_NOT_CAPTURED','The provider has not confirmed a successful capture.'); }
             if (isset($transaction['settleAmount']) && AuthorizeNet::cents($transaction['settleAmount'])!==(int)$r['amount_cents']) { throw new Failure(409,'PAYMENT_MISMATCH','The captured amount does not match the quote.'); }
             $submitted=strtotime($transaction['submitTimeUTC'] ?? '');
             if (!$submitted || $submitted>strtotime($r['quote_expires_at']) || $submitted<strtotime($r['created_at'])-60) { throw new Failure(409,'PAYMENT_REVIEW_REQUIRED','Payment timing requires review; shipping is not enabled.'); }
             $this->q("UPDATE payments SET status='PAID',provider_transaction_id=?,hosted_token_ciphertext=NULL WHERE id=?",[$transactionId,$id]);
-            $this->q("UPDATE shipments SET payment_status='PAID',order_status='READY',version=version+1 WHERE id=?",[$r['shipment_id']]);
+            if ($upgrade) {
+                $this->q('UPDATE packages SET size_class=?,width_mm=?,height_mm=?,depth_mm=?,weight_g=?,version=version+1 WHERE id=?',
+                    [$r['target_size_class'],$r['measured_width_mm'],$r['measured_height_mm'],$r['measured_depth_mm'],$r['measured_weight_g'],$r['package_id']]);
+                $this->q('UPDATE shipments SET version=version+1 WHERE id=?',[$r['shipment_id']]);
+            } else {
+                $this->q("UPDATE shipments SET payment_status='PAID',order_status='READY',version=version+1 WHERE id=?",[$r['shipment_id']]);
+            }
             $this->q("INSERT INTO payment_events(provider,provider_event_id,payment_id,payload_reference) VALUES ('AUTHORIZE_NET_SANDBOX',?,?,?)",['verified-'.$transactionId,$id,'Verified sandbox transaction; no card details stored']);
-            $this->q("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,'SANDBOX_PAYMENT_CONFIRMED',?,'{}',now())",[$r['package_id'],Secrets::uuid(),$r['sender_user_id']]);
-            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'SANDBOX_PAYMENT_CONFIRMED','payment',?)",[$r['sender_user_id'],$id]);
-            (new Outbox($this->db))->append(Secrets::uuid(),'shipment',(string)$r['shipment_id'],'shipping.sandbox_payment_confirmed',['shipment_id'=>(string)$r['shipment_id']]);
+            $event=$upgrade?'ORIGIN_SIZE_UPGRADE_PAID':'SANDBOX_PAYMENT_CONFIRMED';
+            $this->q("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,?,?, '{}'::jsonb,now())",[$r['package_id'],Secrets::uuid(),$event,$r['sender_user_id']]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,?,'payment',?)",[$r['sender_user_id'],$event,$id]);
+            (new Outbox($this->db))->append(Secrets::uuid(),'shipment',(string)$r['shipment_id'],'shipping.'.strtolower($event),['shipment_id'=>(string)$r['shipment_id']]);
         });
     }
     public function webhook(string $raw,string $signature): array {

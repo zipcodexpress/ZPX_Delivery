@@ -22,6 +22,11 @@ foreach (['payments/<shipment>/hosted-session'=>'hosted-session','payments/<ship
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,$action,$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
 }
 Route::any('api/delivery/v1/packages/<shipment>/origin-size-options', static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,'origin-size-options',$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/packages/<shipment>/origin-upgrade-quotes', static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,'origin-upgrade-quote',$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/packages/<shipment>/origin-upgrade-payment', static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,'origin-upgrade-payment',$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/development/origin-deposits', static fn(Request $request) => Zpx\Http\ShippingController::handle($request,'origin-deposit-start'));
+Route::any('api/delivery/v1/development/origin-deposits/<shipment>/events', static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,'origin-deposit-event',$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/development/origin-deposits/<shipment>/confirm', static fn(Request $request, string $shipment) => Zpx\Http\ShippingController::handle($request,'origin-deposit-confirm',$shipment))->pattern(['shipment'=>'[1-9][0-9]{0,17}']);
 foreach (['driver/runs'=>'runs','runs/<run_id>'=>'run-detail','runs/<run_id>/acknowledgments'=>'acknowledge','scans/resolve'=>'resolve','runs/<run_id>/scans'=>'scan','runs/<run_id>/depart'=>'depart'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $runId='') => Zpx\Http\DriverController::handle($request,$action,$runId))->pattern(['run_id'=>'[1-9][0-9]{0,17}']);
 }

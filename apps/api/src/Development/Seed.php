@@ -37,6 +37,7 @@ final class Seed
             $this->ensureAssumedLockerOutcomes((string)$ids[0]);
             $this->syncSizePolicy((string)$ids[0]);
             $this->syncLargeCompartments((string)$ids[0]);
+            $this->syncVirtualLockerInventory((string)$ids[0]);
             $this->syncProfileAddresses((string)$ids[0]);
             return ['created' => false, 'organization_id' => $ids[0], 'credentials' => []];
         }
@@ -89,6 +90,7 @@ final class Seed
                 $this->insert("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status) VALUES (?,?,?,?,?,?,'FROZEN')", [$locker, $code, ...$size]);
             }
         }
+        $this->syncVirtualLockerInventory($org);
         $count = 0;
         foreach ($fixture['run']['stops'] as $stop) {
             foreach ($stop['package_ids'] as $reference) {
@@ -236,6 +238,20 @@ final class Seed
             WHERE l.organization_id=? AND l.kind='LOCKER' AND l.access_policy->>'synthetic'='true'
               AND NOT EXISTS (SELECT 1 FROM compartments c WHERE c.locker_id=k.id AND c.code='L')")
             ->execute([$org]);
+    }
+    /** Separate simulation inventory never changes the frozen physical demo doors. */
+    private function syncVirtualLockerInventory(string $org): void
+    {
+        $lockers=$this->db->prepare("SELECT k.id FROM lockers k JOIN locations l ON l.id=k.location_id WHERE l.organization_id=? AND l.access_policy->>'synthetic'='true'");
+        $lockers->execute([$org]);
+        foreach ($lockers->fetchAll(PDO::FETCH_COLUMN) as $locker) {
+            $this->db->prepare("INSERT INTO locker_devices(locker_id,external_device_id,status) VALUES (?,?,'SIMULATED') ON CONFLICT(external_device_id) DO NOTHING")
+                ->execute([$locker,'simulated:'.$locker]);
+            foreach (['S'=>[200,200,300,2000],'M'=>[400,400,500,10000],'L'=>[600,600,700,30000]] as $code=>$size) {
+                $this->db->prepare("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status) VALUES (?,?,?,?,?,?,'SIMULATED_AVAILABLE') ON CONFLICT(locker_id,code) DO NOTHING")
+                    ->execute([$locker,'SIM-'.$code,...$size]);
+            }
+        }
     }
     private function syncProfileAddresses(string $org): void
     {
