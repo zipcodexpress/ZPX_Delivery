@@ -19,6 +19,38 @@
     }
   ],
   "paths": {
+    "/driver/pickup-availability": {
+      "post": {
+        "operationId": "driver_pickup_availability",
+        "summary": "Approved driver opts into or out of pickup offers during an active shift.",
+        "parameters": [{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "enum": ["AVAILABLE", "OFFLINE"] } }, "required": ["status"] } } } },
+        "responses": { "200": { "description": "Availability updated", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" } }, "required": ["status"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/driver/pickup-offers": {
+      "get": {
+        "operationId": "driver_pickup_offers",
+        "summary": "List current short-lived origin pickup offers for the signed-in driver.",
+        "responses": { "200": { "description": "Current pickup offers", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DriverPickupOfferList" } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/driver/pickup-offers/refresh": {
+      "post": {
+        "operationId": "driver_pickup_offers_refresh",
+        "summary": "Request offers for eligible origin groups during an active shift.",
+        "parameters": [{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "responses": { "200": { "description": "Current pickup offers", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DriverPickupOfferList" } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/driver/pickup-offers/{offer_id}/accept": {
+      "post": {
+        "operationId": "driver_pickup_offer_accept",
+        "summary": "Atomically assign exact available parcels to an inbound run and stop.",
+        "parameters": [{ "name": "offer_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "responses": { "200": { "description": "Pickup accepted", "content": { "application/json": { "schema": { "type": "object", "properties": { "run_id": { "type": "string" }, "stop_id": { "type": "string" }, "package_count": { "type": "integer" }, "revision": { "type": "integer" } }, "required": ["run_id", "stop_id", "package_count", "revision"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
     "/development/origin-deposits": {
       "post": {
         "operationId": "development_origin_deposit_start",
@@ -7171,6 +7203,12 @@
       }
     },
     "schemas": {
+      "DriverPickupOfferList": {
+        "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": {
+          "offer_id": { "type": "string" }, "origin": { "type": "string" }, "address": { "type": "string" },
+          "hub": { "type": "string" }, "package_count": { "type": "integer" }, "expires_at": { "type": "string", "format": "date-time" }
+        }, "required": ["offer_id", "origin", "address", "hub", "package_count", "expires_at"] } } }, "required": ["items"]
+      },
       "TestPaymentOutcome": {
         "type": "object",
         "additionalProperties": false,

@@ -402,6 +402,11 @@ final class Service
                 $this->recordRejectedScan($user, $runId, $packageId, 'INBOUND_PICKUP', 'ALREADY_LOADED');
                 throw new Failure(409, 'ALREADY_LOADED', 'Package already scanned for this run.');
             }
+            $demand=$this->q('SELECT status,assigned_run_id FROM pickup_demands WHERE package_id=? FOR UPDATE',[$packageId])->fetch(PDO::FETCH_ASSOC);
+            if ($demand && ($demand['status']!=='ASSIGNED' || (string)$demand['assigned_run_id']!==$runId
+                || $package['custodian_type']!=='LOCKER' || (string)$package['current_location_id']!==(string)$package['origin_location_id'])) {
+                throw new Failure(409,'PICKUP_ASSIGNMENT_CHANGED','Pickup assignment or locker custody changed.');
+            }
 
             // Perform custody transfer
             $operationUuid = $clientEvent;
@@ -433,6 +438,7 @@ final class Service
 
             // Update manifest item
             $this->q("UPDATE manifest_items SET state='LOADED' WHERE id=?", [$manifestItem['id']]);
+            $this->q("UPDATE pickup_demands SET status='RESOLVED',version=version+1 WHERE package_id=? AND assigned_run_id=? AND status='ASSIGNED'",[$packageId,$runId]);
 
             // Outbox event
             (new Outbox($this->db))->append(
