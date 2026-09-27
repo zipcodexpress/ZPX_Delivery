@@ -1,5 +1,22 @@
 // Generated from docs/handoff/contracts/openapi.json. Do not edit.
 export interface paths {
+    "/packages/{package_id}/origin-size-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview sender-owned origin deposit size upgrades at the original paid rate; no door authorization. */
+        get: operations["origin_size_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/packages/{package_id}/label/pdf": {
         parameters: {
             query?: never;
@@ -2183,6 +2200,57 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    origin_size_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Development-only size options and price differences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        package_id: string;
+                        /** @enum {string} */
+                        current_size_class: "SMALL" | "MEDIUM" | "LARGE";
+                        policy_version: string;
+                        /** @enum {string} */
+                        currency: "USD";
+                        /** @enum {boolean} */
+                        development_only: true;
+                        /** @enum {boolean} */
+                        door_authorized: false;
+                        options: {
+                            /** @enum {string} */
+                            size_class: "SMALL" | "MEDIUM" | "LARGE";
+                            additional_amount_cents: number;
+                            max_width_mm: number;
+                            max_height_mm: number;
+                            max_depth_mm: number;
+                            max_weight_g: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     shipping_label_pdf: {
         parameters: {
             query?: never;

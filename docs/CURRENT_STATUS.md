@@ -6,14 +6,14 @@
 
 Date: 2026-09-26
 Agent: Codex
-Checkpoint: Customer Shipment Initialization E2E and the portal/driver follow-up are implemented and verified in development. PR #19 should merge first, then PR #20. Next feature lane is origin locker deposit with size reconciliation.
+Checkpoint: PR #19 and #20 are merged into `main`. Origin deposit development has begun with a sender-only read-only size preview; no locker door or custody transition is implemented yet. Simulator evidence is acceptable for development, with real hardware validation reserved for pilot.
 
 ## Branch / Baseline
 
-- Active local integration branch: `codex/portal-driver-followup`, based on `main` at `b0f7134` and containing `codex/customer-init-phase1` for conflict-free sequential merging.
+- Active branch: `codex/origin-deposit`, based on `main` at `b1fafa7` (merged PR #20; PR #19 merged at `cb93711`).
 - Feature baseline: `b74a0f1` — merge of PR #18 (`feat(driver): enforce scanned outbound load before departure`) on 2026-09-24.
 - PR #18 is merged. Do not treat `feature/P4.2-outbound-driver-delivery` as the active baseline.
-- Branch started from `main` at `b0f7134`. Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` were preserved.
+- Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` are preserved.
 - Local checkout is the working source of truth during development; push reviewed milestones to GitHub so `main` remains the shared remote baseline.
 - Platform baseline: PostgreSQL + ThinkPHP 8 + React. New terminal direction is Android; old Windows terminal is reference-only.
 
@@ -40,7 +40,7 @@ Checkpoint: Customer Shipment Initialization E2E and the portal/driver follow-up
 
 ## NEXT
 
-1. Origin deposit + size reconciliation: audit current locker/device API and `Custody` model, then implement app/locker pairing, label scan, compatible compartment reservation, SMALL→MEDIUM/LARGE or MEDIUM→LARGE upgrade with price-difference payment before a larger door opens, then evidence-backed `AT_ORIGIN`.
+1. Origin deposit + size reconciliation: implement app/locker pairing, label scan, compatible compartment reservation, SMALL→MEDIUM/LARGE or MEDIUM→LARGE upgrade with price-difference payment before a larger door opens, then evidence-backed `AT_ORIGIN`. A read-only preview now computes allowable differences from the original paid rate card.
 2. Pickup Demand / Driver Offer: create demand from `AT_ORIGIN`, notify nearby AVAILABLE drivers, atomic acceptance, multi-locker inbound run assembly.
 3. Reuse existing P3/P4 inbound/hub/outbound custody flow.
 4. P5 final destination deposit.
@@ -50,6 +50,7 @@ Checkpoint: Customer Shipment Initialization E2E and the portal/driver follow-up
 ## Validation
 
 - `npm run test-db` passed on disposable PostgreSQL; includes new self-recipient, all three size prices/limits, SI stability, `LABEL_REQUIRED` and `READY_FOR_ORIGIN_DEPOSIT`, plus existing custody/payment suites.
+- On `codex/origin-deposit`, disposable `npm run test-db` passed with origin size preview authorization, original rate-card anchoring and authenticated HTTP route; `npm run check` passed with 77 API operations and 9 Node tests. No physical device was used.
 - `npm run check` passed with 74 canonical API operations and 9 Node tests when loopback binding was permitted; `npm run build` passed for both web apps.
 - Changed PHP syntax checks and `git diff --check` passed. Local `up` smoke passed for API, customer, operations, proxies and simulator.
 - Browser test used the synthetic customer at `http://localhost:5173/`; draft creation and quote passed. Configured `AUTHORIZE_NET_SANDBOX` returned a generic provider error before payment. The external sandbox response/credentials require separate investigation; local test adapter integration passed.
@@ -97,9 +98,9 @@ Sender may equal recipient. A sender-as-recipient may intentionally share a one-
 
 Preferred-route / rideshare-style matching is future Phase 2+.
 
-## Portal and outbound follow-up branch — 2026-09-26
+## Portal and outbound follow-up — merged 2026-09-26
 
-- Agent: Codex. Branch: `codex/portal-driver-followup`, based on `main` at `b0f7134`. This clean branch carries the seven post-PR-#18 portal/driver commits from `feature/P4.2-outbound-driver-delivery` without reverting the newer canonical Phase 1 planning documents. PR #19 is merged into this branch locally; merge #19 into `main` before #20.
+- Agent: Codex. Customer initialization and portal/driver follow-up were merged as PR #19 and #20.
 - Completed here: scoped driver approvals, hub receiving resume, driver dispatch acceptance and stop-arrival progress, customer tracking for reported arrival, browser regression coverage, and development-only assumed destination/pickup outcomes. Assumed outcomes are fixtures, not evidence of a real locker handoff.
 - Verification on the combined branch: disposable `npm run test-db` passed; `npm run check` passed (76 API operations and 9 Node tests); `npm run build` passed; isolated `npm run test-e2e` passed all four browser tests; `git diff --check` passed.
-- Exact next action after review/merge of this branch and PR #19: start origin deposit and size-upgrade payment on a new branch from updated `main`. Do not infer completed physical delivery from the synthetic outcome fixtures.
+- Current work on `codex/origin-deposit`: sender-only `GET /packages/{package_id}/origin-size-options` now shows same-size/upgrade choices and price differences using the original paid rate card. It requires a paid, labeled parcel in sender custody and explicitly returns `door_authorized=false`; it cannot reserve or open a door. Next: implement the payment adjustment and pair/scan/claim/command/evidence workflow, then verified `AT_ORIGIN`, with explicit synthetic device evidence and failure/retry tests. Preserve frozen demo compartments until a deliberate virtual commissioning path exists. Do not infer completed physical delivery from synthetic fixtures.

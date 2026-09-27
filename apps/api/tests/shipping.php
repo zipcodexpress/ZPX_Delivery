@@ -124,6 +124,15 @@ check($shipping->get($sender,$paidId)['journey_status']==='LABEL_REQUIRED','paid
 $labelKey=Secrets::uuid();$label=$shipping->label($sender,$paidDraft['package_id'],$labelKey);$again=$shipping->label($sender,$paidDraft['package_id'],Secrets::uuid());
 check($label['si']===$again['si'] && $label['label_payload']===$again['label_payload'],'reprint preserves stable SI and active QR identity');
 check($label['si']===$paidDraft['si'] && $shipping->get($sender,$paidId)['journey_status']==='READY_FOR_ORIGIN_DEPOSIT','original SI stays stable and labeled parcel is ready for origin deposit');
+$sizes=$shipping->originSizeOptions($sender,$paidDraft['package_id']);
+check($sizes['policy_version']==='SIZE-1' && $sizes['door_authorized']===false && array_column($sizes['options'],'additional_amount_cents')===[0,100,200],'origin size preview shows same-size and upgrade differences without opening a door');
+[$response,$body]=identityHttp('GET',$base.'/packages/'.$paidDraft['package_id'].'/origin-size-options',[],[],$shipCookies);
+check($response->getCode()===200 && $body['package_id']===$paidDraft['package_id'] && $body['door_authorized']===false,'authenticated origin size preview route is read-only');
+failsIdentity(fn()=>$shipping->originSizeOptions($recipient,$paidDraft['package_id']),404,'another customer cannot preview sender origin deposit');
+failsIdentity(fn()=>$shipping->originSizeOptions($sender,$mediumShipment['package_id']),409,'unpaid parcel has no origin deposit options');
+$runtime->exec("INSERT INTO pricing_policies(organization_id,code,version,rules,effective_at) SELECT organization_id,code,2,jsonb_set(rules,'{classes,1,amount_cents}','900'::jsonb),now() FROM pricing_policies WHERE organization_id=$shippingOrg AND code='PHASE1_SIZE' AND version=1");
+check(array_column($shipping->originSizeOptions($sender,$paidDraft['package_id'])['options'],'additional_amount_cents')===[0,100,200],'origin upgrade preview remains on the original paid rate card');
+$runtime->exec("DELETE FROM pricing_policies WHERE organization_id=$shippingOrg AND code='PHASE1_SIZE' AND version=2");
 check(preg_match('/^ZPX-[A-Z0-9-]+-[A-Z2-7]{20}$/D',$label['si'])===1 && preg_match('/^ZPX1:L:[A-Za-z0-9_-]{24}$/D',$label['label_payload'])===1,'SI and label token meet canonical entropy formats');
 $before=(int)$runtime->query('SELECT count(*) FROM label_print_jobs WHERE label_id='.$label['label_id'])->fetchColumn();$shipping->label($sender,$paidDraft['package_id'],$labelKey);
 check((int)$runtime->query('SELECT count(*) FROM label_print_jobs WHERE label_id='.$label['label_id'])->fetchColumn()===$before,'label retry does not duplicate print request audit');

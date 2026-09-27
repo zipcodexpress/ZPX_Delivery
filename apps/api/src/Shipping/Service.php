@@ -124,6 +124,38 @@ final class Service
         return ['items'=>array_map(fn($r)=>$this->present($r,$user,$view),$rows),'next_cursor'=>$more?(string)end($rows)['id']:null];
     }
     public function get(string $user,string $id,string $view='customer'): array { return $this->present($this->row($user,$id,$view),$user,$view); }
+    /** A read-only rate preview; it never reserves a compartment or authorizes a door. */
+    public function originSizeOptions(string $user,string $package): array {
+        self::id($package);
+        $shipment=$this->q('SELECT shipment_id FROM packages WHERE id=?',[$package])->fetchColumn();
+        if (!$shipment) { throw new Failure(404,'SHIPMENT_NOT_FOUND','Shipment not found.'); }
+        $row=$this->sender($user,(string)$shipment);
+        $this->localShipment($row);
+        if ((string)$row['package_id']!==$package || $row['order_status']!=='READY' || $row['payment_status']!=='PAID'
+            || $row['package_state']!=='CREATED' || $row['custodian_type']!=='SENDER' || $row['custodian_ref']!==$user
+            || (int)$row['has_label']!==1 || !in_array($row['size_class'],['SMALL','MEDIUM','LARGE'],true)) {
+            throw new Failure(409,'ORIGIN_DEPOSIT_UNAVAILABLE','This parcel is not ready for origin deposit.');
+        }
+        $base=$this->q("SELECT q.policy_version FROM payments p JOIN pricing_quotes q ON q.id=p.quote_id
+            WHERE p.shipment_id=? AND p.status='PAID' AND q.policy_version LIKE 'SIZE-%' ORDER BY p.id LIMIT 1",[$shipment])->fetchColumn();
+        if (!$base || !preg_match('/^SIZE-([1-9][0-9]*)$/D',$base,$match)) {
+            throw new Failure(409,'RATE_POLICY_UNAVAILABLE','The original size rate card is unavailable.');
+        }
+        $rules=$this->q("SELECT rules FROM pricing_policies WHERE organization_id=? AND code='PHASE1_SIZE' AND version=?",[$this->org(),$match[1]])->fetchColumn();
+        if (!$rules) { throw new Failure(409,'RATE_POLICY_UNAVAILABLE','The original size rate card is unavailable.'); }
+        $classes=json_decode($rules,true,512,JSON_THROW_ON_ERROR)['classes'];
+        $paid=(int)$this->q("SELECT COALESCE(sum(amount_cents),0) FROM payments WHERE shipment_id=? AND status='PAID'",[$shipment])->fetchColumn();
+        $order=['SMALL'=>0,'MEDIUM'=>1,'LARGE'=>2];
+        $options=[];
+        foreach ($classes as $class) {
+            if (!isset($order[$class['code']]) || $order[$class['code']]<$order[$row['size_class']]) { continue; }
+            $options[]=['size_class'=>$class['code'],'additional_amount_cents'=>max(0,(int)$class['amount_cents']-$paid),
+                'max_width_mm'=>(int)$class['max_width_mm'],'max_height_mm'=>(int)$class['max_height_mm'],
+                'max_depth_mm'=>(int)$class['max_depth_mm'],'max_weight_g'=>(int)$class['max_weight_g']];
+        }
+        return ['package_id'=>$package,'current_size_class'=>$row['size_class'],'policy_version'=>$base,'currency'=>'USD',
+            'options'=>$options,'development_only'=>true,'door_authorized'=>false];
+    }
     public function searchPackages(string $user,string $query): array {
         $query=trim(Input::text($query,1,100));
         $values=[$this->org()];
