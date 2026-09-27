@@ -5,7 +5,7 @@
 ## Current objective and baseline
 
 - Date: 2026-09-26. Agent: Codex.
-- Branch: `codex/pickup-offers`, started from `codex/origin-deposit` at `6d8ead7`. PR #21 merged into `main` on 2026-09-26 local time; this branch contains the next pickup-offer development.
+- Branch: `codex/pickup-offers`, commit `3bda420`, started from `codex/origin-deposit` at `6d8ead7`. PR #21 merged into `main` on 2026-09-26 local time. Current review: [PR #22](https://github.com/zipcodexpress/ZPX_Delivery/pull/22).
 - Current objective: turn evidence-confirmed origin pickup demands into driver-accepted, exact inbound runs and carry individual parcels into driver custody.
 - Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` are preserved and must not be staged.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended terminal; old Windows terminal is reference only.
@@ -41,7 +41,7 @@
 
 ## Next development after this PR
 
-1. Commit and open a PR against merged `main`. After review/merge, add explicit multi-hub routing and location-aware offer eligibility. Then add cancellation/reassignment for missed pickups and continue real terminal integration.
+1. Check PR #22 CI and review feedback, then merge. After merge, add explicit multi-hub routing and location-aware offer eligibility. Then add cancellation/reassignment for missed pickups and continue real terminal integration.
 2. Real origin terminal path: independent enrolled-device authentication, ownership generation and physical address enforcement, delayed/ambiguous evidence reconciliation and supervised hardware pilot. Never treat development adapter events as real device evidence.
 3. P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 
