@@ -133,10 +133,11 @@ def test_browser():
     if len(set(ports)) != 4:
         raise RuntimeError('Could not reserve distinct browser-test ports; retry.')
     names = ('ZPX_API_PORT', 'ZPX_CUSTOMER_PORT', 'ZPX_OPERATIONS_PORT', 'ZPX_SIMULATOR_PORT')
-    previous = {name: os.environ.get(name) for name in (*names, 'ZPX_AUTH_ALLOWED_ORIGINS', 'ZPX_ORGANIZATION_ID')}
+    previous = {name: os.environ.get(name) for name in (*names, 'ZPX_AUTH_ALLOWED_ORIGINS', 'ZPX_ORGANIZATION_ID', 'PAYMENT_PROVIDER')}
     try:
         for name, port in zip(names, ports): os.environ[name] = str(port)
         os.environ['ZPX_ORGANIZATION_ID'] = '1'
+        os.environ['PAYMENT_PROVIDER'] = 'LOCAL_TEST'
         os.environ['ZPX_AUTH_ALLOWED_ORIGINS'] = ','.join(f'http://{host}:{port}' for port in ports[1:3] for host in ('localhost', '127.0.0.1'))
         compose('-p', project, 'build')
         compose('-p', project, 'up', '-d', 'postgres')

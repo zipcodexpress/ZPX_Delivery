@@ -14,7 +14,7 @@ final class ShippingController
         $requestId=Secrets::uuid();
         try {
             $method=$request->method(true);
-            $expected=in_array($action,['lookup','wallet-methods','wallet-history','locations','get','tracking','operations','operations-search','operations-get','operations-tracking','operations-payments','pdf','pending-payment'],true)?'GET':'POST';
+            $expected=in_array($action,['lookup','wallet-methods','wallet-history','locations','get','tracking','operations','operations-search','operations-get','operations-tracking','operations-payments','pdf','pending-payment','origin-size-options'],true)?'GET':'POST';
             if ($action==='shipments') { $expected=in_array($method,['GET','POST'],true)?$method:'GET, POST'; }
             if ($method!==$expected) { throw new Failure(405,'METHOD_NOT_ALLOWED','Unsupported method.'); }
             $origin=$request->header('origin','');
@@ -64,6 +64,12 @@ final class ShippingController
                 'reconcile-payment'=>(new \Zpx\Payments\HostedCheckout($db,$crypto))->reconcile($user,$shipment,$input['transaction_id'] ?? null),
                 'payment'=>$shipping->payment($user,$shipment,$input,$key,$match),
                 'pending-payment'=>$shipping->pendingPayment($user,$shipment),
+                'origin-size-options'=>$shipping->originSizeOptions($user,$shipment),
+                'origin-upgrade-quote'=>$shipping->originUpgradeQuote($user,$shipment,$input,$key,$match),
+                'origin-upgrade-payment'=>$shipping->originUpgradePayment($user,$shipment,$input,$key,$match),
+                'origin-deposit-start'=>(new \Zpx\Custody\OriginDeposit($db,$crypto))->start($user,$input,$key),
+                'origin-deposit-event'=>(new \Zpx\Custody\OriginDeposit($db,$crypto))->simulate($user,$shipment,$input,$key),
+                'origin-deposit-confirm'=>(new \Zpx\Custody\OriginDeposit($db,$crypto))->confirm($user,$shipment,$input,$key),
                 'confirm-payment'=>$shipping->confirmPayment($user,$shipment,$input,$key),
                 'labels'=>$shipping->label($user,$shipment,$key),
                 'quotes'=>$shipping->quote($user,$shipment,$input,$key,$match),

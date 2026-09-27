@@ -119,3 +119,58 @@ test('recipient can see both assumed locker outcomes', async ({ page }) => {
   await expect(page.getByRole('button', { name: /SYNTHETIC-local-DEPOSIT-DEMO/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /SYNTHETIC-local-PICKUP-DEMO/ })).toBeVisible();
 });
+
+test('customer can pay a size difference and finish a virtual origin deposit', async ({ page }) => {
+  const site = process.env.ZPX_E2E_CUSTOMER_URL;
+  await page.goto(site);
+  const loginResponse = page.waitForResponse(response => response.url().endsWith('/auth/login'));
+  await signIn(page, 'CUSTOMER');
+  const csrf = (await (await loginResponse).json()).csrf_token;
+  const base = site + '/api/delivery/v1';
+  const locations = (await (await page.request.get(base + '/locations')).json()).items;
+  const post = async (path, body, version) => {
+    const response = await page.request.post(base + path, { data: body, headers: {
+      'X-CSRF-Token': csrf, 'Idempotency-Key': crypto.randomUUID(),
+      ...(version === undefined ? {} : { 'If-Match': `"${version}"` }),
+    } });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return response.json();
+  };
+  const recipient = account('RECIPIENT');
+  const shipment = await post('/shipments', {
+    origin_location_id: locations[0].id, destination_location_id: locations[1].id, service_level: 'STANDARD',
+    recipient: { name: 'Synthetic Recipient', email: recipient.email, phone: recipient.phone,
+      address: { line1: 'Test only', city: 'Austin', region: 'TX', postal_code: '00000', country_code: 'US' } },
+    package: { size_class: 'SMALL', width_mm: 100, height_mm: 100, depth_mm: 100, weight_g: 500 },
+  });
+  const quote = await post('/shipments/' + shipment.shipment_id + '/quotes', { service_level: 'STANDARD' }, 0);
+  const payment = await post('/shipments/' + shipment.shipment_id + '/payment-session', { quote_id: quote.quote_id }, 0);
+  await post('/development/payments/' + payment.payment_id + '/confirm', { outcome: 'SUCCEEDED' });
+  await page.getByRole('navigation', { name: 'Customer navigation' }).getByRole('button', { name: 'Shipments & history' }).click();
+  await page.getByRole('button', { name: new RegExp(shipment.public_reference) }).click();
+  await page.getByRole('button', { name: 'Generate / reprint test label' }).click();
+  const origin = page.getByLabel('Origin deposit development simulation');
+  await expect(origin).toBeVisible();
+  await origin.getByLabel('Need a larger compartment?').selectOption('MEDIUM');
+  await origin.getByLabel('Width (mm)').fill('300');
+  await origin.getByLabel('Height (mm)').fill('300');
+  await origin.getByLabel('Depth (mm)').fill('350');
+  await origin.getByLabel('Weight (g)').fill('1500');
+  await origin.getByRole('button', { name: 'Get size-upgrade quote' }).click();
+  await expect(origin).toContainText('Upgrade to MEDIUM');
+  await origin.getByRole('button', { name: 'Continue to test checkout' }).click();
+  await page.reload();
+  await page.getByRole('navigation', { name: 'Customer navigation' }).getByRole('button', { name: 'Shipments & history' }).click();
+  await page.getByRole('button', { name: new RegExp(shipment.public_reference) }).click();
+  await page.getByLabel('Origin deposit development simulation').getByRole('button', { name: 'Simulate payment success' }).click();
+  await expect(page.locator('.shipment-facts')).toContainText('MEDIUM');
+  await page.getByRole('button', { name: 'Generate / reprint test label' }).click();
+  const ready = page.getByLabel('Origin deposit development simulation');
+  await expect(ready.getByLabel('Scan or paste the primary test label')).not.toBeEmpty();
+  await ready.getByRole('button', { name: 'Pair with virtual origin locker' }).click();
+  await ready.getByRole('button', { name: 'Simulate door open' }).click();
+  await ready.getByRole('button', { name: 'Simulate door close' }).click();
+  await ready.getByRole('button', { name: 'Confirm virtual placement' }).click();
+  await expect(page.locator('.shipment-facts')).toContainText('At origin');
+  await expect(page.locator('.shipment-detail')).toContainText('no physical door was operated');
+});

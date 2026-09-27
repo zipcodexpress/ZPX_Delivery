@@ -106,7 +106,7 @@ final class Service
             'origin_location_id'=>(string)$r['origin_location_id'],'destination_location_id'=>(string)$r['destination_location_id'],
             'origin_name'=>$r['origin_name'],'destination_name'=>$r['destination_name'],'order_status'=>$r['order_status'],'payment_status'=>$r['payment_status'],
             'package_state'=>$r['package_state'],'journey_status'=>$r['order_status']==='READY' && $r['package_state']==='CREATED' ? ((int)$r['has_label']===1?'READY_FOR_ORIGIN_DEPOSIT':'LABEL_REQUIRED') : $r['package_state'],
-            'si'=>$r['si'],'version'=>(int)$r['version'],'service_level'=>$r['service_level'],
+            'si'=>$r['si'],'version'=>(int)$r['version'],'package_version'=>(int)$r['package_version'],'service_level'=>$r['service_level'],
             'relationship'=>$view==='operations'?'OPERATIONS':($r['sender_user_id']===$user?'SENDER':'RECIPIENT'),
             'package'=>array_merge(array_map('intval',array_intersect_key($r,array_flip(['width_mm','height_mm','depth_mm','weight_g']))),['size_class'=>$r['size_class']]),
             'development_only'=>(bool)$r['development_only'],'created_at'=>gmdate('c',strtotime($r['created_at']))];
@@ -124,6 +124,102 @@ final class Service
         return ['items'=>array_map(fn($r)=>$this->present($r,$user,$view),$rows),'next_cursor'=>$more?(string)end($rows)['id']:null];
     }
     public function get(string $user,string $id,string $view='customer'): array { return $this->present($this->row($user,$id,$view),$user,$view); }
+    /** A read-only rate preview; it never reserves a compartment or authorizes a door. */
+    public function originSizeOptions(string $user,string $package): array {
+        self::id($package);
+        $shipment=$this->q('SELECT shipment_id FROM packages WHERE id=?',[$package])->fetchColumn();
+        if (!$shipment) { throw new Failure(404,'SHIPMENT_NOT_FOUND','Shipment not found.'); }
+        $row=$this->sender($user,(string)$shipment);
+        $this->localShipment($row);
+        if ((string)$row['package_id']!==$package || $row['order_status']!=='READY' || $row['payment_status']!=='PAID'
+            || $row['package_state']!=='CREATED' || $row['custodian_type']!=='SENDER' || $row['custodian_ref']!==$user
+            || (int)$row['has_label']!==1 || !in_array($row['size_class'],['SMALL','MEDIUM','LARGE'],true)) {
+            throw new Failure(409,'ORIGIN_DEPOSIT_UNAVAILABLE','This parcel is not ready for origin deposit.');
+        }
+        $base=$this->q("SELECT q.policy_version FROM payments p JOIN pricing_quotes q ON q.id=p.quote_id
+            WHERE p.shipment_id=? AND p.status='PAID' AND q.policy_version LIKE 'SIZE-%' ORDER BY p.id LIMIT 1",[$shipment])->fetchColumn();
+        if (!$base || !preg_match('/^SIZE-([1-9][0-9]*)$/D',$base,$match)) {
+            throw new Failure(409,'RATE_POLICY_UNAVAILABLE','The original size rate card is unavailable.');
+        }
+        $rules=$this->q("SELECT rules FROM pricing_policies WHERE organization_id=? AND code='PHASE1_SIZE' AND version=?",[$this->org(),$match[1]])->fetchColumn();
+        if (!$rules) { throw new Failure(409,'RATE_POLICY_UNAVAILABLE','The original size rate card is unavailable.'); }
+        $classes=json_decode($rules,true,512,JSON_THROW_ON_ERROR)['classes'];
+        $paid=(int)$this->q("SELECT COALESCE(sum(amount_cents),0) FROM payments WHERE shipment_id=? AND status='PAID'",[$shipment])->fetchColumn();
+        $order=['SMALL'=>0,'MEDIUM'=>1,'LARGE'=>2];
+        $options=[];
+        foreach ($classes as $class) {
+            if (!isset($order[$class['code']]) || $order[$class['code']]<$order[$row['size_class']]) { continue; }
+            $options[]=['size_class'=>$class['code'],'additional_amount_cents'=>max(0,(int)$class['amount_cents']-$paid),
+                'max_width_mm'=>(int)$class['max_width_mm'],'max_height_mm'=>(int)$class['max_height_mm'],
+                'max_depth_mm'=>(int)$class['max_depth_mm'],'max_weight_g'=>(int)$class['max_weight_g']];
+        }
+        return ['package_id'=>$package,'current_size_class'=>$row['size_class'],'policy_version'=>$base,'currency'=>'USD',
+            'options'=>$options,'development_only'=>true,'door_authorized'=>false];
+    }
+    public function originUpgradeQuote(string $user,string $package,array $input,string $key,string $match): array {
+        self::id($package);
+        Input::fields($input,['target_size_class','width_mm','height_mm','depth_mm','weight_g']);
+        if (!is_string($input['target_size_class']) || !in_array($input['target_size_class'],['MEDIUM','LARGE'],true)) {
+            throw new Failure(422,'INVALID_SIZE','Choose a larger supported size.');
+        }
+        foreach (['width_mm','height_mm','depth_mm','weight_g'] as $field) {
+            if (!is_int($input[$field]) || $input[$field]<1 || $input[$field]>1000000) { throw new Failure(422,'INVALID_PACKAGE','Enter the measured parcel dimensions and weight.'); }
+        }
+        $shipment=$this->q('SELECT shipment_id FROM packages WHERE id=?',[$package])->fetchColumn();
+        if (!$shipment) { throw new Failure(404,'SHIPMENT_NOT_FOUND','Shipment not found.'); }
+        return $this->once($user,'origin-upgrade-quote:'.$package,$key,[$input,$match],fn()=>$this->sender($user,(string)$shipment),function () use ($user,$package,$shipment,$input,$match) {
+            $row=$this->sender($user,(string)$shipment,true); $this->version($row,$match);
+            $preview=$this->originSizeOptions($user,$package);
+            if ($this->q("SELECT 1 FROM locker_sessions WHERE package_id=? AND action='ORIGIN_DEPOSIT' AND status IN ('READY','OPEN','CLOSED','UNKNOWN')",[$package])->fetchColumn()) {
+                throw new Failure(409,'DEPOSIT_SESSION_ACTIVE','Finish or reconcile the origin session before changing size.');
+            }
+            $options=array_column($preview['options'],null,'size_class');
+            $choice=$options[$input['target_size_class']] ?? null;
+            if (!$choice || $choice['size_class']===$row['size_class']) { throw new Failure(422,'INVALID_SIZE','Only a size upgrade is supported at origin.'); }
+            foreach (['width_mm','height_mm','depth_mm','weight_g'] as $field) {
+                if ($input[$field]>$choice['max_'.$field]) { throw new Failure(422,'PACKAGE_TOO_LARGE','The parcel exceeds this size class.'); }
+            }
+            foreach ([$row['origin_location_id'],$row['destination_location_id']] as $location) {
+                $fits=$this->q('SELECT 1 FROM compartments c JOIN lockers k ON k.id=c.locker_id WHERE k.location_id=? AND c.width_mm>=? AND c.height_mm>=? AND c.depth_mm>=? AND c.max_weight_g>=? LIMIT 1',[$location,$input['width_mm'],$input['height_mm'],$input['depth_mm'],$input['weight_g']])->fetchColumn();
+                if (!$fits) { throw new Failure(422,'PACKAGE_TOO_LARGE','No compatible compartment exists on this route.'); }
+            }
+            $quote=$this->q("INSERT INTO pricing_quotes(shipment_id,policy_version,amount_cents,expires_at,shipment_version,purpose,target_size_class,measured_width_mm,measured_height_mm,measured_depth_mm,measured_weight_g)
+                VALUES (?,?,?,now()+interval '15 minutes',?,'ORIGIN_UPGRADE',?,?,?,?,?) RETURNING id,expires_at",
+                [$shipment,$preview['policy_version'],$choice['additional_amount_cents'],$row['version'],$choice['size_class'],$input['width_mm'],$input['height_mm'],$input['depth_mm'],$input['weight_g']])->fetch(PDO::FETCH_ASSOC);
+            $this->event($user,$row,'ORIGIN_SIZE_UPGRADE_QUOTED');
+            return ['quote_id'=>(string)$quote['id'],'package_id'=>$package,'target_size_class'=>$choice['size_class'],
+                'additional_amount_cents'=>$choice['additional_amount_cents'],'currency'=>'USD','policy_version'=>$preview['policy_version'],
+                'expires_at'=>gmdate('c',strtotime($quote['expires_at'])),'development_only'=>true,'door_authorized'=>false];
+        });
+    }
+    public function originUpgradePayment(string $user,string $package,array $input,string $key,string $match): array {
+        self::id($package); Input::fields($input,['quote_id']); self::id($input['quote_id']);
+        $shipment=$this->q('SELECT shipment_id FROM packages WHERE id=?',[$package])->fetchColumn();
+        if (!$shipment) { throw new Failure(404,'SHIPMENT_NOT_FOUND','Shipment not found.'); }
+        $result=$this->once($user,'origin-upgrade-payment:'.$package,$key,[$input,$match],fn()=>$this->sender($user,(string)$shipment),function () use ($user,$package,$shipment,$input,$match) {
+            $row=$this->sender($user,(string)$shipment,true); $this->version($row,$match);
+            $this->originSizeOptions($user,$package);
+            if ($this->q("SELECT 1 FROM locker_sessions WHERE package_id=? AND action='ORIGIN_DEPOSIT' AND status IN ('READY','OPEN','CLOSED','UNKNOWN')",[$package])->fetchColumn()) {
+                throw new Failure(409,'DEPOSIT_SESSION_ACTIVE','Finish or reconcile the origin session before changing size.');
+            }
+            $quote=$this->q("SELECT * FROM pricing_quotes WHERE id=? AND shipment_id=? AND purpose='ORIGIN_UPGRADE' AND shipment_version=? AND expires_at>now() FOR UPDATE",[$input['quote_id'],$shipment,$row['version']])->fetch(PDO::FETCH_ASSOC);
+            if (!$quote) { throw new Failure(409,'QUOTE_EXPIRED','Request a new origin upgrade quote.'); }
+            $order=['SMALL'=>0,'MEDIUM'=>1,'LARGE'=>2];
+            if ($order[$quote['target_size_class']]<=$order[$row['size_class']] || (int)$quote['amount_cents']<=0) { throw new Failure(409,'UPGRADE_UNAVAILABLE','This parcel does not need that upgrade.'); }
+            if ($this->q("SELECT 1 FROM payments p JOIN pricing_quotes q ON q.id=p.quote_id WHERE p.shipment_id=? AND p.status='PENDING' AND q.purpose='ORIGIN_UPGRADE' LIMIT 1",[$shipment])->fetchColumn()) {
+                throw new Failure(409,'PAYMENT_PENDING','An origin upgrade checkout is already pending.');
+            }
+            $provider=getenv('PAYMENT_PROVIDER') ?: 'LOCAL_TEST';
+            if (!in_array($provider,['LOCAL_TEST','AUTHORIZE_NET_SANDBOX'],true) || ($provider==='AUTHORIZE_NET_SANDBOX' && !\Zpx\Payments\AuthorizeNet::configured())) {
+                throw new Failure(503,'PAYMENT_NOT_CONFIGURED','Origin upgrade checkout is unavailable.');
+            }
+            $reference=$provider==='LOCAL_TEST'?'LOCAL-'.Secrets::uuid():'ZP'.strtoupper(bin2hex(random_bytes(9)));
+            $payment=(string)$this->q("INSERT INTO payments(shipment_id,provider,provider_reference,amount_cents,status,quote_id) VALUES (?,?,?,?,'PENDING',?) RETURNING id",[$shipment,$provider,$reference,$quote['amount_cents'],$quote['id']])->fetchColumn();
+            $this->event($user,$row,'ORIGIN_SIZE_UPGRADE_CHECKOUT_STARTED');
+            return ['payment_id'=>$payment];
+        });
+        return (new \Zpx\Payments\HostedCheckout($this->db,$this->crypto))->prepare($user,$result['payment_id']);
+    }
     public function searchPackages(string $user,string $query): array {
         $query=trim(Input::text($query,1,100));
         $values=[$this->org()];
@@ -281,7 +377,7 @@ final class Service
         $result=$this->once($user,'payment:'.$id,$key,[$input,$match],fn()=>$this->sender($user,$id),function () use ($user,$id,$input,$match) {
             $row=$this->sender($user,$id,true); $this->localShipment($row); $this->version($row,$match);
             if ($row['order_status']!=='DRAFT' || !in_array($row['payment_status'],['UNPAID','FAILED'],true)) { throw new Failure(409,'PAYMENT_UNAVAILABLE','This shipment cannot start a checkout.'); }
-            $quote=$this->q("SELECT * FROM pricing_quotes WHERE id=? AND shipment_id=? AND shipment_version=? AND expires_at>now() AND policy_version LIKE 'SIZE-%'",[$input['quote_id'],$id,$row['version']])->fetch(PDO::FETCH_ASSOC);
+            $quote=$this->q("SELECT * FROM pricing_quotes WHERE id=? AND shipment_id=? AND shipment_version=? AND expires_at>now() AND purpose='SHIPMENT' AND policy_version LIKE 'SIZE-%'",[$input['quote_id'],$id,$row['version']])->fetch(PDO::FETCH_ASSOC);
             if (!$quote) { throw new Failure(409,'QUOTE_EXPIRED','Request a new quote before checkout.'); }
             $provider=getenv('PAYMENT_PROVIDER') ?: 'LOCAL_TEST';
             if (!in_array($provider,['LOCAL_TEST','AUTHORIZE_NET_SANDBOX'],true)) { throw new Failure(503,'PAYMENT_NOT_CONFIGURED','Unsupported development payment provider.'); }
@@ -301,13 +397,26 @@ final class Service
         if (!$id) { throw new Failure(404,'PAYMENT_NOT_FOUND','Payment not found.'); }
         return $this->once($user,'test-payment:'.$payment,$key,$input,fn()=>$this->sender($user,$id),function () use ($user,$id,$payment,$input) {
             $row=$this->sender($user,$id,true); $this->localShipment($row);
-            $pay=$this->q('SELECT p.*,q.expires_at FROM payments p JOIN pricing_quotes q ON q.id=p.quote_id WHERE p.id=? FOR UPDATE OF p',[$payment])->fetch(PDO::FETCH_ASSOC);
-            if ($pay['provider']!=='LOCAL_TEST' || $pay['status']!=='PENDING' || $row['order_status']!=='DRAFT' || $row['payment_status']!=='PENDING') { throw new Failure(409,'PAYMENT_UNAVAILABLE','This test checkout is no longer pending.'); }
+            $pay=$this->q('SELECT p.*,q.expires_at,q.purpose,q.shipment_version,q.target_size_class,q.measured_width_mm,q.measured_height_mm,q.measured_depth_mm,q.measured_weight_g FROM payments p JOIN pricing_quotes q ON q.id=p.quote_id WHERE p.id=? FOR UPDATE OF p',[$payment])->fetch(PDO::FETCH_ASSOC);
+            $upgrade=$pay && $pay['purpose']==='ORIGIN_UPGRADE';
+            if (!$pay || $pay['provider']!=='LOCAL_TEST' || $pay['status']!=='PENDING'
+                || ($upgrade ? ($row['order_status']!=='READY' || $row['payment_status']!=='PAID' || $row['package_state']!=='CREATED' || (int)$row['version']!==(int)$pay['shipment_version'])
+                    : ($row['order_status']!=='DRAFT' || $row['payment_status']!=='PENDING'))) {
+                throw new Failure(409,'PAYMENT_UNAVAILABLE','This test checkout is no longer pending.');
+            }
             $status=$input['outcome']==='SUCCEEDED' && strtotime($pay['expires_at'])>time()?'PAID':'FAILED';
             $this->q('UPDATE payments SET status=? WHERE id=?',[$status,$payment]);
-            $this->q("UPDATE shipments SET payment_status=?,order_status=?,version=version+1 WHERE id=?",[$status,$status==='PAID'?'READY':'DRAFT',$id]);
+            if ($upgrade) {
+                if ($status==='PAID') {
+                    $this->q('UPDATE packages SET size_class=?,width_mm=?,height_mm=?,depth_mm=?,weight_g=?,version=version+1 WHERE id=?',
+                        [$pay['target_size_class'],$pay['measured_width_mm'],$pay['measured_height_mm'],$pay['measured_depth_mm'],$pay['measured_weight_g'],$row['package_id']]);
+                    $this->q('UPDATE shipments SET version=version+1 WHERE id=?',[$id]);
+                }
+            } else {
+                $this->q("UPDATE shipments SET payment_status=?,order_status=?,version=version+1 WHERE id=?",[$status,$status==='PAID'?'READY':'DRAFT',$id]);
+            }
             $this->q("INSERT INTO payment_events(provider,provider_event_id,payment_id,payload_reference) VALUES ('LOCAL_TEST',?,?,?)",['local-confirm-'.$payment,$payment,'Local test adapter: '.$status]);
-            $this->event($user,$row,$status==='PAID'?'TEST_PAYMENT_CONFIRMED':'TEST_PAYMENT_FAILED');
+            $this->event($user,$row,$upgrade ? ($status==='PAID'?'ORIGIN_SIZE_UPGRADE_PAID':'ORIGIN_SIZE_UPGRADE_FAILED') : ($status==='PAID'?'TEST_PAYMENT_CONFIRMED':'TEST_PAYMENT_FAILED'));
             return ['payment_id'=>$payment,'provider_session_reference'=>$pay['provider_reference'],'status'=>$status,'development_only'=>true];
         });
     }

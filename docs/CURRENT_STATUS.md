@@ -1,105 +1,54 @@
 # Current Development Status
 
-> Shared checkpoint for Codex, Qwen Code, and human developers. Hard limit: 200 lines.
+> Shared handoff for Codex, Qwen Code and human developers. Hard limit: 200 lines.
 
-## Last Updated
+## Current objective and baseline
 
-Date: 2026-09-26
-Agent: Codex
-Checkpoint: Customer Shipment Initialization E2E and the portal/driver follow-up are implemented and verified in development. PR #19 should merge first, then PR #20. Next feature lane is origin locker deposit with size reconciliation.
+- Date: 2026-09-26. Agent: Codex.
+- Branch: `codex/origin-deposit`, based on merged `main` at `b1fafa7` (PR #20; PR #19 merged at `cb93711`). Latest feature commit: `8e63b25 feat(origin): add test deposit and paid size upgrades`.
+- PR: [#21](https://github.com/zipcodexpress/ZPX_Delivery/pull/21). Origin size-adjustment payment and the **development-only** virtual deposit workflow are implemented and locally validated; review/merge remains with the human developer.
+- Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` are preserved and must not be staged.
+- Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended terminal; old Windows terminal is reference only.
 
-## Branch / Baseline
+## Implemented baseline
 
-- Active local integration branch: `codex/portal-driver-followup`, based on `main` at `b0f7134` and containing `codex/customer-init-phase1` for conflict-free sequential merging.
-- Feature baseline: `b74a0f1` — merge of PR #18 (`feat(driver): enforce scanned outbound load before departure`) on 2026-09-24.
-- PR #18 is merged. Do not treat `feature/P4.2-outbound-driver-delivery` as the active baseline.
-- Branch started from `main` at `b0f7134`. Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` were preserved.
-- Local checkout is the working source of truth during development; push reviewed milestones to GitHub so `main` remains the shared remote baseline.
-- Platform baseline: PostgreSQL + ThinkPHP 8 + React. New terminal direction is Android; old Windows terminal is reference-only.
+- Customer registration/contact verification, sender-as-recipient, encrypted recipient snapshot, shipment creation, size policy, server-confirmed development payment, stable SI and primary label/PDF.
+- Driver inbound pickup/custody, hub independent receiving and discrepancies, operations custody timeline, hub staging/dispatch and exact outbound load/departure gate. Customer/driver/hub portal follow-ups from PR #19/#20 are merged.
+- Synthetic destination deposit/pickup demo outcomes are assumptions, not device evidence.
 
-## DONE — do not redesign without a demonstrated regression
+## Current branch milestone
 
-- PostgreSQL migration/seed/test foundation, scoped identities and authorization.
-- Shipment/payment sandbox, SI/label and customer tracking foundations.
-- Driver management and individual inbound pickup/custody transfer.
-- Hub independent receiving and SHORT/DAMAGED/EXTRA discrepancy workflow.
-- Operations package search and authoritative custody timeline.
-- Hub staging/dispatch workspace and canonical resolve/scan normalization.
-- P4.2 outbound manifest freeze, individual package load scans, hub-to-driver custody transfer, ordered stop groups and exact departure gate.
-- Acceptance scenario: 10 packages grouped 6 + 4; 9 unique scans plus a duplicate cannot depart; tenth unique accepted scan enables departure.
-- Legacy bulk outbound-load bypass removed.
+- Sender-only origin size options and upgrade quotes use the original paid `PHASE1_SIZE` rate-card version. Measured parcel dimensions must fit the requested class and both route endpoints. Only SMALL→MEDIUM/LARGE and MEDIUM→LARGE are accepted.
+- A separate price-difference checkout uses the existing LOCAL_TEST or Authorize.net sandbox provider. Pending/failed adjustment leaves the parcel in its original class and sender custody; confirmed payment updates size, dimensions and versions before any larger virtual door can open. Migration 018 extends `pricing_quotes` additively.
+- Seed creates distinct `SIM-*` virtual compartments and simulated devices. Existing physical demo compartments remain `FROZEN`; no real door address is invented or commanded.
+- Development-only origin session validates the sender, paid and labeled shipment, exact origin, active label, package version and compatible virtual claim. It journals a command, accepts correlated synthetic open/close or unknown events, then requires sender attestation before `CREATED → AT_ORIGIN` and locker custody. Unknown outcome never auto-reopens or transfers custody.
+- Confirmed virtual deposit appends scan/custody/package events with `synthetic_simulation=true` and `physical_hardware_verified=false`, occupies the claim and creates one OPEN pickup demand (migration 019). The test flow is available in the customer portal with explicit simulation labels.
+- The canonical flow document states that virtual evidence does not complete production Step C. Android terminal enrollment, authenticated real telemetry, commissioning and a supervised pilot remain required for real deposits.
 
-## DONE — Customer Shipment Initialization E2E development milestone
+## Validation and current limitations
 
-- Baseline gap audit is in `docs/CUSTOMER_INITIALIZATION_AUDIT.md`.
-- Recipient address is encrypted in the existing contact snapshot; "Send to myself" uses the account's verified contacts and profile address, and self-recipient access is linked at creation.
-- New shipments persist SMALL/MEDIUM/LARGE. An organization-scoped, versioned `PHASE1_SIZE` database policy publishes interior limits and $1/$2/$3 development rates; server validation and quote use it. Existing legacy packages keep a nullable class for compatibility.
-- SI is issued once at shipment creation. The existing payment and PDF/QR label flow remains in use. Paid and actively labeled parcels show `READY_FOR_ORIGIN_DEPOSIT`; payment alone shows `LABEL_REQUIRED`.
-- Synthetic fixture now has frozen LARGE compartments and non-real profile addresses; reseeding existing local fixtures adds missing data without replacing credentials or existing addresses.
-- Running local stack has migration 017 and reseeded synthetic data. Customer browser flow confirmed form, draft, SI, published limits and $1 quote. The sandbox checkout provider rejected the external checkout request; the pending session is visible and retryable in the portal. Do not report a live sandbox payment as verified.
+- Disposable `npm run test-db` passed after the active-session and revoked-label gates. It covers upgrade pricing/payment, wrong site/label, CSRF, version fences, open/close/attestation, idempotent replay, unknown door, expired unopened claim recovery and production-mode refusal.
+- `npm run check` passed: 82 OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps.
+- Isolated `npm run test-e2e` passed all 5 browser tests, including size-difference payment resumption after reload and virtual origin deposit. The test stack forces LOCAL_TEST payment and is removed afterward.
+- No physical hardware was used or verified. Configured live local Authorize.net sandbox checkout previously returned a provider error; the local test adapter is verified, but provider troubleshooting remains separate.
+- The virtual door events are generated by the development API adapter; the standalone Node locker simulator and Android terminal are not yet integrated with these sessions. Real device telemetry and sandbox upgrade capture need separate validation.
+- Local validation and PR creation are complete. Check PR CI/review feedback before merge; no physical hardware validation was performed.
 
-## NEXT
+## Next development after this PR
 
-1. Origin deposit + size reconciliation: audit current locker/device API and `Custody` model, then implement app/locker pairing, label scan, compatible compartment reservation, SMALL→MEDIUM/LARGE or MEDIUM→LARGE upgrade with price-difference payment before a larger door opens, then evidence-backed `AT_ORIGIN`.
-2. Pickup Demand / Driver Offer: create demand from `AT_ORIGIN`, notify nearby AVAILABLE drivers, atomic acceptance, multi-locker inbound run assembly.
-3. Reuse existing P3/P4 inbound/hub/outbound custody flow.
-4. P5 final destination deposit.
-5. Recipient notification/pickup and return/reconciliation.
-6. Android terminal/hardware integration and supervised pilot.
+1. Pickup Demand / Driver Offer: aggregate OPEN demands by origin/hub/window, expose nearby AVAILABLE drivers, atomic offer acceptance and multi-locker inbound run assembly. Reuse existing P3/P4 custody and route code.
+2. Real origin terminal path: independent enrolled-device authentication, ownership generation and physical address enforcement, delayed/ambiguous evidence reconciliation and supervised hardware pilot. Never treat development adapter events as real device evidence.
+3. P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 
-## Validation
+## Critical rules
 
-- `npm run test-db` passed on disposable PostgreSQL; includes new self-recipient, all three size prices/limits, SI stability, `LABEL_REQUIRED` and `READY_FOR_ORIGIN_DEPOSIT`, plus existing custody/payment suites.
-- `npm run check` passed with 74 canonical API operations and 9 Node tests when loopback binding was permitted; `npm run build` passed for both web apps.
-- Changed PHP syntax checks and `git diff --check` passed. Local `up` smoke passed for API, customer, operations, proxies and simulator.
-- Browser test used the synthetic customer at `http://localhost:5173/`; draft creation and quote passed. Configured `AUTHORIZE_NET_SANDBOX` returned a generic provider error before payment. The external sandbox response/credentials require separate investigation; local test adapter integration passed.
+- Physical eligibility depends on package state, custody, active manifest/session and version, not scan-event count alone.
+- Each handoff is package-specific, scoped and idempotent; wrong actor, locker, destination, revoked label or stale version fails closed.
+- Hardware ambiguity never becomes automatic completion or automatic reopen.
+- `docs/phase1_END_TO_END_DELIVERY_FLOW.md` is the canonical product flow. Keep this status concise and update it at handoffs.
 
-## Critical invariants
+## Local development
 
-- Current package custody plus authoritative manifest state determines physical eligibility; scan-event count alone is insufficient.
-- Every physical handoff is package-specific, scoped, version checked and idempotent.
-- Wrong driver/run/hub/destination/off-manifest/revoked/stale requests fail closed.
-- Hardware ambiguity never becomes automatic delivery completion or automatic reopen.
-- P5 final deposit and recipient pickup must extend the existing custody timeline so operations can always answer where a package is and who holds custody.
-- Route optimization, dashboard polishing and broad noncritical CRUD are not the current critical path.
-
-## Important Files
-
-- `apps/api/src/Custody/Service.php`
-- `apps/api/src/HubDispatch/Service.php`
-- `apps/api/src/Http/DriverController.php`
-- `apps/api/route/api.php`
-- `apps/api/tests/hub-dispatch.php`
-- `packages/ui/DriverWorkspace.tsx`
-- `docs/PHASE1_REMAINING_WORK.md`
-- `docs/PROGRESS.md`
-
-## Local Notes
-
-- Start: `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py up`
-- Operations: `http://localhost:5174` · Customer: `http://localhost:5173` · API: `http://localhost:8000`
-- Seed/re-seed: `python3 scripts/dev.py seed`; DRIVER-IN labels are `TEST-LABEL-001`…`005`.
-- `scripts/dev.py test-db` uses a unique disposable Docker stack and preserves dev volumes.
-- Before ending a substantial Codex/Qwen session, update this file with completed work, verification, blockers and the exact next action.
-- A browser test left one development-only pending sandbox payment on `ZPX-ORDER-E3D16499A1B0F728AB8B54BA`. It made no confirmed charge. Inspect/reconcile before any repeat checkout on that order.
-
-## Product-flow correction — 2026-09-26
-
-Canonical business flow: [phase1_END_TO_END_DELIVERY_FLOW.md](phase1_END_TO_END_DELIVERY_FLOW.md).
-
-Before proceeding as if P5 were the only remaining feature lane, incorporate:
-- P2.3 size-only SMALL/MEDIUM/LARGE pricing, published dimensions and origin size-upgrade payment difference;
-- P3.0 Pickup Demand / Driver Offer, nearby-driver availability/offers and multi-locker inbound run assembly.
-
-P4.2 outbound load/departure remains the implemented feature baseline.
-
-Sender may equal recipient. A sender-as-recipient may intentionally share a one-time pickup grant with a trusted friend; SI remains public tracking identity and never opens a locker.
-
-Preferred-route / rideshare-style matching is future Phase 2+.
-
-## Portal and outbound follow-up branch — 2026-09-26
-
-- Agent: Codex. Branch: `codex/portal-driver-followup`, based on `main` at `b0f7134`. This clean branch carries the seven post-PR-#18 portal/driver commits from `feature/P4.2-outbound-driver-delivery` without reverting the newer canonical Phase 1 planning documents. PR #19 is merged into this branch locally; merge #19 into `main` before #20.
-- Completed here: scoped driver approvals, hub receiving resume, driver dispatch acceptance and stop-arrival progress, customer tracking for reported arrival, browser regression coverage, and development-only assumed destination/pickup outcomes. Assumed outcomes are fixtures, not evidence of a real locker handoff.
-- Verification on the combined branch: disposable `npm run test-db` passed; `npm run check` passed (76 API operations and 9 Node tests); `npm run build` passed; isolated `npm run test-e2e` passed all four browser tests; `git diff --check` passed.
-- Exact next action after review/merge of this branch and PR #19: start origin deposit and size-upgrade payment on a new branch from updated `main`. Do not infer completed physical delivery from the synthetic outcome fixtures.
+- Start: `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py up`; customer `http://localhost:5173`, operations `http://localhost:5174`, API `http://localhost:8000`.
+- Seed/reseed: `python3 scripts/dev.py seed`. Disposable tests preserve local development volumes.
+- One prior browser run left a development-only pending sandbox payment on `ZPX-ORDER-E3D16499A1B0F728AB8B54BA`, with no confirmed charge. Reconcile it before retrying checkout on that order.
