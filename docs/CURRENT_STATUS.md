@@ -108,3 +108,9 @@ Sender may equal recipient. A sender-as-recipient may intentionally share a one-
 
 Preferred-route / rideshare-style matching is future Phase 2+.
 
+## Portal and outbound follow-up branch — 2026-09-26
+
+- Agent: Codex. Branch: `codex/portal-driver-followup`, based on `main` at `b0f7134`. This clean branch carries the seven post-PR-#18 portal/driver commits from `feature/P4.2-outbound-driver-delivery` without reverting the newer canonical Phase 1 planning documents. It is separate from customer initialization PR #19.
+- Completed here: scoped driver approvals, hub receiving resume, driver dispatch acceptance and stop-arrival progress, customer tracking for reported arrival, browser regression coverage, and development-only assumed destination/pickup outcomes. Assumed outcomes are fixtures, not evidence of a real locker handoff.
+- Verification on this branch: disposable `npm run test-db` passed; `npm run check` passed (76 API operations and 9 Node tests); `npm run build` passed; isolated `npm run test-e2e` passed all four browser tests; `git diff --check` passed.
+- Exact next action after review/merge of this branch and PR #19: start origin deposit and size-upgrade payment on a new branch from updated `main`. Do not infer completed physical delivery from the synthetic outcome fixtures.

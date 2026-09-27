@@ -35,3 +35,18 @@ jobs:
         run: python3 scripts/dev.py logs
       - if: always()
         run: python3 scripts/dev.py down
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install chromium --with-deps
+      - run: python3 scripts/dev.py init
+      - run: npm run test-e2e

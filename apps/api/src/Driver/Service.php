@@ -81,7 +81,7 @@ final class Service
             $scope = 'driver:' . $this->org() . ':approve';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
-            $driver = $this->q('SELECT * FROM drivers WHERE id=? AND organization_id=(SELECT organization_id FROM users WHERE id=?) FOR UPDATE', [$driverId, $adminUser])->fetch(PDO::FETCH_ASSOC);
+            $driver = $this->q('SELECT d.* FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.id=? AND u.organization_id=? FOR UPDATE OF d', [$driverId, $this->org()])->fetch(PDO::FETCH_ASSOC);
             if (!$driver) {
                 throw new Failure(404, 'DRIVER_NOT_FOUND', 'Driver not found.');
             }
@@ -93,6 +93,11 @@ final class Service
             }
 
             $this->q("UPDATE drivers SET status='ACTIVE', approved_at=now(), approved_by=? WHERE id=?", [$adminUser, $driverId]);
+            $this->q("INSERT INTO roles(code) VALUES ('DRIVER') ON CONFLICT(code) DO NOTHING");
+            $this->q("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,granted_by)
+                      SELECT ?,r.id,?,? FROM roles r WHERE r.code='DRIVER'
+                      AND NOT EXISTS (SELECT 1 FROM scoped_role_grants g WHERE g.user_id=? AND g.role_id=r.id AND g.organization_id=? AND g.location_id IS NULL AND (g.expires_at IS NULL OR g.expires_at>now()))",
+                [$driver['user_id'], $this->org(), $adminUser, $driver['user_id'], $this->org()]);
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'DRIVER_APPROVED','driver',?)", [$adminUser, $driverId]);
 
             return ['driver_id' => $driverId, 'user_id' => $driver['user_id'], 'status' => 'ACTIVE'];
@@ -111,7 +116,7 @@ final class Service
             $scope = 'driver:' . $this->org() . ':reject';
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))', [$scope . ':' . $key]);
 
-            $driver = $this->q('SELECT * FROM drivers WHERE id=? FOR UPDATE', [$driverId])->fetch(PDO::FETCH_ASSOC);
+            $driver = $this->q('SELECT d.* FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.id=? AND u.organization_id=? FOR UPDATE OF d', [$driverId, $this->org()])->fetch(PDO::FETCH_ASSOC);
             if (!$driver) {
                 throw new Failure(404, 'DRIVER_NOT_FOUND', 'Driver not found.');
             }
@@ -454,9 +459,9 @@ final class Service
                     u.display_name
              FROM drivers d
              JOIN users u ON u.id=d.user_id
-             WHERE d.status='PENDING'
+             WHERE d.status='PENDING' AND u.organization_id=?
              ORDER BY d.applied_at DESC",
-            []
+            [$this->org()]
         )->fetchAll(PDO::FETCH_ASSOC);
 
         return ['items' => array_map(fn($r) => [

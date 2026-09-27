@@ -83,7 +83,7 @@ final class Service
         $rows = $this->q(
             "SELECT r.id, r.kind, r.state, r.revision, r.planned_start, r.planned_end, r.departed_at,
                     l.name AS hub_name, v.code AS vehicle_code,
-                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id AND mi.state='EXPECTED') AS expected_count,
+                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id) AS expected_count,
                     (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id AND mi.state='LOADED') AS loaded_count
              FROM route_runs r
              JOIN hubs h ON h.id=r.hub_id
@@ -556,6 +556,47 @@ final class Service
             $this->q("UPDATE hub_slots SET status='AVAILABLE' WHERE id=(SELECT slot_id FROM dispatch_calls WHERE id=?)",[$run['dispatch_call_id']]);
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'RUN_DEPARTED','run',?)",[$user,$runId]);
             $result=['run_id'=>$runId,'kind'=>'OUTBOUND','driver_id'=>$driverId,'hub_id'=>(string)$run['hub_id'],'revision'=>$revision,'state'=>'IN_PROGRESS','stops'=>$this->runStops($runId),'expected_count'=>(int)$counts['expected'],'loaded_count'=>(int)$counts['valid_loaded'],'departed_at'=>$departed];
+            $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at) VALUES (?,?,decode(?,'hex'),200,?,now()+interval '30 days')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]);
+            return $result;
+        });
+    }
+
+    /** Driver-reported arrival only; package custody and delivery state do not change. */
+    public function arriveAtStop(string $user,string $runId,string $stopId,array $input,string $key,string $match=''): array
+    {
+        $this->requireDriver($user);
+        Input::text($runId,1,18); Input::text($stopId,1,18); Input::fields($input,['expected_revision']); Input::text($key,16,100);
+        $revision=(int)$input['expected_revision'];
+        if ($revision<1) { throw new Failure(422,'INVALID_INPUT','expected_revision must be positive.'); }
+        if ($match!=='' && $match!=='"'.$revision.'"') { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision precondition does not match.'); }
+        $driverId=$this->driverId($user);
+        return (new Transaction($this->db))->run(function () use ($user,$driverId,$runId,$stopId,$key,$revision) {
+            $scope='custody:'.$this->org().':'.$user.':stop-arrival';
+            $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))',[$scope.':'.$key]);
+            $hash=$this->crypto->digest('stop-arrival',json_encode(['run_id'=>$runId,'stop_id'=>$stopId,'expected_revision'=>$revision],JSON_THROW_ON_ERROR));
+            $saved=$this->q("SELECT encode(payload_hash,'hex') AS hash,response_body FROM idempotency_records WHERE scope=? AND request_key=?",[$scope,$key])->fetch(PDO::FETCH_ASSOC);
+            if ($saved) { if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was already used for different details.'); } return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR); }
+            $run=$this->q("SELECT id,state,revision,departed_at FROM route_runs WHERE id=? AND driver_id=? AND organization_id=? AND kind='OUTBOUND' FOR UPDATE",[$runId,$driverId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$run) { throw new Failure(404,'RUN_NOT_FOUND','Outbound run not found or not assigned to you.'); }
+            if ((int)$run['revision']!==$revision) { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision changed. Refresh before arrival.'); }
+            if ($run['state']!=='IN_PROGRESS' || $run['departed_at']===null) { throw new Failure(409,'RUN_NOT_DEPARTED','Run must depart before reporting stop arrival.'); }
+            $stop=$this->q('SELECT id,sequence_no,state FROM route_run_stops WHERE id=? AND run_id=? FOR UPDATE',[$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
+            if (!$stop) { throw new Failure(404,'STOP_NOT_FOUND','Stop not found on this run.'); }
+            if ($stop['state']!=='EXPECTED') { throw new Failure(409,'STOP_NOT_EXPECTED','Stop is not awaiting arrival.'); }
+            if ($this->q("SELECT 1 FROM route_run_stops WHERE run_id=? AND sequence_no<? AND state<>'COMPLETED'",[$runId,$stop['sequence_no']])->fetchColumn()) {
+                throw new Failure(409,'STOP_OUT_OF_ORDER','Complete preceding stops before arriving here.');
+            }
+            $counts=$this->q("SELECT COUNT(*) AS expected,COUNT(*) FILTER (WHERE mi.state='LOADED' AND p.state='OUTBOUND_CUSTODY' AND p.custodian_type='DRIVER' AND p.custodian_ref=?) AS in_custody FROM manifest_items mi JOIN packages p ON p.id=mi.package_id WHERE mi.stop_id=? AND mi.run_id=?",[$driverId,$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
+            if ((int)$counts['expected']===0 || (int)$counts['expected']!==(int)$counts['in_custody']) { throw new Failure(409,'STOP_CUSTODY_UNRESOLVED','Every package for this stop must remain in driver custody.'); }
+            $this->q("UPDATE route_run_stops SET state='ARRIVED' WHERE id=?",[$stopId]);
+            $this->q('UPDATE route_runs SET revision=revision+1 WHERE id=?',[$runId]);
+            $packages=$this->q('SELECT package_id FROM manifest_items WHERE run_id=? AND stop_id=?',[$runId,$stopId])->fetchAll(PDO::FETCH_COLUMN);
+            $details=json_encode(['run_id'=>$runId,'stop_id'=>$stopId],JSON_THROW_ON_ERROR);
+            foreach ($packages as $packageId) {
+                $this->q("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,'DRIVER_REPORTED_STOP_ARRIVAL',?,?::jsonb,now())",[$packageId,Secrets::uuid(),$user,$details]);
+            }
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'STOP_ARRIVED','route_run_stop',?)",[$user,$stopId]);
+            $result=['run_id'=>$runId,'stop_id'=>$stopId,'sequence'=>(int)$stop['sequence_no'],'state'=>'ARRIVED','run_revision'=>$revision+1,'packages_in_driver_custody'=>(int)$counts['in_custody']];
             $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at) VALUES (?,?,decode(?,'hex'),200,?,now()+interval '30 days')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]);
             return $result;
         });

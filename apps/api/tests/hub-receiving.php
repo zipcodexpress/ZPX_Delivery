@@ -110,6 +110,7 @@ $session = $hubService->openSession($staffUser, ['hub_id' => $hub, 'inbound_run_
 check($session['state'] === 'OPEN', 'session opened');
 check($session['expected_count'] === 3, 'expected count is 3');
 check($session['received_count'] === 0, 'received count is 0');
+check($hubService->listSessions($staffUser)['items'][0]['session_id'] === $session['receiving_session_id'], 'open receiving session is discoverable for resume');
 
 // Test 2: Cannot open duplicate session for same run
 failsIdentity(fn() => $hubService->openSession($staffUser, ['hub_id' => $hub, 'inbound_run_id' => $run], Secrets::uuid()), 409, 'duplicate session rejected');

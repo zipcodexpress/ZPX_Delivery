@@ -10,7 +10,7 @@ use Zpx\Infrastructure\Database\Connection;
 
 final class DriverController
 {
-    public static function handle(Request $request, string $action, string $runId = ''): Response
+    public static function handle(Request $request, string $action, string $runId = '', string $stopId = ''): Response
     {
         $requestId = Secrets::uuid();
         try {
@@ -22,6 +22,7 @@ final class DriverController
                 'resolve' => 'POST',
                 'scan' => 'POST',
                 'depart' => 'POST',
+                'arrive' => 'POST',
                 default => 'GET',
             };
             if ($method !== $expected) { throw new Failure(405, 'METHOD_NOT_ALLOWED', 'Unsupported method.'); }
@@ -75,6 +76,7 @@ final class DriverController
                     ? $custody->outboundLoadScan($user, $runId, $input, $key, $request->header('if-match',''))
                     : $custody->inboundPickupScan($user, $runId, $input, $key, $request->header('if-match','')),
                 'depart' => $custody->departRun($user, $runId, $input, $key, $request->header('if-match','')),
+                'arrive' => $custody->arriveAtStop($user, $runId, $stopId, $input, $key, $request->header('if-match','')),
             };
 
             return Reply::json(200, $body, $requestId);

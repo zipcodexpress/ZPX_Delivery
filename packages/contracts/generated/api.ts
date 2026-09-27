@@ -912,6 +912,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{run_id}/stops/{stop_id}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assigned outbound driver reports arrival at the next ordered stop without transferring custody. */
+        post: operations["driver_arrive_at_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{run_id}/complete": {
         parameters: {
             query?: never;
@@ -939,7 +956,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List assigned inbound runs ready to open or resume at the hub. */
+        get: operations["hub_receiving_list_sessions"];
         put?: never;
         /**
          * Hub receiver opens intake for expected inbound run.
@@ -5431,6 +5449,55 @@ export interface operations {
             };
         };
     };
+    driver_arrive_at_stop: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+                /** @description Required for browser cookie authentication. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                run_id: string;
+                stop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunAction"];
+            };
+        };
+        responses: {
+            /** @description Arrival recorded; packages remain in driver custody */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        run_id: string;
+                        stop_id: string;
+                        sequence: number;
+                        /** @enum {string} */
+                        state: "ARRIVED";
+                        run_revision: number;
+                        packages_in_driver_custody: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     delivery_25__runs_run_id_complete: {
         parameters: {
             query?: never;
@@ -5526,6 +5593,53 @@ export interface operations {
             };
             /** @description Structured error */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    hub_receiving_list_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available inbound runs and open receiving sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            run_id: string;
+                            hub_id: string;
+                            session_id: string | null;
+                            status: string | null;
+                            expected_count: number;
+                            received_count: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Hub access denied */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

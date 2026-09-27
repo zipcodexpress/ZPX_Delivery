@@ -9,6 +9,7 @@ type ReceivingSession = {
   short_count?: number;
   damaged_count?: number; extra_count?: number;
 };
+type AvailableRun = { run_id: string; hub_id: string; session_id: string | null; status: string | null; expected_count: number; received_count: number };
 type ScanResult = {
   package_id: string; package_version: number; state: string;
   result_code: string; received_count: number; expected_count: number;
@@ -19,8 +20,7 @@ type Discrepancy = { id: string; package_id: string; run_id: string | null; publ
 
 export function HubReceiving({ profile, onLogout, embedded = false, show = 'all' }: { profile: components['schemas']['Profile']; onLogout: () => void; embedded?: boolean; show?: 'all' | 'receiving' | 'exceptions' }) {
   const [session, setSession] = useState<ReceivingSession | null>(null);
-  const [hubId, setHubId] = useState('');
-  const [runId, setRunId] = useState('');
+  const [availableRuns, setAvailableRuns] = useState<AvailableRun[]>([]);
   const [scanInput, setScanInput] = useState('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,22 +34,28 @@ export function HubReceiving({ profile, onLogout, embedded = false, show = 'all'
     try { setDiscrepancies((await api<{ items: Discrepancy[] }>('/hub/receiving-discrepancies')).items); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load discrepancies.'); }
   }, []);
+  const loadRuns = useCallback(async () => {
+    const result = await api<{ items: AvailableRun[] }>('/hub/receiving-sessions');
+    setAvailableRuns(result.items);
+  }, []);
 
   useEffect(() => { void loadDiscrepancies(); }, [loadDiscrepancies]);
+  useEffect(() => { void loadRuns().catch(e => setError(e instanceof Error ? e.message : 'Unable to load receiving runs.')); }, [loadRuns]);
 
-  const openSession = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!hubId.trim() || !runId.trim() || busy) return;
+  async function openSession(run: AvailableRun) {
+    if (busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const result = await api<ReceivingSession>('/hub/receiving-sessions', {
-        hub_id: hubId.trim(), inbound_run_id: runId.trim(),
-      }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      const result = run.session_id
+        ? await api<ReceivingSession>(`/hub/receiving-sessions/${run.session_id}`)
+        : await api<ReceivingSession>('/hub/receiving-sessions', {
+          hub_id: run.hub_id, inbound_run_id: run.run_id,
+        }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       setSession(result);
-      setNotice(`Session opened. ${result.expected_count} packages expected.`);
+      setNotice(`Run ${run.run_id} ready. ${result.received_count}/${result.expected_count} packages received.`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to open session.'); }
     finally { setBusy(false); }
-  }, [hubId, runId, busy, profile.csrf_token]);
+  }
 
   async function scanPackage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,12 +93,14 @@ export function HubReceiving({ profile, onLogout, embedded = false, show = 'all'
       setSession(result);
       setNotice(`Session closed. ${result.received_count}/${result.expected_count} received. ${result.short_count ?? 0} short.`);
       await loadDiscrepancies();
+      await loadRuns();
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to close session.'); }
     finally { setBusy(false); }
   }
 
   function reset() {
     setSession(null); setScanResult(null); setScanInput(''); setError(''); setNotice('');
+    void loadRuns().catch(e => setError(e instanceof Error ? e.message : 'Unable to load receiving runs.'));
   }
 
   async function resolveDiscrepancy(id: string) {
@@ -119,11 +127,11 @@ export function HubReceiving({ profile, onLogout, embedded = false, show = 'all'
       <p className="eyebrow">OPEN RECEIVING SESSION</p>
       <h2>Receive inbound shipment</h2>
       <p className="hub-intro">Open a session to start scanning packages from a driver's inbound run. Each scan transfers custody from the driver to the hub independently.</p>
-      <form onSubmit={openSession}>
-        <label>Hub ID<input value={hubId} onChange={e => setHubId(e.target.value)} placeholder="e.g. 1" disabled={busy} /></label>
-        <label>Inbound Run ID<input value={runId} onChange={e => setRunId(e.target.value)} placeholder="e.g. 1" disabled={busy} /></label>
-        <button type="submit" disabled={busy || !hubId.trim() || !runId.trim()}>{busy ? 'Opening…' : 'Open Session'}</button>
-      </form>
+      <button type="button" disabled={busy} onClick={() => void loadRuns().catch(e => setError(e instanceof Error ? e.message : 'Unable to load receiving runs.'))}>Refresh runs</button>
+      {availableRuns.length === 0 ? <p>No inbound runs ready for receiving.</p> : <ul>{availableRuns.map(run => <li key={run.run_id}>
+        Run {run.run_id} · {run.received_count}/{run.expected_count} received
+        <button type="button" disabled={busy} onClick={() => void openSession(run)}>{run.session_id ? 'Resume session' : 'Open session'}</button>
+      </li>)}</ul>}
     </div> : <div className="hub-card">
       <div className="session-header">
         <div>

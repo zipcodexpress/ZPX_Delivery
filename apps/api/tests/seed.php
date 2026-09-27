@@ -22,6 +22,11 @@ try {
     check((int)$runtime->query("SELECT count(*) FROM locations WHERE organization_id=$org")->fetchColumn() === 21, 'seed creates twenty sites and one hub');
     check((int)$runtime->query("SELECT count(*) FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='CREATED' AND s.payment_status='UNPAID'")->fetchColumn() === 5, 'seed leaves five unpaid parcels with sender');
     check((int)$runtime->query("SELECT count(*) FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='AT_ORIGIN' AND s.payment_status='PAID'")->fetchColumn() === 5, 'seed transitions five parcels to origin for driver pickup');
+    $demo = $runtime->query("SELECT s.public_reference,p.id AS package_id,p.state,p.custodian_type,p.version,s.development_only FROM shipments s JOIN packages p ON p.shipment_id=s.id WHERE s.organization_id=$org AND s.public_reference LIKE 'SYNTHETIC-$seedNamespace-%-DEMO' ORDER BY s.public_reference")->fetchAll(PDO::FETCH_ASSOC);
+    check(count($demo)===2 && array_column($demo,'state')===['AT_DESTINATION','COLLECTED'], 'seed adds separate assumed deposit and pickup history');
+    check(array_column($demo,'custodian_type')===['LOCKER','RECIPIENT'] && array_map('intval',array_column($demo,'version'))===[1,2], 'assumed outcomes have coherent custody projections');
+    check((int)$runtime->query("SELECT count(*) FROM custody_events ce JOIN packages p ON p.id=ce.package_id JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND s.public_reference LIKE 'SYNTHETIC-$seedNamespace-%-DEMO' AND ce.evidence->>'synthetic_fixture'='true' AND ce.evidence->>'device_evidence'='false'")->fetchColumn()===3, 'assumed custody history explicitly disclaims device evidence');
+    check((int)$runtime->query("SELECT count(*) FROM shipment_parties sp JOIN shipments s ON s.id=sp.shipment_id WHERE s.organization_id=$org AND s.public_reference LIKE 'SYNTHETIC-$seedNamespace-%-DEMO' AND sp.party_role='RECIPIENT' AND sp.user_id IS NOT NULL")->fetchColumn()===2, 'recipient can see both assumed outcomes');
     check((int)$runtime->query("SELECT count(*) FROM route_runs WHERE organization_id=$org AND kind='INBOUND' AND state='PUBLISHED'")->fetchColumn() === 1, 'seed creates one published inbound run');
     check((int)$runtime->query("SELECT count(*) FROM manifest_items mi JOIN route_runs r ON r.id=mi.run_id WHERE r.organization_id=$org AND mi.state='EXPECTED'")->fetchColumn() === 5, 'seed creates five expected manifest items');
     $seededPackages = $runtime->query("SELECT p.id FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='AT_ORIGIN' ORDER BY p.id")->fetchAll(PDO::FETCH_COLUMN);
@@ -48,12 +53,17 @@ try {
         putenv($previousOrganization === false ? 'ZPX_ORGANIZATION_ID' : 'ZPX_ORGANIZATION_ID=' . $previousOrganization);
     }
     check($resolved['package_id'] === (string)$seededPackages[0], 'TEST-LABEL-001 resolves to the first seeded DRIVER-IN package');
+    $outboundShift = $runtime->prepare("SELECT COUNT(*) FROM driver_shifts ds JOIN drivers d ON d.id=ds.driver_id JOIN users u ON u.id=d.user_id WHERE u.organization_id=? AND u.external_auth_id=? AND ds.starts_at<=now() AND ds.ends_at>now()");
+    $outboundShift->execute([$org, 'synthetic:' . $seedNamespace . ':DRIVER-OUT']);
+    check((int)$outboundShift->fetchColumn()===1,'seeded outbound driver has an active test shift');
+    check((int)$runtime->query("SELECT count(*) FROM hub_slots hs JOIN hubs h ON h.id=hs.hub_id JOIN locations l ON l.id=h.location_id WHERE l.organization_id=$org AND hs.code IN ('LOT-AUS-004','LOT-AUS-005')")->fetchColumn()===2,'seeded hub has two destination staging slots');
     check((int)$runtime->query("SELECT count(*) FROM compartments c JOIN lockers k ON k.id=c.locker_id JOIN locations l ON l.id=k.location_id WHERE l.organization_id=$org AND c.status='FROZEN'")->fetchColumn() === 40, 'seed does not commission physical doors');
     $runtime->exec("UPDATE users SET display_name='Preserve local edit' WHERE organization_id=$org");
     $runtime->exec("UPDATE package_labels SET token_hash=decode(repeat('ab',32),'hex') WHERE package_id={$seededPackages[0]}");
     $again = $seed->run($fixture);
     check(!$again['created'] && $again['credentials'] === [] && $again['organization_id'] === $org, 'repeat seed preserves credentials without redisplaying');
     check((int)$runtime->query("SELECT count(*) FROM users WHERE organization_id=$org AND display_name='Preserve local edit'")->fetchColumn() === 6, 'repeat seed preserves local edits');
+    check((int)$runtime->query("SELECT count(*) FROM shipments WHERE organization_id=$org AND public_reference LIKE 'SYNTHETIC-$seedNamespace-%-DEMO'")->fetchColumn()===2, 'repeat seed does not duplicate assumed outcomes');
     check((string)$runtime->query("SELECT encode(token_hash,'hex') FROM package_labels WHERE package_id={$seededPackages[0]}")->fetchColumn() === hash('sha256', 'TEST-LABEL-001'), 'repeat seed upgrades a legacy random DRIVER-IN label hash');
 } finally { $runtime->rollBack(); }
 $q = $runtime->prepare('SELECT count(*) FROM organizations WHERE id=?'); $q->execute([$org]);

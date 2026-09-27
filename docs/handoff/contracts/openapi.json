@@ -4294,6 +4294,42 @@
         }
       }
     },
+    "/runs/{run_id}/stops/{stop_id}/arrive": {
+      "post": {
+        "operationId": "driver_arrive_at_stop",
+        "summary": "Assigned outbound driver reports arrival at the next ordered stop without transferring custody.",
+        "parameters": [
+          {"name": "run_id", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "stop_id", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 16, "maxLength": 100}},
+          {"name": "If-Match", "in": "header", "required": true, "schema": {"type": "string"}},
+          {"name": "X-CSRF-Token", "in": "header", "required": false, "description": "Required for browser cookie authentication.", "schema": {"type": "string"}}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RunAction"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Arrival recorded; packages remain in driver custody",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["run_id", "stop_id", "sequence", "state", "run_revision", "packages_in_driver_custody"],
+              "properties": {
+                "run_id": {"type": "string"},
+                "stop_id": {"type": "string"},
+                "sequence": {"type": "integer", "minimum": 1},
+                "state": {"type": "string", "enum": ["ARRIVED"]},
+                "run_revision": {"type": "integer", "minimum": 1},
+                "packages_in_driver_custody": {"type": "integer", "minimum": 1}
+              }
+            }}}
+          },
+          "default": {"description": "Structured error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+        }
+      }
+    },
     "/runs/{run_id}/complete": {
       "post": {
         "operationId": "delivery_25__runs_run_id_complete",
@@ -4443,6 +4479,87 @@
       }
     },
     "/hub/receiving-sessions": {
+      "get": {
+        "operationId": "hub_receiving_list_sessions",
+        "summary": "List assigned inbound runs ready to open or resume at the hub.",
+        "responses": {
+          "200": {
+            "description": "Available inbound runs and open receiving sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "run_id",
+                          "hub_id",
+                          "session_id",
+                          "status",
+                          "expected_count",
+                          "received_count"
+                        ],
+                        "properties": {
+                          "run_id": {
+                            "type": "string"
+                          },
+                          "hub_id": {
+                            "type": "string"
+                          },
+                          "session_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expected_count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "received_count": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Hub access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "delivery_26__hub_receiving_sessions",
         "summary": "Hub receiver opens intake for expected inbound run.",

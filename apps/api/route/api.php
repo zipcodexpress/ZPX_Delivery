@@ -24,6 +24,7 @@ foreach (['payments/<shipment>/hosted-session'=>'hosted-session','payments/<ship
 foreach (['driver/runs'=>'runs','runs/<run_id>'=>'run-detail','runs/<run_id>/acknowledgments'=>'acknowledge','scans/resolve'=>'resolve','runs/<run_id>/scans'=>'scan','runs/<run_id>/depart'=>'depart'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $runId='') => Zpx\Http\DriverController::handle($request,$action,$runId))->pattern(['run_id'=>'[1-9][0-9]{0,17}']);
 }
+Route::any('api/delivery/v1/runs/<run_id>/stops/<stop_id>/arrive', static fn(Request $request, string $runId, string $stopId) => Zpx\Http\DriverController::handle($request,'arrive',$runId,$stopId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','stop_id'=>'[1-9][0-9]{0,17}']);
 foreach (['driver/register'=>'register','driver/profile'=>'profile','driver/profile/update'=>'update-profile','driver/wallet'=>'wallet','driver/transactions'=>'transactions','admin/drivers/pending'=>'pending','admin/drivers/<driver_id>/approve'=>'approve','admin/drivers/<driver_id>/reject'=>'reject','admin/driver-pay'=>'pay-run'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $driverId='') => Zpx\Http\DriverManagementController::handle($request,$action,$driverId))->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
 }
