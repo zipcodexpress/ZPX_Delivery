@@ -7871,6 +7871,9 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "size_policy": {
+            "$ref": "#/components/schemas/SizePolicy"
+          },
           "items": {
             "type": "array",
             "items": {
@@ -7883,14 +7886,39 @@
           }
         },
         "required": [
+          "size_policy",
           "items",
           "next_cursor"
         ]
+      },
+      "SizeClass": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "string", "enum": ["SMALL", "MEDIUM", "LARGE"] },
+          "amount_cents": { "type": "integer", "minimum": 0 },
+          "max_width_mm": { "type": "integer", "minimum": 1 },
+          "max_height_mm": { "type": "integer", "minimum": 1 },
+          "max_depth_mm": { "type": "integer", "minimum": 1 },
+          "max_weight_g": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["code", "amount_cents", "max_width_mm", "max_height_mm", "max_depth_mm", "max_weight_g"]
+      },
+      "SizePolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": { "type": "string" },
+          "currency": { "type": "string", "enum": ["USD"] },
+          "classes": { "type": "array", "items": { "$ref": "#/components/schemas/SizeClass" } }
+        },
+        "required": ["version", "currency", "classes"]
       },
       "PackageSpec": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "size_class": { "type": "string", "enum": ["SMALL", "MEDIUM", "LARGE"], "nullable": true },
           "width_mm": {
             "type": "integer",
             "minimum": 1,
@@ -7913,16 +7941,30 @@
           }
         },
         "required": [
+          "size_class",
           "width_mm",
           "height_mm",
           "depth_mm",
           "weight_g"
         ]
       },
+      "CreatePackageSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "size_class": { "type": "string", "enum": ["SMALL", "MEDIUM", "LARGE"] },
+          "width_mm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+          "height_mm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+          "depth_mm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+          "weight_g": { "type": "integer", "minimum": 1, "maximum": 100000 }
+        },
+        "required": ["size_class", "width_mm", "height_mm", "depth_mm", "weight_g"]
+      },
       "Recipient": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "address": { "$ref": "#/components/schemas/Address" },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -7938,6 +7980,7 @@
           }
         },
         "required": [
+          "address",
           "name",
           "email",
           "phone"
@@ -7959,7 +8002,7 @@
             "$ref": "#/components/schemas/Recipient"
           },
           "package": {
-            "$ref": "#/components/schemas/PackageSpec"
+            "$ref": "#/components/schemas/CreatePackageSpec"
           },
           "service_level": {
             "type": "string"
@@ -7977,6 +8020,8 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "si": { "type": "string", "nullable": true },
+          "journey_status": { "type": "string" },
           "shipment_id": {
             "type": "string",
             "description": "Opaque identifier; serialize as string."
@@ -8038,6 +8083,8 @@
           }
         },
         "required": [
+          "si",
+          "journey_status",
           "shipment_id",
           "package_id",
           "origin_location_id",

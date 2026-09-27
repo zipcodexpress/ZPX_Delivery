@@ -11,7 +11,7 @@ $senderInput=$registration; $senderInput['email']='sender.shipping@example.inval
 $recipientInput=$registration; $recipientInput['email']='recipient.shipping@example.invalid'; $recipientInput['phone']='+12025550112';
 $sender=$identity->register($senderInput)['user_id']; $recipient=$identity->register($recipientInput)['user_id'];
 $sites=$shipping->locations()['items']; check(count($sites)===20 && $sites[0]['development_only'] && !$sites[0]['eligible'],'synthetic sites are draft-only, not commissioned shipping locations');
-$input=['origin_location_id'=>$sites[0]['id'],'destination_location_id'=>$sites[1]['id'],'service_level'=>'STANDARD','recipient'=>['name'=>'Synthetic Recipient','email'=>$recipientInput['email'],'phone'=>$recipientInput['phone']],'package'=>['width_mm'=>100,'height_mm'=>100,'depth_mm'=>100,'weight_g'=>500]];
+$input=['origin_location_id'=>$sites[0]['id'],'destination_location_id'=>$sites[1]['id'],'service_level'=>'STANDARD','recipient'=>['name'=>'Synthetic Recipient','email'=>$recipientInput['email'],'phone'=>$recipientInput['phone'],'address'=>$recipientInput['address']],'package'=>['size_class'=>'SMALL','width_mm'=>100,'height_mm'=>100,'depth_mm'=>100,'weight_g'=>500]];
 failsIdentity(fn()=>$shipping->create($sender,$input,Secrets::uuid()),403,'unverified sender cannot create shipment');
 foreach ([$senderInput,$recipientInput] as $person) {
  foreach (['EMAIL'=>'email','PHONE'=>'phone'] as $kind=>$field) {
@@ -23,22 +23,31 @@ foreach ([$senderInput,$recipientInput] as $person) {
 }
 $key=Secrets::uuid(); $shipment=$shipping->create($sender,$input,$key); $sid=$shipment['shipment_id'];
 check($shipment['order_status']==='DRAFT' && $shipment['payment_status']==='UNPAID' && $shipment['package_state']==='CREATED','draft preserves unpaid sender custody');
+check($shipment['package']['size_class']==='SMALL' && str_starts_with($shipment['si'],'ZPX-'),'new shipment persists size class and stable SI');
 $reordered=array_reverse($input,true); $again=$shipping->create($sender,$reordered,$key);
 check($again['shipment_id']===$sid,'canonical payload retry creates exactly one shipment');
 $changed=$input; $changed['package']['weight_g']=501;
 failsIdentity(fn()=>$shipping->create($sender,$changed,$key),409,'changed payload cannot reuse request key');
 $large=$input; $large['package']['width_mm']=99999;
 failsIdentity(fn()=>$shipping->create($sender,$large,Secrets::uuid()),422,'parcel must fit both declared site compartment sizes');
+$medium=$input; $medium['package']['size_class']='MEDIUM'; $medium['package']['width_mm']=300;
+$mediumShipment=$shipping->create($sender,$medium,Secrets::uuid());
+check($shipping->quote($sender,$mediumShipment['shipment_id'],['service_level'=>'STANDARD'],Secrets::uuid(),'"0"')['amount_cents']===200,'medium price depends on size only');
+$largeFit=$input; $largeFit['package']=['size_class'=>'LARGE','width_mm'=>500,'height_mm'=>500,'depth_mm'=>600,'weight_g'=>20000];
+$largeShipment=$shipping->create($sender,$largeFit,Secrets::uuid());
+check($shipping->quote($sender,$largeShipment['shipment_id'],['service_level'=>'STANDARD'],Secrets::uuid(),'"0"')['amount_cents']===300,'large parcel uses its class price despite higher weight');
+$oversize=$input; $oversize['package']['size_class']='LARGE'; $oversize['package']['width_mm']=551;
+failsIdentity(fn()=>$shipping->create($sender,$oversize,Secrets::uuid()),422,'large class rejects oversized parcel');
 $invalid=$input; $invalid['origin_location_id']=$input['destination_location_id'];
 failsIdentity(fn()=>$shipping->create($sender,$invalid,Secrets::uuid()),422,'same-site route rejected');
 failsIdentity(fn()=>$shipping->create($sender,$input+['sender_user_id'=>$recipient],Secrets::uuid()),422,'sender override injection rejected');
-check(count($shipping->list($sender,'sending')['items'])===1,'sender list contains own draft');
+check(count($shipping->list($sender,'sending')['items'])===3,'sender list contains own drafts');
 check(count($shipping->list($recipient,'receiving')['items'])===0,'matching verified contacts alone do not grant recipient access');
 failsIdentity(fn()=>$shipping->get($recipient,$sid),404,'unclaimed recipient cannot read shipment');
 $stored=$runtime->query("SELECT contact_encrypted FROM shipment_parties WHERE shipment_id=$sid")->fetchColumn();
 check(!str_contains($stored,$recipientInput['email']) && json_decode($crypto->decrypt($stored),true)['email']===$recipientInput['email'],'recipient snapshot encrypted at rest');
 $quote=$shipping->quote($sender,$sid,['service_level'=>'STANDARD'],Secrets::uuid(),'"0"');
-check($quote['development_only'] && $quote['amount_cents']===600 && strtotime($quote['expires_at'])>time(),'versioned expiring test quote uses server parcel weight');
+check($quote['development_only'] && $quote['amount_cents']===100 && $quote['policy_version']==='SIZE-1' && strtotime($quote['expires_at'])>time(),'versioned expiring test quote uses server size card');
 failsIdentity(fn()=>$shipping->quote($sender,$sid,['service_level'=>'STANDARD'],Secrets::uuid(),'"99"'),409,'stale quote precondition rejected');
 putenv('APP_ENV=production');
 failsIdentity(fn()=>$shipping->quote($sender,$sid,['service_level'=>'STANDARD'],Secrets::uuid(),'"0"'),503,'demo rates cannot be used in production');
@@ -58,8 +67,11 @@ failsIdentity(fn()=>$shipping->claim($recipient,$claimInput,Secrets::uuid()),400
 check(count($shipping->list($recipient,'receiving')['items'])===1,'claimed parcel appears in receiving');
 failsIdentity(fn()=>$shipping->cancel($recipient,$sid,['reason'=>'Not mine'],Secrets::uuid(),'"0"'),403,'recipient cannot cancel sender order');
 // The same customer can send: no recipient role or account elevation.
-$reverse=$input;$reverse['recipient']=['name'=>'Original Sender','email'=>$senderInput['email'],'phone'=>$senderInput['phone']];
+$reverse=$input;$reverse['recipient']=['name'=>'Original Sender','email'=>$senderInput['email'],'phone'=>$senderInput['phone'],'address'=>$senderInput['address']];
 check($shipping->create($recipient,$reverse,Secrets::uuid())['relationship']==='SENDER','one customer account can both send and receive');
+$self=$input;$self['recipient']=['name'=>$senderInput['name'],'email'=>$senderInput['email'],'phone'=>$senderInput['phone'],'address'=>$senderInput['address']];
+$selfShipment=$shipping->create($sender,$self,Secrets::uuid());
+check(in_array($selfShipment['shipment_id'],array_column($shipping->list($sender,'receiving')['items'],'shipment_id'),true),'sender as recipient receives shipment access without a claim');
 $unknown=$shipping->claimChallenge($sender,['public_reference'=>'UNKNOWN'],Secrets::uuid());
 check(array_keys($unknown)===array_keys($claim) && $unknown['delivery_status']===$claim['delivery_status'],'unknown shipment challenge is neutral');
 // Staff access respects scope and expired grants; no universal hub role access.
@@ -108,8 +120,10 @@ check($confirmed['status']==='PAID' && $confirmed['development_only'],'local ada
 check($shipping->confirmPayment($sender,$payment['payment_id'],['outcome'=>'SUCCEEDED'],$confirmKey)['payment_id']===$payment['payment_id'],'confirmation retry produces one financial event');
 check((int)$runtime->query('SELECT count(*) FROM payment_events WHERE payment_id='.$payment['payment_id'])->fetchColumn()===1,'only one payment event recorded');
 check($shipping->get($sender,$paidId)['package_state']==='CREATED','payment does not change physical custody');
+check($shipping->get($sender,$paidId)['journey_status']==='LABEL_REQUIRED','paid shipment still needs a primary label');
 $labelKey=Secrets::uuid();$label=$shipping->label($sender,$paidDraft['package_id'],$labelKey);$again=$shipping->label($sender,$paidDraft['package_id'],Secrets::uuid());
 check($label['si']===$again['si'] && $label['label_payload']===$again['label_payload'],'reprint preserves stable SI and active QR identity');
+check($label['si']===$paidDraft['si'] && $shipping->get($sender,$paidId)['journey_status']==='READY_FOR_ORIGIN_DEPOSIT','original SI stays stable and labeled parcel is ready for origin deposit');
 check(preg_match('/^ZPX-[A-Z0-9-]+-[A-Z2-7]{20}$/D',$label['si'])===1 && preg_match('/^ZPX1:L:[A-Za-z0-9_-]{24}$/D',$label['label_payload'])===1,'SI and label token meet canonical entropy formats');
 $before=(int)$runtime->query('SELECT count(*) FROM label_print_jobs WHERE label_id='.$label['label_id'])->fetchColumn();$shipping->label($sender,$paidDraft['package_id'],$labelKey);
 check((int)$runtime->query('SELECT count(*) FROM label_print_jobs WHERE label_id='.$label['label_id'])->fetchColumn()===$before,'label retry does not duplicate print request audit');
@@ -159,7 +173,6 @@ $slot=insertId($runtime,"INSERT INTO hub_slots(hub_id,code,destination_location_
 $runtime->exec("INSERT INTO staging_assignments(package_id,slot_id,outbound_run_id,assigned_by,routing_revision) VALUES ($package,$slot,$run,$hubStaff,1)");
 $dispatch=insertId($runtime,"INSERT INTO dispatch_calls(hub_id,slot_id,outbound_run_id,destination_location_id,package_count,status,called_at,expires_at,driver_id,confirmed_at) VALUES ($hub,$slot,$run,$hubLocation,1,'ACCEPTED',now()-interval '2 minutes',now()+interval '10 minutes',$driver,now()-interval '1 minute')");
 $runtime->exec("UPDATE route_runs SET dispatch_call_id=$dispatch WHERE id=$run");
-$runtime->exec("INSERT INTO shipping_identifiers(package_id,si,destination_location_id) VALUES ($package,'ZPX-TRACKING-TEST',$hubLocation)");
 $q=$runtime->prepare("INSERT INTO exceptions(package_id,run_id,code,status,recorded_by,organization_id,hub_id,receiving_session_id,notes) VALUES (?,?,'DAMAGED','OPEN',?,?,?,?, 'Test damage note')");$q->execute([$package,$run,$hubStaff,$shippingOrg,$hub,$session]);
 $customerTracking=$shipping->tracking($sender,$sid,'customer');
 check(!isset($customerTracking['package'],$customerTracking['events'],$customerTracking['current_custody']),'customer tracking omits internal custody, actor, scan, and exception evidence');
@@ -170,7 +183,7 @@ check(in_array('CUSTODY_EVENT',$sources,true) && in_array('SCAN_EVENT',$sources,
 check(in_array('REJECTED_TEST_EVIDENCE',array_column($operationsTracking['events'],'result'),true) && in_array('EXCEPTION_DAMAGED',$codes,true),'rejected scans and damage discrepancies remain visible to operations');
 check($shipping->searchPackages($hubStaff,$shipment['public_reference'])['items'][0]['shipment_id']===$sid,'hub-scoped package search finds public reference');
 check($shipping->searchPackages($hubStaff,$operationsTracking['package']['package_uuid'])['items'][0]['shipment_id']===$sid,'package UUID search resolves the authorized shipment');
-check($shipping->searchPackages($hubStaff,'ZPX-TRACKING-TEST')['items'][0]['shipment_id']===$sid,'shipping identifier search resolves the authorized shipment');
+check($shipping->searchPackages($hubStaff,$shipment['si'])['items'][0]['shipment_id']===$sid,'shipping identifier search resolves the authorized shipment');
 check($shipping->searchPackages($hubStaff,$package)['items'][0]['shipment_id']===$sid,'internal package ID search resolves the authorized shipment');
 check($shipping->searchPackages($recipient,$shipment['public_reference'])['items']===[],'customer cannot discover packages through operations search service');
 $oldOrg=getenv('ZPX_ORGANIZATION_ID');putenv('ZPX_ORGANIZATION_ID='.$identityOrg);

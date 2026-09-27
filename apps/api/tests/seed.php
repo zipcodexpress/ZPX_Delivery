@@ -20,6 +20,7 @@ try {
         check(password_verify($credential['password'], $q->fetchColumn()), 'seed stores a verifiable password hash');
     }
     check((int)$runtime->query("SELECT count(*) FROM locations WHERE organization_id=$org")->fetchColumn() === 21, 'seed creates twenty sites and one hub');
+    check((int)$runtime->query("SELECT count(*) FROM user_addresses a JOIN users u ON u.id=a.user_id WHERE u.organization_id=$org AND a.kind='PROFILE'")->fetchColumn() === 6, 'seeded accounts can use send to myself');
     check((int)$runtime->query("SELECT count(*) FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='CREATED' AND s.payment_status='UNPAID'")->fetchColumn() === 5, 'seed leaves five unpaid parcels with sender');
     check((int)$runtime->query("SELECT count(*) FROM packages p JOIN shipments s ON s.id=p.shipment_id WHERE s.organization_id=$org AND p.state='AT_ORIGIN' AND s.payment_status='PAID'")->fetchColumn() === 5, 'seed transitions five parcels to origin for driver pickup');
     $demo = $runtime->query("SELECT s.public_reference,p.id AS package_id,p.state,p.custodian_type,p.version,s.development_only FROM shipments s JOIN packages p ON p.shipment_id=s.id WHERE s.organization_id=$org AND s.public_reference LIKE 'SYNTHETIC-$seedNamespace-%-DEMO' ORDER BY s.public_reference")->fetchAll(PDO::FETCH_ASSOC);
@@ -57,7 +58,7 @@ try {
     $outboundShift->execute([$org, 'synthetic:' . $seedNamespace . ':DRIVER-OUT']);
     check((int)$outboundShift->fetchColumn()===1,'seeded outbound driver has an active test shift');
     check((int)$runtime->query("SELECT count(*) FROM hub_slots hs JOIN hubs h ON h.id=hs.hub_id JOIN locations l ON l.id=h.location_id WHERE l.organization_id=$org AND hs.code IN ('LOT-AUS-004','LOT-AUS-005')")->fetchColumn()===2,'seeded hub has two destination staging slots');
-    check((int)$runtime->query("SELECT count(*) FROM compartments c JOIN lockers k ON k.id=c.locker_id JOIN locations l ON l.id=k.location_id WHERE l.organization_id=$org AND c.status='FROZEN'")->fetchColumn() === 40, 'seed does not commission physical doors');
+    check((int)$runtime->query("SELECT count(*) FROM compartments c JOIN lockers k ON k.id=c.locker_id JOIN locations l ON l.id=k.location_id WHERE l.organization_id=$org AND c.status='FROZEN'")->fetchColumn() === 60, 'seed does not commission physical doors');
     $runtime->exec("UPDATE users SET display_name='Preserve local edit' WHERE organization_id=$org");
     $runtime->exec("UPDATE package_labels SET token_hash=decode(repeat('ab',32),'hex') WHERE package_id={$seededPackages[0]}");
     $again = $seed->run($fixture);
