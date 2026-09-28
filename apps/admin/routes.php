@@ -10,8 +10,8 @@ Route::any('admin/login', static fn(Request $request) => PageController::handle(
 Route::any('admin/logout', static fn(Request $request) => PageController::handle($request, 'logout'));
 Route::get('admin-style', static fn() => PageController::stylesheet());
 Route::any('admin/action/<operation>', static fn(Request $request, string $operation) => PageController::action($request, $operation))
-    ->pattern(['operation'=>'driver-approve|driver-reject|driver-suspend|driver-reactivate|route-assign|pickup-release|customer-restrict|customer-revoke|partner-create|site-create|site-update|site-relationship|site-contact-add|site-contact-archive|site-location-create|site-overdue|location-overdue|location-deactivate|location-reactivate|locker-body-add|locker-module-add|locker-box-add|locker-box-assign|customer-rename|address-save|address-archive']);
-foreach (['customers', 'drivers', 'partners', 'sites', 'lockers', 'pickup-routes', 'pickup-recovery', 'shipments'] as $page) {
+    ->pattern(['operation'=>'driver-approve|driver-reject|driver-suspend|driver-reactivate|route-assign|pickup-release|customer-restrict|customer-revoke|partner-create|site-create|site-update|site-relationship|site-contact-add|site-contact-archive|site-location-create|site-overdue|location-overdue|location-deactivate|location-reactivate|locker-body-add|locker-module-add|locker-box-add|locker-box-assign|locker-model-box-add|locker-model-body-add|locker-model-slot-add|locker-model-slot-remove|locker-model-ready|locker-model-instantiate|customer-rename|address-save|address-archive']);
+foreach (['customers', 'drivers', 'partners', 'sites', 'lockers', 'locker-models', 'pickup-routes', 'pickup-recovery', 'shipments'] as $page) {
     Route::any('admin/'.$page, static fn(Request $request) => PageController::handle($request, $page));
 }
 Route::any('admin/customers/<user_id>', static fn(Request $request, string $userId) => PageController::handle($request,'customer-detail',$userId))

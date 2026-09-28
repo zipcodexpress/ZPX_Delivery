@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-locker-occupancy`, implementation commit `a3c7b39`, based on `codex/admin-360-views` (`81e1435`). PR #37 is open against PR #36's branch; PR #36 targets PR #35's branch. Merge the stack in order.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-locker-models`, implementation commit `83bca38`, based on `codex/admin-locker-occupancy` (`a475223`). PR #38 is open against PR #37's branch; PR #37 is open against PR #36's branch; PR #36 targets PR #35's branch. Merge the stack in order.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls; PR #33 contains ADM-03 read-only details; PR #34 contains the first ADM-04 partner registry/draft creation. This branch implements an ADM-05/06 and people-address partial slice. Search/filtering, support, fleet/commercial, delegated partner grants and resource relationships remain.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -42,10 +42,16 @@
 - Locker detail reports available, reserved, occupied, review and unavailable box counts from delivery ownership, mapped board/door, current claims, custody and session state. It separately counts locker-custody packages without a box claim. A cursor-paged package table shows origin/destination association, lifecycle phase (initial outbound, hub staging, final pickup, etc.), custody and box-claim evidence, and marks synthetic assumptions.
 - Tests cover duplicate body position, unclaimed synthetic locker custody, available/reserved/occupied/review transitions, invalid cursor and rendered HTML. `npm run check` (105 operations, nine Node tests), `npm run build` and final disposable `npm run test-db` passed. Local API/admin image rebuilt and browser verified locker 17 and locker 4, including synthetic final-pickup and completed pickup rows. No new migration. No hardware tested.
 
+## Reusable locker models slice
+
+- New stacked branch adds migration 027 with network-scoped versioned box/body models, layout slots, immutable publication and optional model references on bodies/boxes. Migration 028 permits audited removal of draft positions while ready layouts remain locked. `LockerModels` provides model creation, layout editing by add/remove, ready publication and frozen structure instantiation at inactive locker locations.
+- PHP lint, final disposable `npm run test-db`, `npm run check` (105 operations, nine Node tests) and `npm run build` passed. Migrations 027–028 applied locally; the API/admin image was rebuilt. Browser created a synthetic box/body model and two positions, marked the layout ready, instantiated it at inactive locker 21 and verified two new frozen/unmapped boxes. Ready layout hides draft editing. PR #37 CI is green. No real device was tested.
+- PR #38 is open on PR #37's branch; browser, code checks and local-stack CI passed on the implementation and handoff commits. Human notes remain untracked.
+
 ## Next exact actions
 
-1. PR #37 is open and local browser verification passed. Next, build reusable versioned body/box model catalog and safe draft editing as a separate stacked development slice. Do not stage the two human notes.
-2. Next locker work: reusable versioned body/box model catalog and layout templates (TP8 reference), safe draft edit/deactivate controls, hardware commissioning and actual telemetry reconciliation. Draft inventory is not a live door. Do not make admin occupancy edits that bypass custody.
+1. Merge the stacked admin PRs in order after review: #35 → #36 → #37 → #38. Do not stage the two human notes.
+2. Next locker work: safe draft edit/deactivate controls, hardware commissioning and actual telemetry reconciliation. Draft inventory is not a live door. Do not make admin occupancy edits that bypass custody.
 3. Other admin backlog: searchable cross-entity history, shared contact directory and coverage, contract documents/effective periods, locker owner/operator relationships, commercial terms, finance reconciliation/payout evidence, delegated partner grants and calendar/access policy. Overdue amounts remain draft configuration. DBeaver PostgreSQL mapping remains `127.0.0.1:5432`.
 
 ## Delivery baseline and gates
