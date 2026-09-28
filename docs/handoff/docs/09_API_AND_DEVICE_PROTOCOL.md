@@ -6,6 +6,8 @@
 
 Browser: server-managed secure HttpOnly SameSite session cookie and CSRF header for writes. Native: short-lived Bearer token and rotated refresh token in secure OS storage; revocation on logout/suspension. Terminal: independent per-device credential authentication over TLS; bind authenticated identity to own locker. Operator mobile credentials cannot impersonate devices. OpenAPI expresses transport schemes, while service-level roles are in operation descriptions/doc 06.
 
+Implemented command-poll authentication for final destination deposit: the enrolled device stores an Ed25519 private key; `device_credentials.public_key` is its base64 public key. Send `X-Device-Key-Id`, `X-Device-Timestamp` (Unix seconds), `X-Device-Nonce` (UUID) and `X-Device-Signature` (base64 detached signature). The signed UTF-8 bytes are `GET\n/api/delivery/v1/devices/me/commands\n{timestamp}\n{nonce}\n{SHA256(raw request body)}` with lowercase hexadecimal hash. Timestamp skew is at most 60 seconds; a used nonce is refused and retained across restarts. The transport must still use TLS. A returned OPEN command is authorization for the enrolled terminal to journal and actuate, never proof that the door opened or custody changed.
+
 Every business POST except initial registration/login uses Idempotency-Key; initial register/login is rate-limited and challenge-protected. Device webhook/event submission also uses unique event UUID plus signed/enrolled channel. Use If-Match for updates of existing package/run/session, and body run_revision where two aggregates are involved. New create commands do not require a preexisting aggregate ETag. GET responses expose version and ETag when applicable. Store canonical payload hash per scope/key; same key/different payload → 409.
 
 Error envelope: code, message, correlation_id, retryable, optional current_version/recovery_action. 400 malformed; 401 auth; 403 role/scope; 404 unavailable or cross-scope resource; 409 stale version/wrong state/wrong destination/duplicate conflict; 422 capacity/label/field validation; 429 rate limit; 503 dependency unavailable. Do not leak another customer's address/identity in error messages.
@@ -76,4 +78,3 @@ Worker/events:
 - `FINAL_DEPOSIT_CONFIRMED` -> READY_FOR_PICKUP notification.
 
 SI remains a public identifier and tracking key; it is never a pickup credential.
-

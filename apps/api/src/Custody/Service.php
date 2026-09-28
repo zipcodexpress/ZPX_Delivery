@@ -411,6 +411,16 @@ final class Service
                 throw new Failure(409,'PICKUP_ASSIGNMENT_CHANGED','Pickup assignment or locker custody changed.');
             }
 
+            // An origin occupancy claim follows the parcel out of the locker. Release only
+            // the exact occupied origin door as part of this accepted custody transfer.
+            $originClaim=$this->q("SELECT cc.id,cc.state,c.locker_id,k.location_id FROM compartment_claims cc
+                JOIN compartments c ON c.id=cc.compartment_id JOIN lockers k ON k.id=c.locker_id
+                WHERE cc.package_id=? FOR UPDATE OF cc",[$packageId])->fetch(PDO::FETCH_ASSOC);
+            if ($originClaim && ($originClaim['state']!=='OCCUPIED' || (string)$originClaim['locker_id']!==(string)$package['custodian_ref']
+                || (string)$originClaim['location_id']!==(string)$package['origin_location_id'])) {
+                throw new Failure(409,'ORIGIN_OCCUPANCY_UNRESOLVED','Origin compartment claim does not match parcel custody.');
+            }
+
             // Perform custody transfer
             $operationUuid = $clientEvent;
             $newVersion = (int)$package['version'] + 1;
@@ -442,6 +452,7 @@ final class Service
             // Update manifest item
             $this->q("UPDATE manifest_items SET state='LOADED' WHERE id=?", [$manifestItem['id']]);
             $this->q("UPDATE pickup_demands SET status='RESOLVED',version=version+1 WHERE package_id=? AND assigned_run_id=? AND status='ASSIGNED'",[$packageId,$runId]);
+            if ($originClaim) { $this->q("DELETE FROM compartment_claims WHERE id=? AND package_id=? AND state='OCCUPIED'",[$originClaim['id'],$packageId]); }
 
             // Outbox event
             (new Outbox($this->db))->append(
