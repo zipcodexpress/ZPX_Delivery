@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/customers/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one network customer with masked contacts, recent linked shipments and redacted administration actions. */
+        get: operations["admin_customer_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/customers/{user_id}/restrictions/{restriction_id}/revoke": {
         parameters: {
             query?: never;
@@ -99,6 +116,23 @@ export interface paths {
         put?: never;
         /** Suspend or reactivate a driver with a reason and version check. Suspension blocks new offers without removing assigned custody. */
         post: operations["admin_driver_transition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/drivers/{driver_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one network driver with qualification status, availability freshness, recent runs and redacted administration actions. */
+        get: operations["admin_driver_detail"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2734,6 +2768,67 @@ export interface operations {
             };
         };
     };
+    admin_customer_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        customer: {
+                            user_id: string;
+                            name: string;
+                            status: string;
+                            /** Format: date-time */
+                            created_at: string;
+                            shipping_restricted: boolean;
+                            restriction_id: string | null;
+                            masked_email: string | null;
+                            masked_phone: string | null;
+                            email_verified: boolean;
+                            phone_verified: boolean;
+                        };
+                        shipments: {
+                            shipment_id: string;
+                            public_reference: string;
+                            order_status: string;
+                            payment_status: string;
+                            package_state: string | null;
+                            /** @enum {string} */
+                            relationship: "SENDER" | "RECIPIENT";
+                            /** Format: date-time */
+                            created_at: string;
+                        }[];
+                        activity: {
+                            action: string;
+                            /** Format: date-time */
+                            created_at: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     admin_customer_shipping_restore: {
         parameters: {
             query?: never;
@@ -2852,6 +2947,73 @@ export interface operations {
                         /** @enum {string} */
                         status: "ACTIVE" | "SUSPENDED";
                         version: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_driver_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                driver_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Driver detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        driver: {
+                            driver_id: string;
+                            user_id: string;
+                            name: string;
+                            status: string;
+                            engagement_type: string;
+                            /** Format: date-time */
+                            applied_at: string;
+                            /** Format: date-time */
+                            approved_at: string | null;
+                            version: number;
+                            verification_status: string;
+                            /** Format: date */
+                            license_expiry: string | null;
+                            vehicle_description: string;
+                            availability_status: string;
+                            /** Format: date-time */
+                            location_updated_at: string | null;
+                        };
+                        runs: {
+                            run_id: string;
+                            kind: string;
+                            state: string;
+                            /** Format: date-time */
+                            planned_start: string;
+                            /** Format: date-time */
+                            planned_end: string;
+                            hub_name: string;
+                            vehicle_code: string;
+                        }[];
+                        activity: {
+                            action: string;
+                            /** Format: date-time */
+                            created_at: string;
+                        }[];
                     };
                 };
             };

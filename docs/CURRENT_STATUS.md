@@ -4,9 +4,9 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-customer-driver`, commit `893002b`, based on `codex/admin-foundation` (`e4a8617`). PR #31 is open against `main`; stacked PR #32 is open against `codex/admin-foundation`.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-identity-details`, based on `codex/admin-customer-driver` (`a6929d6`). PR #31 is open against `main`; stacked PR #32 is open against `codex/admin-foundation`.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
-- PR #31 contains ADM-01/02. This branch implements the first ADM-03 customer/driver slice. Customer/driver detail and activity screens remain; ADM-04–ADM-18 remain. Add partner/site tables only in their owning tasks after verifying relationships.
+- PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls. This branch adds ADM-03 read-only customer/driver detail and recent activity. Search/filtering, support and fleet/commercial extensions remain; ADM-04–ADM-18 remain. Add partner/site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
 ## Implemented on this branch
@@ -17,6 +17,7 @@
 - `topthink/think-view` is locked in Composer. API Docker image includes sibling `apps/admin` while keeping one application/database.
 - No new database migration was needed for ADM-01/02. The local development database had four pending existing migrations, including `021_pickup_routing.sql`; the migration image was rebuilt and they were applied. PostgreSQL remains exposed only on `127.0.0.1:5432` for DBeaver.
 - ADM-03 first slice: migration 022 adds audited customer SHIPPING restrictions and driver optimistic version. Admin pages and JSON endpoints list scoped customers/drivers and apply reasoned restriction/revocation or suspension/reactivation. Shipping checks restrictions only for new shipments. Suspension cancels open offers and takes driver offline; assigned runs and parcel custody remain. Offer actions recheck active driver status under lock. Reactivation does not restore availability.
+- ADM-03 detail slice: scoped JSON and HTML detail routes show masked customer contacts and ten recent linked shipments, or driver qualification/availability and up to ten recent runs with active assignments first. Both show redacted recent admin action names/times. No new schema or contact reveal.
 
 ## Validation
 
@@ -25,11 +26,12 @@
 - Live local admin sign-in with the synthetic seed account, all four page families, `/admin/access`, stylesheet and sign-out passed. Browser route assignment changed one synthetic origin to the seeded hub and displayed the result. Existing operations portal remained authenticated after root cookie migration.
 - ADM-03 `npm run check` passed (100 OpenAPI operations, TypeScript, 9 Node tests); `npm run build` passed both React apps; PHP syntax checks passed. Disposable `npm run test-db` passed with customer/driver scope, restriction, idempotency, stale version, suspended offers and active-run preservation.
 - Local development migration 022 applied. With the synthetic admin, `/admin/customers` rendered masked contacts and restriction/restore forms completed; `/admin/drivers` rendered statuses and active-run counts. PostgreSQL stayed available to DBeaver at `127.0.0.1:5432` and API/admin at `127.0.0.1:8000`.
+- Detail slice: `npm run check` passed (102 OpenAPI operations, TypeScript, 9 Node tests); `npm run build` passed both React apps; PHP syntax and disposable `npm run test-db` passed. Local browser rendered customer shipment/action detail and driver assignment/status detail. Foreign resources returned 404 and audit reasons stayed redacted.
 
 ## Next exact actions
 
-1. PR #32 contains the validated ADM-03 customer/driver first slice; it awaits review after/alongside PR #31. Begin a new branch from PR #32 for scoped customer/driver detail and activity views, without waiting for the merges.
-2. After ADM-03 detail views, tackle ADM-04 partner entities/grants and ADM-05 sites with guarded additive migrations and synthetic fixtures; do not fabricate legal ownership.
+1. Review diff, commit and open a stacked PR from `codex/admin-identity-details` against `codex/admin-customer-driver`. PR #32 passed all CI jobs; PR #31/#32 await merge.
+2. Next bounded work: customer search/filtering and driver fleet/qualification views, or ADM-04 partner entities/grants if access foundations are prioritized. Do not invent commercial affiliations or contact-reveal authority.
 3. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`, respecting physical/payout evidence gates.
 
 ## Delivery baseline and gates

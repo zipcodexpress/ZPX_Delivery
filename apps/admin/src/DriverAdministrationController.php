@@ -15,7 +15,7 @@ final class DriverAdministrationController
         $id=Secrets::uuid();
         try {
             $method=$request->method(true);
-            if ($method!==($action==='list'?'GET':'POST')) { throw new Failure(405,'METHOD_NOT_ALLOWED','Unsupported method.'); }
+            if ($method!==(in_array($action,['list','detail'],true)?'GET':'POST')) { throw new Failure(405,'METHOD_NOT_ALLOWED','Unsupported method.'); }
             $origin=$request->header('origin','');
             if ($origin!=='' && !in_array($origin,explode(',',getenv('AUTH_ALLOWED_ORIGINS') ?: ''),true)) {
                 throw new Failure(403,'ORIGIN_REJECTED','Request origin is not allowed.');
@@ -27,8 +27,8 @@ final class DriverAdministrationController
             if ($token==='' && preg_match('/^Bearer ([a-f0-9]{64})$/D',$auth,$m)) { $token=$m[1]; $kind='NATIVE'; }
             $session=$identity->authenticate($token,$kind); $actor=(string)$session['user_id'];
             $service=new DriverAdministration($db,$crypto);
-            if ($action==='list') {
-                $body=$service->list($actor,(string)$request->get('cursor',''));
+            if ($action==='list' || $action==='detail') {
+                $body=$action==='list' ? $service->list($actor,(string)$request->get('cursor','')) : $service->detail($actor,$driver);
             } else {
                 if ($kind==='BROWSER') { $identity->csrf($token,$request->header('x-csrf-token','')); }
                 $identity->limit('admin-driver:'.$actor,50);
@@ -53,7 +53,7 @@ final class DriverAdministrationController
         } catch (Failure $error) {
             return Reply::json($error->status,['code'=>$error->errorCode,'message'=>$error->getMessage(),
                 'correlation_id'=>$id,'retryable'=>$error->status===503],$id,
-                $error->status===405?['Allow'=>$action==='list'?'GET':'POST']:[]);
+                $error->status===405?['Allow'=>in_array($action,['list','detail'],true)?'GET':'POST']:[]);
         }
     }
 }

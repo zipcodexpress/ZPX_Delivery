@@ -62,6 +62,18 @@
         "responses": { "200": { "description": "Restriction applied", "content": { "application/json": { "schema": { "type": "object", "properties": { "user_id": { "type": "string" }, "restriction_id": { "type": "string" }, "shipping_restricted": { "type": "boolean" } }, "required": ["user_id", "restriction_id", "shipping_restricted"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
+    "/admin/customers/{user_id}": {
+      "get": {
+        "operationId": "admin_customer_detail",
+        "summary": "Read one network customer with masked contacts, recent linked shipments and redacted administration actions.",
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Customer detail", "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "customer": { "type": "object", "properties": { "user_id": { "type": "string" }, "name": { "type": "string" }, "status": { "type": "string" }, "created_at": { "type": "string", "format": "date-time" }, "shipping_restricted": { "type": "boolean" }, "restriction_id": { "type": "string", "nullable": true }, "masked_email": { "type": "string", "nullable": true }, "masked_phone": { "type": "string", "nullable": true }, "email_verified": { "type": "boolean" }, "phone_verified": { "type": "boolean" } }, "required": ["user_id", "name", "status", "created_at", "shipping_restricted", "restriction_id", "masked_email", "masked_phone", "email_verified", "phone_verified"] },
+          "shipments": { "type": "array", "items": { "type": "object", "properties": { "shipment_id": { "type": "string" }, "public_reference": { "type": "string" }, "order_status": { "type": "string" }, "payment_status": { "type": "string" }, "package_state": { "type": "string", "nullable": true }, "relationship": { "type": "string", "enum": ["SENDER", "RECIPIENT"] }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["shipment_id", "public_reference", "order_status", "payment_status", "package_state", "relationship", "created_at"] } },
+          "activity": { "type": "array", "items": { "type": "object", "properties": { "action": { "type": "string" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["action", "created_at"] } }
+        }, "required": ["customer", "shipments", "activity"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
     "/admin/customers/{user_id}/restrictions/{restriction_id}/revoke": {
       "post": {
         "operationId": "admin_customer_shipping_restore",
@@ -92,6 +104,18 @@
         "parameters": [{ "name": "driver_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }, { "name": "If-Match", "in": "header", "required": true, "schema": { "type": "string", "pattern": "^\"[0-9]+\"$" } }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "properties": { "action": { "type": "string", "enum": ["SUSPEND", "REACTIVATE"] }, "reason": { "type": "string", "minLength": 10, "maxLength": 500 } }, "required": ["action", "reason"] } } } },
         "responses": { "200": { "description": "Driver status changed", "content": { "application/json": { "schema": { "type": "object", "properties": { "driver_id": { "type": "string" }, "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"] }, "version": { "type": "integer" } }, "required": ["driver_id", "status", "version"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/drivers/{driver_id}": {
+      "get": {
+        "operationId": "admin_driver_detail",
+        "summary": "Read one network driver with qualification status, availability freshness, recent runs and redacted administration actions.",
+        "parameters": [{ "name": "driver_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Driver detail", "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "driver": { "type": "object", "properties": { "driver_id": { "type": "string" }, "user_id": { "type": "string" }, "name": { "type": "string" }, "status": { "type": "string" }, "engagement_type": { "type": "string" }, "applied_at": { "type": "string", "format": "date-time" }, "approved_at": { "type": "string", "format": "date-time", "nullable": true }, "version": { "type": "integer" }, "verification_status": { "type": "string" }, "license_expiry": { "type": "string", "format": "date", "nullable": true }, "vehicle_description": { "type": "string" }, "availability_status": { "type": "string" }, "location_updated_at": { "type": "string", "format": "date-time", "nullable": true } }, "required": ["driver_id", "user_id", "name", "status", "engagement_type", "applied_at", "approved_at", "version", "verification_status", "license_expiry", "vehicle_description", "availability_status", "location_updated_at"] },
+          "runs": { "type": "array", "items": { "type": "object", "properties": { "run_id": { "type": "string" }, "kind": { "type": "string" }, "state": { "type": "string" }, "planned_start": { "type": "string", "format": "date-time" }, "planned_end": { "type": "string", "format": "date-time" }, "hub_name": { "type": "string" }, "vehicle_code": { "type": "string" } }, "required": ["run_id", "kind", "state", "planned_start", "planned_end", "hub_name", "vehicle_code"] } },
+          "activity": { "type": "array", "items": { "type": "object", "properties": { "action": { "type": "string" }, "created_at": { "type": "string", "format": "date-time" } }, "required": ["action", "created_at"] } }
+        }, "required": ["driver", "runs", "activity"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
     "/admin/drivers/{driver_id}/approve": {

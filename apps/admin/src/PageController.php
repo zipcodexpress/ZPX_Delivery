@@ -20,7 +20,7 @@ final class PageController
             ->header(['Content-Type'=>'text/css; charset=utf-8','X-Content-Type-Options'=>'nosniff','Cache-Control'=>'public, max-age=3600']);
     }
 
-    public static function handle(Request $request, string $page): Response
+    public static function handle(Request $request, string $page, string $resource=''): Response
     {
         $method = $request->method(true);
         if ($page === 'login') {
@@ -47,7 +47,7 @@ final class PageController
             }
             $profile = $identity->profile((string)$session['user_id']);
             $access = (new Access($db))->requireNetworkAdmin((string)$session['user_id']);
-            $data = self::pageData($page, $db, (string)$session['user_id'], $request);
+            $data = self::pageData($page, $db, (string)$session['user_id'], $request, $resource);
             $html = View::fetch('dashboard', [
                 'title'=>self::title($page), 'page'=>$page, 'name'=>$profile['name'],
                 'csrf'=>(new Secrets())->digest('csrf', $token),
@@ -141,13 +141,15 @@ final class PageController
         return $input;
     }
 
-    private static function pageData(string $page, \PDO $db, string $user, Request $request): array
+    private static function pageData(string $page, \PDO $db, string $user, Request $request, string $resource): array
     {
         $crypto = new Secrets();
         $data = match ($page) {
             'customers'=>(new CustomerManagement($db,$crypto))->list($user,(string)$request->get('cursor','')),
+            'customer-detail'=>(new CustomerManagement($db,$crypto))->detail($user,$resource),
             'drivers'=>(new DriverService($db,$crypto))->listPending($user)
                 + ['all'=>(new DriverAdministration($db,$crypto))->list($user,(string)$request->get('cursor',''))],
+            'driver-detail'=>(new DriverAdministration($db,$crypto))->detail($user,$resource),
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
@@ -209,7 +211,8 @@ final class PageController
     private static function title(string $page): string
     {
         return match ($page) {
-            'customers'=>'Customers', 'drivers'=>'Drivers', 'pickup-routes'=>'Pickup routes',
+            'customers'=>'Customers', 'customer-detail'=>'Customer detail',
+            'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'pickup-routes'=>'Pickup routes',
             'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments',
             default=>'Operations overview',
         };
