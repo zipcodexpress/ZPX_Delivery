@@ -149,3 +149,28 @@ Close statements under locks so concurrent workers cannot select the same earnin
 Synthetic network with two partners in Austin, one partner in a second state/timezone, a mall with two locations, an apartment with restricted eligibility, a closed school, an internal hub and lockers owned/operated by different parties. Include a customer shipping across partners, an expired staff grant, a suspended driver with a held parcel, an occupied locker, a stale device, duplicate service events, a refund after statement close and an unknown payout result.
 
 No imported apartment customers, production credentials or real banking data. Credentials are generated through existing development seed conventions.
+
+## 10. Global console extensions (2026-09-28)
+
+See [GLOBAL_CONSOLE](GLOBAL_CONSOLE.md) for G01–G06 and the complete menu registry. These additions expand the read surface without replacing existing domain tables or services.
+
+| Requirement | Planned GET contracts (base /api/delivery/v1) | Owned mutation service |
+|---|---|---|
+| G01 | `/admin/search?query=`, `/admin/overview`, `/admin/network-map`, `/admin/my-work` | None; search and counts use capability-specific scope |
+| G02 | `/admin/people`, `/admin/people/{id}`, `/admin/contacts`, `/admin/contacts/{id}`, typed contact-assignment child reads | Contact administration; identity grants remain separate |
+| G03 | `/admin/compartments`, `/admin/compartments/{id}`, `/admin/devices`, `/admin/devices/{id}` | Existing locker configuration/commissioning services |
+| G04 | `/admin/shipments`, `/admin/packages`, `/admin/packages/{id}/timeline`, `/admin/tracking`, `/admin/runs`, `/admin/pickup-demand`, `/admin/driver-offers`, `/admin/labels`, `/admin/recipient-pickups` | Existing shipping/custody/dispatch services; use existing operations contracts where projection is equivalent |
+| G05 | `/admin/payments`, `/admin/payments/{id}`, `/admin/refunds`, `/admin/pricing-policies`, `/admin/quotes`, `/admin/driver-earnings` | Existing payment/pricing/driver services with new explicit admin authorization adapters |
+| G06 | `/admin/notifications`, `/admin/notifications/{id}`, `/admin/notification-templates`, `/admin/integrations`, `/admin/system-health`, `/admin/settings` | Messaging/configuration use cases; no generic arbitrary retry or settings endpoint |
+
+Define concrete schemas and action endpoints in each owning ADM task before implementation, keeping the current API as the sole executable source. HTML `/admin/finance/...` navigation does not require renaming the JSON endpoints above. Existing endpoints can be extended with compatible scoped projections rather than creating duplicates solely to match a menu.
+
+Contact model: `network_contacts` has network ID, kind PERSON/TEAM, display_name, company_name, protected channels, timezone, optional linked_user_id, status and version. Separate `site_contact_assignments`, `location_contact_assignments`, `hub_contact_assignments` and `partner_contact_assignments` provide real same-network foreign keys, contact role, primary/backup, start/end and permitted purpose. Carrier uses its partner association. Enforce non-overlapping active primary assignments per resource/role with database constraints/locked transactions; do not rely solely on browser validation. A contact can be shared across assignments without exposing all assignments to every viewer.
+
+Existing identity `user_contacts` remains authoritative for verified login/shipping contact channels. Network business-contact edits cannot modify verification or create user access. Backfill prior admin site/partner contact fields once into assignment records and remove competing write paths before enabling contact edits; retain compatibility response projections through the directory. Unknown/missing contacts become completeness warnings, never invented records.
+
+Directory person ID is existing user ID; contacts without accounts stay in the contacts directory. Do not implement unsafe automatic user merge. Search normalization and contact reveal/export require scoped capability and audit. Typed assignment records carry provenance and allow logical archive, not deletion of history.
+
+Financial read models join provider/payment/quote/driver earning records without relabeling their states. Refund request/approve/execute endpoints require capture balance locks, provider idempotency, cumulative refund constraints and authoritative outcome reconciliation. Quote/pricing changes create versions rather than changing an existing shipment's paid basis. Existing pricing remains size-only in Phase 1.
+
+Tracking uses current package state plus append-only sources; display occurrence and ingestion time separately. Cross-domain timeline queries are bounded and redacted per event type. Outbox delivery status is not equivalent to business transition success or customer receipt.

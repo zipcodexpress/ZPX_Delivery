@@ -120,6 +120,8 @@ Requirements: F01, F11, F12. Dependencies: relevant preceding modules; finance r
 
 ## Acceptance catalog
 
+Global console additions ADM-13–ADM-18 below extend the original twelve tasks. They can deliver read views before advanced mutation workflows; they do not require all original tasks to finish first.
+
 | ID | Setup/action | Required result |
 |---|---|---|
 | A01 | Customer/partner submits network role or forged scope | 403/404; no privilege change or hidden data |
@@ -146,6 +148,64 @@ Requirements: F01, F11, F12. Dependencies: relevant preceding modules; finance r
 | A22 | Preparer approves own payout; provider outcome unknown | Self-approval refused; unknown stays pending; reconciliation precedes retry |
 | A23 | Revoke scope after export queued or file generated | Worker/download refuses disclosure; file expiry enforced; CSV formula text neutralized |
 | A24 | Old API-path cookie, fresh login, admin page, API call, logout | Old cookie cleared, one root-scoped cookie accepted, both surfaces authenticated, logout clears both paths; no duplicate-session ambiguity |
+| A25 | Global operator filters all-network dashboard then city/partner | Counts and drill-down predicates agree; clearing filters restores authorized network view |
+| A26 | One user has customer, driver and hub staff roles | One people result with role-specific tabs and independent tab permissions; no duplicate total |
+| A27 | Location overrides site contact; primary contact expires | Correct effective primary/backup shown; expired contacts excluded and missing coverage flagged |
+| A28 | Contact linked to login or shared among sites | No new account permission or verified-channel update; only authorized resource assignments visible |
+| A29 | Search SI through package/locker/site/payment related links | Stable connected records, independent scope checks, no usable pickup/label secrets |
+| A30 | One parcel delivered in a multi-parcel shipment; late event arrives | Other parcels stay incomplete; timeline labels occurred/received time and confirmed vs pending evidence |
+| A31 | Payment capture outcome unknown; duplicate reconcile/refund attempts | No manual success, duplicate charge or excessive cumulative refund; stable provider identity |
+| A32 | Mixed currencies/environments in report fixture | Separate totals; no test money in live totals; amounts and event bases explicitly named |
+| A33 | Notification resend after grant revoked or job scope revoked | Stale sensitive message not sent; permission and current purpose reevaluated; deduplicated retry |
+| A34 | Menu leaf lacks route/permission or feature implementation | Registry check fails or page hidden; global read role cannot acquire write/approve powers |
+
+## ADM-13 — global navigation, search and network overview
+
+Requirements: G01, global workspace and menu registry in GLOBAL_CONSOLE. Dependencies: ADM-01/02; cards use available domain read services and show unavailable for missing sources.
+
+- Add static authorized menu registry, network scope filters, scoped exact-identifier search, network dashboard and map using existing location tooling.
+- Build read services with bounded queries, capability-specific projections and explicit freshness/event bases. No new search infrastructure or road-routing engine required.
+- Tests A03, A25, A29, A34. Done: global users can discover implemented records across regions; restricted users cannot infer hidden search results/counts.
+
+## ADM-14 — unified people and location contact directory
+
+Requirements: G02. Dependencies: ADM-01/02; site/location assignment writes require ADM-05, partner assignment writes require ADM-04.
+
+- Add unified read projection of existing user/customer/driver/hub-staff identities, without duplicate login tables. Add independent contact records and typed effective-dated assignments with primary/backup rules.
+- Implement contact list/detail/edit/archive, resource-specific views, site fallback and coverage warnings. Backfill only explicit known contact data with provenance; do not infer a login/verification from a phone match.
+- Tests A03, A26, A27, A28. Done: one person with multiple roles appears once; primary/backup contacts resolve correctly without granting access or leaking other site relationships.
+
+## ADM-15 — global locker, compartment and device inspection
+
+Requirements: G03. Dependencies: ADM-01/02; use existing inventory for read-only baseline, ADM-06/07 for provisioning and commissioning writes.
+
+- Add global compartment/device lists and linked site/locker/session views, with claim/occupancy, partition ownership, pending evidence and stale telemetry distinguished.
+- No generic command replay, open-all, occupancy clearing or plaintext credentials.
+- Tests A03, A13, A14, A29. Done: locate a parcel's recorded door and capacity constraints globally without mutating hardware/custody.
+
+## ADM-16 — global shipment, tracking and dispatch workspace
+
+Requirements: G04. Dependencies: ADM-01/02 and existing shipping/custody read services. ADM-14 contacts enrich navigation but do not block package visibility.
+
+- Add shipment/package lists, SI lookup, joined but bounded custody timeline, labels, recipient pickup metadata, demand/offers/runs and exception views.
+- Reuse existing routes and service actions; new domain mutations require explicit separate implementation. Preserve per-package state, rejected/pending evidence and actual event ordering.
+- Tests A03, A29, A30 and existing custody regressions. Done: global operators trace packages end-to-end without treating incomplete/synthetic evidence as physical delivery.
+
+## ADM-17 — customer payment, pricing and financial reconciliation views
+
+Requirements: G05. Dependencies: ADM-01/02, current payment/driver services. Partner earning links wait for ADM-10/11.
+
+- Provide global payment attempt/detail, pricing/quote and driver-earning views; distinguish wallet payment methods from stored money.
+- Specify and implement guarded reconcile/refund contracts only through available provider/domain adapters. Unsupported mutations show a blocker; read-only visibility is separately deliverable.
+- Tests A03, A31, A32 plus relevant provider/payment regressions. Done: unknown payment outcomes and accounting-versus-external settlement are visible and cannot be manually falsified.
+
+## ADM-18 — notifications, integrations and system operations
+
+Requirements: G06. Dependencies: ADM-01/02 and existing messaging/outbox; support links reuse ADM-08 when available.
+
+- Add masked notification history, versioned template preview, explicit authorized resend, integration/queue health and allowlisted settings with audit.
+- Use existing idempotent handlers for retries; no arbitrary job/SQL/shell runner. Do not send production messages as part of tests.
+- Tests A03, A23, A33, A34. Done: operators can diagnose failures and perform supported scoped recovery without revealing secrets or sending stale/unauthorized messages.
 
 ## Definition of done and verification
 

@@ -2,13 +2,13 @@
 
 Purpose: implementation specification for ZPX network administration. Audience: Codex, Qwen and human developers.
 Status: ready for incremental software development; application features described here are not yet implemented unless explicitly marked existing.
-Date: 2026-09-27. Product owner: Richard; implementation owner: unassigned.
+Date: 2026-09-28. Product owner: Richard; implementation owner: unassigned.
 Baseline: delivery `338046c`, apartment reference `119d080`.
 
 ## Read in this order
 
 1. Repository `AGENTS.md` and [current status](../CURRENT_STATUS.md).
-2. [Functional specification](FUNCTIONS.md): screens, fields, actions, authorization and lifecycle rules.
+2. [Global console and full menu catalog](GLOBAL_CONSOLE.md): system-wide visibility, all menu items, linked detail workspaces and global requirements G01–G06. Then [functional specification](FUNCTIONS.md) for underlying actions and lifecycle rules.
 3. [ThinkPHP presentation](THINKPHP_PRESENTATION.md): controllers, templates, authentication and coexistence with current screens.
 4. [Data and API specification](DATA_AND_API.md): extensions, endpoint plan, first-slice payloads and migration requirements.
 5. [Implementation backlog](BACKLOG.md): bounded tasks, dependencies and acceptance evidence.
@@ -19,6 +19,7 @@ Baseline: delivery `338046c`, apartment reference `119d080`.
 - ThinkPHP 8 renders the new admin pages under `/admin` using server templates in the existing delivery backend. Richard explicitly confirmed ThinkPHP-rendered pages like `zpxadmin-tp8`. Existing React customer/driver/hub workflows remain accessible; no new React admin is required.
 - Existing ThinkPHP API, PostgreSQL 17, identity sessions, CSRF, transactions, outbox and append-only evidence are retained.
 - One ZPX customer/network identity. Partners are business entities within the network, not replacements for `organizations`.
+- Global ZPX administrators receive explicitly granted network-wide read views across people, contacts, locations, hardware, shipments/tracking and money. Global visibility never silently grants financial approval, credential access or physical custody override. Restricted partner/local staff views use the same console with scoped data.
 - Site, operational location, physical locker, equipment owner, operator and revenue beneficiary are separate concepts.
 - One locker per existing operational location remains the initial rule. A site can contain multiple locations; a locker can contain multiple cabinet modules.
 - Partner capabilities are scoped server-side. New partner roles do not receive existing network-wide ADMIN grants.

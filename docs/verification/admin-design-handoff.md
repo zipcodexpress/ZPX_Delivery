@@ -23,3 +23,9 @@ Scope: documentation only; no application, database or production changes.
 - Some admin contracts and runtime routes differ; ADM-01 requires reconciliation rather than assuming contract completeness.
 
 No runtime or hardware tests were run: documents describe proposed behavior, not a finished admin application. Live agreements and physical commissioning remain external activation gates. Start implementation at ADM-01 using `docs/admin/README.md`.
+
+## Global console expansion — 2026-09-28
+
+Added GLOBAL_CONSOLE.md with full menu catalog, G01–G06 requirements, related-record navigation, contact assignment model and global financial/operational visibility. Extended the backlog to eighteen tasks and thirty-four acceptance cases; added matching API/data work map. Global read capability remains separate from mutation/approval permissions.
+
+Document validation rerun: local links and fences, menu task references, all eighteen task headings and thirty-four acceptance rows, current-status line bound and `git diff --check`. No application tests run for this documentation-only expansion.

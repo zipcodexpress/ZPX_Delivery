@@ -3,6 +3,8 @@
 Status: development design, not implementation evidence. Baseline and reading order: [README](README.md).
 Requirement IDs F01–F12 map to [tasks and tests](BACKLOG.md).
 
+The [global console specification](GLOBAL_CONSOLE.md) extends this document with the complete menu catalog, global people/contact directory, connected shipment/locker/payment workspaces and requirements G01–G06. Use its menu hierarchy for implementation; the sections below define underlying module behavior.
+
 ## Shared behavior
 
 - Desktop-first responsive ThinkPHP-rendered administration sharing the delivery backend. Left navigation, page title/breadcrumb, authorized scope filter, search/filter bar, paginated list and detail view. Preserve the scan-focused React hub/driver screens.

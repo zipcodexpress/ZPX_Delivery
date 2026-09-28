@@ -4,8 +4,8 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `docs/admin-development-spec`, application baseline `338046c` (PR #24 merged).
-- Current task complete: admin development specification in `docs/admin/README.md` with functions, ThinkPHP presentation, data/API requirements and ADM-01–ADM-12 backlog. Reference apartment admin `119d080`. No application/schema changes.
+- Date: 2026-09-28. Agent: Codex. Branch: `docs/admin-development-spec`, application baseline `338046c` (PR #24 merged); initial design commit `f1e70e5`.
+- Current task complete: expanded global console specification in `docs/admin/GLOBAL_CONSOLE.md`, linked from the handoff README. Full menu catalog, people/contact directory, global equipment/shipment/tracking/payment views; ADM-01–ADM-18 backlog and A01–A34 acceptance cases. No application/schema changes.
 - Richard confirmed ThinkPHP-rendered admin pages like `zpxadmin-tp8`; this replaces the earlier React admin expansion proposal. Existing React customer/driver/hub screens remain. Use the same delivery backend/services/PostgreSQL and identity.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -36,6 +36,7 @@
 2. PR #24 is merged. Delivery continuation remains partial-run missed pickup discrepancy resolution with explicit evidence, then enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 3. Documentation verification: local links, requirement/test/task references, code fences and handoff length checked; no runtime tests or production actions. Prior test results above belong to recovery implementation. Legacy apartment code was not modified.
 4. Live settlement terms and real hardware commissioning remain explicit gates; independent synthetic admin development can proceed. New admin scope must not broaden existing location/hub grants or change physical custody through forms.
+5. Global read work ADM-13–ADM-18 may follow access/shell foundations before advanced writes; NETWORK scope is explicit and does not imply unrestricted mutations or access to other organizations. Contacts use typed resource assignments and do not grant login permissions.
 
 ## Critical rules
 
