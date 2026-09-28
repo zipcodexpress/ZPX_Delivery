@@ -92,7 +92,7 @@ final class Service
                 throw new Failure(409, 'INVALID_STATUS', 'Driver cannot be approved from status: ' . $driver['status']);
             }
 
-            $this->q("UPDATE drivers SET status='ACTIVE', approved_at=now(), approved_by=? WHERE id=?", [$adminUser, $driverId]);
+            $this->q("UPDATE drivers SET status='ACTIVE', version=version+1, approved_at=now(), approved_by=? WHERE id=?", [$adminUser, $driverId]);
             $this->q("INSERT INTO roles(code) VALUES ('DRIVER') ON CONFLICT(code) DO NOTHING");
             $this->q("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,granted_by)
                       SELECT ?,r.id,?,? FROM roles r WHERE r.code='DRIVER'
@@ -124,7 +124,7 @@ final class Service
                 throw new Failure(409, 'INVALID_STATUS', 'Only pending drivers can be rejected.');
             }
 
-            $this->q("UPDATE drivers SET status='INACTIVE', rejection_reason=?, approved_at=now() WHERE id=?", [$reason, $driverId]);
+            $this->q("UPDATE drivers SET status='INACTIVE', version=version+1, rejection_reason=?, approved_at=now() WHERE id=?", [$reason, $driverId]);
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'DRIVER_REJECTED','driver',?,?)", [$adminUser, $driverId, $reason]);
 
             return ['driver_id' => $driverId, 'user_id' => $driver['user_id'], 'status' => 'INACTIVE', 'reason' => $reason];

@@ -16,6 +16,17 @@ foreach (['register','login','challenges','verify-contact','refresh','logout'] a
 }
 Route::any('api/delivery/v1/me', static fn(Request $request) => Zpx\Http\IdentityController::handle($request,'me'));
 Route::any('api/delivery/v1/admin/access', static fn(Request $request) => ZpxAdmin\AccessController::handle($request));
+Route::any('api/delivery/v1/admin/customers', static fn(Request $request) => ZpxAdmin\CustomerController::handle($request,'list'));
+Route::any('api/delivery/v1/admin/customers/<user_id>/restrictions',
+    static fn(Request $request, string $userId) => ZpxAdmin\CustomerController::handle($request,'restrict',$userId))
+    ->pattern(['user_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/admin/customers/<user_id>/restrictions/<restriction_id>/revoke',
+    static fn(Request $request, string $userId, string $restrictionId) => ZpxAdmin\CustomerController::handle($request,'revoke',$userId,$restrictionId))
+    ->pattern(['user_id'=>'[1-9][0-9]{0,17}','restriction_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/admin/drivers', static fn(Request $request) => ZpxAdmin\DriverAdministrationController::handle($request,'list'));
+Route::any('api/delivery/v1/admin/drivers/<driver_id>/transitions',
+    static fn(Request $request, string $driverId) => ZpxAdmin\DriverAdministrationController::handle($request,'transition',$driverId))
+    ->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
 foreach (['me/profile'=>'profile-update','me/payment-methods'=>'wallet-methods','me/payment-methods/manage'=>'wallet-manage','me/payments'=>'wallet-history','shipments/lookup'=>'lookup','locations'=>'locations','shipments'=>'shipments','operations/shipments'=>'operations','operations/packages/search'=>'operations-search','recipient-claims/challenges'=>'claim-challenge','recipient-claims'=>'claim'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request) => Zpx\Http\ShippingController::handle($request,$action));
 }

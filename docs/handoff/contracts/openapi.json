@@ -34,6 +34,43 @@
         }
       }
     },
+    "/admin/customers": {
+      "get": {
+        "operationId": "admin_customers_list",
+        "summary": "List customers with masked contacts and current shipping eligibility within the admin network.",
+        "parameters": [{ "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Bounded customer page", "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "items": { "type": "array", "items": { "type": "object", "properties": {
+              "user_id": { "type": "string" }, "name": { "type": "string" }, "status": { "type": "string" },
+              "created_at": { "type": "string", "format": "date-time" }, "shipping_restricted": { "type": "boolean" },
+              "restriction_id": { "type": "string", "nullable": true }, "masked_email": { "type": "string", "nullable": true },
+              "masked_phone": { "type": "string", "nullable": true }, "email_verified": { "type": "boolean" }, "phone_verified": { "type": "boolean" }
+            }, "required": ["user_id", "name", "status", "created_at", "shipping_restricted", "restriction_id", "masked_email", "masked_phone", "email_verified", "phone_verified"] } },
+            "next_cursor": { "type": "string", "nullable": true }
+          }, "required": ["items", "next_cursor"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/admin/customers/{user_id}/restrictions": {
+      "post": {
+        "operationId": "admin_customer_shipping_restrict",
+        "summary": "Apply an audited SHIPPING-only restriction; existing parcel access remains available.",
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string", "minLength": 10, "maxLength": 500 } }, "required": ["reason"] } } } },
+        "responses": { "200": { "description": "Restriction applied", "content": { "application/json": { "schema": { "type": "object", "properties": { "user_id": { "type": "string" }, "restriction_id": { "type": "string" }, "shipping_restricted": { "type": "boolean" } }, "required": ["user_id", "restriction_id", "shipping_restricted"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/customers/{user_id}/restrictions/{restriction_id}/revoke": {
+      "post": {
+        "operationId": "admin_customer_shipping_restore",
+        "summary": "Revoke one current SHIPPING restriction with a reason; stale restriction IDs conflict.",
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "restriction_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string", "minLength": 10, "maxLength": 500 } }, "required": ["reason"] } } } },
+        "responses": { "200": { "description": "Restriction revoked", "content": { "application/json": { "schema": { "type": "object", "properties": { "user_id": { "type": "string" }, "restriction_id": { "type": "string" }, "shipping_restricted": { "type": "boolean" } }, "required": ["user_id", "restriction_id", "shipping_restricted"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
     "/admin/drivers/pending": {
       "get": {
         "operationId": "admin_drivers_pending",
@@ -46,6 +83,15 @@
           }, "required": ["driver_id", "user_id", "name", "engagement_type", "status", "email", "phone", "applied_at"] } } }, "required": ["items"] } } } },
           "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
+      }
+    },
+    "/admin/drivers/{driver_id}/transitions": {
+      "post": {
+        "operationId": "admin_driver_transition",
+        "summary": "Suspend or reactivate a driver with a reason and version check. Suspension blocks new offers without removing assigned custody.",
+        "parameters": [{ "name": "driver_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }, { "name": "If-Match", "in": "header", "required": true, "schema": { "type": "string", "pattern": "^\"[0-9]+\"$" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "properties": { "action": { "type": "string", "enum": ["SUSPEND", "REACTIVATE"] }, "reason": { "type": "string", "minLength": 10, "maxLength": 500 } }, "required": ["action", "reason"] } } } },
+        "responses": { "200": { "description": "Driver status changed", "content": { "application/json": { "schema": { "type": "object", "properties": { "driver_id": { "type": "string" }, "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"] }, "version": { "type": "integer" } }, "required": ["driver_id", "status", "version"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
     "/admin/drivers/{driver_id}/approve": {
@@ -1114,6 +1160,12 @@
     }
   },
   "/admin/drivers": {
+    "get": {
+      "operationId": "admin_drivers_list",
+      "summary": "List network drivers with status, engagement, active-run count, and version.",
+      "parameters": [{ "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }],
+      "responses": { "200": { "description": "Bounded driver page", "content": { "application/json": { "schema": { "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": { "driver_id": { "type": "string" }, "user_id": { "type": "string" }, "name": { "type": "string" }, "status": { "type": "string" }, "engagement_type": { "type": "string" }, "applied_at": { "type": "string", "format": "date-time" }, "version": { "type": "integer" }, "active_run_count": { "type": "integer" } }, "required": ["driver_id", "user_id", "name", "status", "engagement_type", "applied_at", "version", "active_run_count"] } }, "next_cursor": { "type": "string", "nullable": true } }, "required": ["items", "next_cursor"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+    },
     "post": {
       "operationId": "delivery_post__admin_drivers",
       "summary": "Operations admin creates approved driver profile.",

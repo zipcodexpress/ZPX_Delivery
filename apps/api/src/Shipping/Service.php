@@ -19,6 +19,14 @@ final class Service
         return $id;
     }
     private function customer(string $user): void { $this->identity->requireRole($user,'CUSTOMER'); $this->identity->requireVerified($user); }
+    private function canCreateShipment(string $user): void {
+        $this->customer($user);
+        // Serialize a new shipping commitment with a concurrent admin restriction.
+        $this->q('SELECT id FROM users WHERE id=? AND organization_id=? FOR SHARE',[$user,$this->org()]);
+        if ($this->q('SELECT id FROM customer_shipping_restrictions WHERE user_id=? AND organization_id=? AND revoked_at IS NULL',[$user,$this->org()])->fetchColumn()) {
+            throw new Failure(403,'SHIPPING_RESTRICTED','New shipping is unavailable for this account. Existing parcels remain accessible.');
+        }
+    }
     private function local(array $location): bool {
         $policy=json_decode($location['access_policy'] ?? '{}',true);
         return in_array(getenv('APP_ENV'),['development','test'],true) && ($policy['synthetic'] ?? false)===true;
@@ -247,7 +255,7 @@ final class Service
         Input::fields($input['package'],['size_class','width_mm','height_mm','depth_mm','weight_g']);
         if (!in_array($input['package']['size_class'],['SMALL','MEDIUM','LARGE'],true)) { throw new Failure(422,'INVALID_PACKAGE','Choose a supported parcel size.'); }
         foreach (['width_mm','height_mm','depth_mm','weight_g'] as $field) { $v=$input['package'][$field]; if (!is_int($v) || $v<1 || $v>100000) { throw new Failure(422,'INVALID_PACKAGE','Use positive whole-number parcel measurements.'); } }
-        return $this->once($user,'create',$key,$input,fn()=>$this->customer($user),function () use ($user,$input,$origin,$destination,$recipient) {
+        return $this->once($user,'create',$key,$input,fn()=>$this->canCreateShipment($user),function () use ($user,$input,$origin,$destination,$recipient) {
             $policy=$this->sizePolicy(); $p=$input['package'];
             $size=current(array_filter($policy['classes'],fn($class)=>$class['code']===$p['size_class']));
             if (!$size) { throw new Failure(503,'RATE_POLICY_UNAVAILABLE','This parcel size is not configured.'); }

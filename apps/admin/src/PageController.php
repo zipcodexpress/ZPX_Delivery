@@ -94,19 +94,27 @@ final class PageController
                 'route-assign' => (new PickupRouting($db,$crypto))->assign($user, self::routeInput($request,$id),$key),
                 'pickup-release' => (new PickupRecovery($db,$crypto))->release($user,$id,
                     ['reason'=>(string)$request->post('reason',''),'expected_revision'=>$request->post('revision',-1)],$key),
+                'customer-restrict' => (new CustomerManagement($db,$crypto))->restrict($user,$id,$request->post('reason',''),$key),
+                'customer-revoke' => (new CustomerManagement($db,$crypto))->revoke($user,$id,(string)$request->post('restriction_id',''),$request->post('reason',''),$key),
+                'driver-suspend', 'driver-reactivate' => (new DriverAdministration($db,$crypto))->transition($user,$id,[
+                    'action'=>$operation==='driver-suspend'?'SUSPEND':'REACTIVATE',
+                    'reason'=>$request->post('reason',''), 'expected_version'=>$request->post('version',-1),
+                ],$key),
             };
             $page = match ($operation) {
-                'driver-approve','driver-reject'=>'drivers',
+                'driver-approve','driver-reject','driver-suspend','driver-reactivate'=>'drivers',
                 'route-assign'=>'pickup-routes',
+                'customer-restrict','customer-revoke'=>'customers',
                 default=>'pickup-recovery',
             };
             return self::redirect('/admin/'.$page);
         } catch (Failure $error) {
             if ($error->status === 401) { return self::redirect('/admin/login'); }
-            if (in_array($error->status, [409, 422], true)) {
+            if (in_array($error->status, [409, 412, 422], true)) {
                 $back = match ($operation) {
-                    'driver-approve','driver-reject'=>'/admin/drivers',
+                    'driver-approve','driver-reject','driver-suspend','driver-reactivate'=>'/admin/drivers',
                     'route-assign'=>'/admin/pickup-routes',
+                    'customer-restrict','customer-revoke'=>'/admin/customers',
                     default=>'/admin/pickup-recovery',
                 };
                 return self::html(View::fetch('action_error', [
@@ -137,7 +145,9 @@ final class PageController
     {
         $crypto = new Secrets();
         $data = match ($page) {
-            'drivers'=>(new DriverService($db,$crypto))->listPending($user),
+            'customers'=>(new CustomerManagement($db,$crypto))->list($user,(string)$request->get('cursor','')),
+            'drivers'=>(new DriverService($db,$crypto))->listPending($user)
+                + ['all'=>(new DriverAdministration($db,$crypto))->list($user,(string)$request->get('cursor',''))],
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
@@ -148,6 +158,9 @@ final class PageController
             if (!isset($data[$collection])) { continue; }
             foreach ($data[$collection] as &$row) { $row['form_key']=Secrets::uuid(); }
             unset($row);
+        }
+        foreach ($data['all']['items'] ?? [] as $index=>$row) {
+            $data['all']['items'][$index]['form_key']=Secrets::uuid();
         }
         return $data;
     }
@@ -196,7 +209,7 @@ final class PageController
     private static function title(string $page): string
     {
         return match ($page) {
-            'drivers'=>'Driver reviews', 'pickup-routes'=>'Pickup routes',
+            'customers'=>'Customers', 'drivers'=>'Drivers', 'pickup-routes'=>'Pickup routes',
             'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments',
             default=>'Operations overview',
         };

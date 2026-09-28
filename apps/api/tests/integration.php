@@ -71,7 +71,7 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 84, '82 business tables plus migration ledger and auth limiter');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 85, 'customer shipping restriction and device nonce tables added without removing existing tables');
 require __DIR__ . '/seed.php';
 require __DIR__ . '/ownership.php';
 
@@ -164,6 +164,7 @@ check($kernel->handle('GET','/health/live','test')[0]===200,'liveness independen
 putenv('DB_PASSWORD=' . $password);
 require __DIR__ . '/identity.php';
 require __DIR__ . '/shipping.php';
+require __DIR__ . '/customer-administration.php';
 // ThinkPHP installs a CLI exception handler during HTTP tests; force subsequent failures to fail CI.
 set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, get_class($error).': '.$error->getMessage()."\n"); exit(1); });
 require __DIR__ . '/providers.php';
@@ -177,6 +178,7 @@ require __DIR__ . '/hub-dispatch.php';
 require __DIR__ . '/final-deposit.php';
 require __DIR__ . '/device-commands.php';
 require __DIR__ . '/driver-management.php';
+require __DIR__ . '/driver-administration.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
 $suiteComplete=true;
