@@ -48,6 +48,8 @@ services:
       MAIL_DELIVERY_MODE: ${MAIL_DELIVERY_MODE:-local}
       MAIL_ALLOWED_RECIPIENTS: ${MAIL_ALLOWED_RECIPIENTS:-}
       AUTH_ALLOWED_ORIGINS: ${ZPX_AUTH_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174}
+      ADMIN_OPERATIONS_URL: ${ZPX_ADMIN_OPERATIONS_URL:-http://localhost:5174/}
+      ADMIN_CUSTOMER_URL: ${ZPX_ADMIN_CUSTOMER_URL:-http://localhost:5173/}
     ports: ["127.0.0.1:${ZPX_API_PORT:-8000}:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}

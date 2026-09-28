@@ -19,6 +19,62 @@
     }
   ],
   "paths": {
+    "/admin/access": {
+      "get": {
+        "operationId": "admin_access",
+        "summary": "Return current admin capability hints and resolved network or location scopes.",
+        "description": "Navigation hint only. Every resource action rechecks current grants; location grants do not imply network ADMIN.",
+        "responses": {
+          "200": { "description": "Current access hints", "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "capabilities": { "type": "array", "items": { "type": "string" } },
+            "scopes": { "type": "array", "items": { "type": "object", "properties": { "kind": { "type": "string", "enum": ["NETWORK", "LOCATION"] }, "id": { "type": "string" } }, "required": ["kind", "id"] } },
+            "policy_version": { "type": "integer", "minimum": 1 }
+          }, "required": ["capabilities", "scopes", "policy_version"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/admin/drivers/pending": {
+      "get": {
+        "operationId": "admin_drivers_pending",
+        "summary": "List pending driver applications within the current network.",
+        "responses": {
+          "200": { "description": "Pending applications", "content": { "application/json": { "schema": { "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": {
+            "driver_id": { "type": "string" }, "user_id": { "type": "string" }, "name": { "type": "string" },
+            "engagement_type": { "type": "string" }, "status": { "type": "string" }, "email": { "type": "string", "nullable": true },
+            "phone": { "type": "string", "nullable": true }, "applied_at": { "type": "string", "format": "date-time" }
+          }, "required": ["driver_id", "user_id", "name", "engagement_type", "status", "email", "phone", "applied_at"] } } }, "required": ["items"] } } } },
+          "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/admin/drivers/{driver_id}/approve": {
+      "post": {
+        "operationId": "admin_driver_approve",
+        "summary": "Approve a pending driver; grants DRIVER role and writes audit evidence.",
+        "parameters": [{ "name": "driver_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "properties": {} } } } },
+        "responses": { "200": { "description": "Driver activated", "content": { "application/json": { "schema": { "type": "object", "properties": { "driver_id": { "type": "string" }, "user_id": { "type": "string" }, "status": { "type": "string", "enum": ["ACTIVE"] } }, "required": ["driver_id", "user_id", "status"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/drivers/{driver_id}/reject": {
+      "post": {
+        "operationId": "admin_driver_reject",
+        "summary": "Reject a pending driver with an audit reason.",
+        "parameters": [{ "name": "driver_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 500 } }, "required": ["reason"] } } } },
+        "responses": { "200": { "description": "Driver rejected", "content": { "application/json": { "schema": { "type": "object", "properties": { "driver_id": { "type": "string" }, "user_id": { "type": "string" }, "status": { "type": "string", "enum": ["INACTIVE"] }, "reason": { "type": "string" } }, "required": ["driver_id", "user_id", "status", "reason"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/driver-pay": {
+      "post": {
+        "operationId": "admin_driver_pay_record",
+        "summary": "Record a completed run's configured driver compensation; no external payout is initiated.",
+        "parameters": [{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16, "maxLength": 100 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "driver_id": { "type": "string" }, "run_id": { "type": "string" } }, "required": ["driver_id", "run_id"] } } } },
+        "responses": { "200": { "description": "Compensation entry recorded", "content": { "application/json": { "schema": { "type": "object", "properties": { "pay_entry_id": { "type": "string" }, "driver_id": { "type": "string" }, "run_id": { "type": "string" }, "amount_cents": { "type": "integer" } }, "required": ["pay_entry_id", "driver_id", "run_id", "amount_cents"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
     "/admin/pickup-routes": {
       "get": {
         "operationId": "admin_pickup_routes",

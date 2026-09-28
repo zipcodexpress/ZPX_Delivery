@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Save could not complete · ZipcodeXpress</title><link rel="stylesheet" href="/admin-style"></head>
+<body class="login-page"><main class="login-card"><div class="login-brand">Zipcode<strong>Xpress</strong></div><h1>Save could not complete</h1><div class="alert" role="alert">{$message}</div>
+{if $status == 409}<p class="intro">The record changed or this action is unavailable. Refresh the list before trying again.</p>{else /}<p class="intro">Check the entered values, then return to the list and retry.</p>{/if}
+{if $reason}<label for="entered-reason">Your entered reason</label><input id="entered-reason" value="{$reason}" readonly>{/if}
+{if $hub}<label for="entered-hub">Selected hub ID</label><input id="entered-hub" value="{$hub}" readonly>{/if}
+{if $latitude}<label for="entered-latitude">Latitude</label><input id="entered-latitude" value="{$latitude}" readonly>{/if}
+{if $longitude}<label for="entered-longitude">Longitude</label><input id="entered-longitude" value="{$longitude}" readonly>{/if}
+<a href="{$back}">Refresh the list</a></main></body></html>

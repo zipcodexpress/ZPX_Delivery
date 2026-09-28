@@ -15,6 +15,7 @@ foreach (['register','login','challenges','verify-contact','refresh','logout'] a
     Route::any('api/delivery/v1/auth/'.$action, static fn(Request $request) => Zpx\Http\IdentityController::handle($request,$action));
 }
 Route::any('api/delivery/v1/me', static fn(Request $request) => Zpx\Http\IdentityController::handle($request,'me'));
+Route::any('api/delivery/v1/admin/access', static fn(Request $request) => ZpxAdmin\AccessController::handle($request));
 foreach (['me/profile'=>'profile-update','me/payment-methods'=>'wallet-methods','me/payment-methods/manage'=>'wallet-manage','me/payments'=>'wallet-history','shipments/lookup'=>'lookup','locations'=>'locations','shipments'=>'shipments','operations/shipments'=>'operations','operations/packages/search'=>'operations-search','recipient-claims/challenges'=>'claim-challenge','recipient-claims'=>'claim'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request) => Zpx\Http\ShippingController::handle($request,$action));
 }
@@ -54,6 +55,7 @@ Route::any('api/delivery/v1/integrations/payments/webhook', static function(Requ
         return Reply::json(200,$service->webhook($raw,$request->header('x-anet-signature','')),$id);
     } catch (Zpx\Identity\Failure $e) { return Reply::json($e->status,['code'=>$e->errorCode,'message'=>$e->getMessage(),'correlation_id'=>$id,'retryable'=>$e->status===503],$id); }
 });
+require dirname(__DIR__, 2) . '/admin/routes.php';
 Route::miss(static function () {
     $id = bin2hex(random_bytes(16));
     return Reply::json(404, ['code' => 'NOT_FOUND', 'message' => 'Endpoint not implemented.', 'request_id' => $id, 'retryable' => false], $id);
