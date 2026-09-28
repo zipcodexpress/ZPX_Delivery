@@ -53,7 +53,7 @@ Requirements: F06, F11. Dependencies: ADM-01, ADM-02.
 
 Requirements: F04. Dependencies: ADM-02, ADM-04.
 
-Current partial slice: draft site catalog/editing, additive backfill of existing locations, inactive locker-location creation, site and location overdue-policy drafts, and audited location deactivation are implemented in the HTML admin console. No site activation, calendar, host assignment, membership eligibility, production commissioning or billing is implied. JSON contracts and remaining lifecycle actions are still required.
+Current partial slice: draft site catalog/editing, additive backfill of existing locations, inactive locker-location creation, site and location overdue-policy drafts, and audited location deactivation/reactivation are implemented in the HTML admin console. Reactivation is limited to locations deactivated by this admin workflow; new site/locker activation remains gated. No site activation, calendar, host assignment, membership eligibility, production commissioning or billing is implied. JSON contracts and remaining lifecycle actions are still required.
 
 - Implement the concrete first-slice contracts in DATA_AND_API, including backward-compatible location creation and draft-site backfill.
 - Add site forms and location associations, calendar/eligibility policy, host assignment, lifecycle and origin-hub configuration using current route service.

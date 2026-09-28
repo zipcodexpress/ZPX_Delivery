@@ -38,6 +38,8 @@ final class SiteInventory
         $site['address']=json_decode($site['address'],true,512,JSON_THROW_ON_ERROR);
         $locations=$this->q('SELECT l.id,l.code,l.name,l.kind,l.status,l.address_text,l.site_mode,l.timezone,
             l.overdue_grace_days,l.overdue_daily_cents,l.overdue_cap_cents,
+            CASE WHEN EXISTS(SELECT 1 FROM audit_events a WHERE a.entity_type=\'location\' AND a.entity_id=l.id::text
+                AND a.action=\'LOCATION_DEACTIVATED\') THEN 1 ELSE 0 END AS can_reactivate,
             k.id AS locker_id,k.external_locker_id,
             (SELECT count(*) FROM compartments c WHERE c.locker_id=k.id) AS box_count
             FROM locations l LEFT JOIN lockers k ON k.location_id=l.id
@@ -200,6 +202,27 @@ final class SiteInventory
             if ($row['status']!=='ACTIVE') { throw new Failure(409,'LOCATION_NOT_ACTIVE','Location is not active.'); }
             $this->q("UPDATE locations SET status='INACTIVE' WHERE id=?",[$locationId]);
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'LOCATION_DEACTIVATED','location',?,?)",[$actor,$locationId,$reason]);
+        });
+    }
+
+    public function reactivateLocation(string $actor,string $siteId,string $locationId,string $reason): void
+    {
+        $this->authorize($actor); self::id($siteId); self::id($locationId);
+        $reason=Input::text(trim(Input::text($reason,10,500)),10,500);
+        (new Transaction($this->db))->run(function() use($actor,$siteId,$locationId,$reason) {
+            $row=$this->q('SELECT l.status,s.status AS site_status FROM locations l JOIN installation_sites s ON s.id=l.site_id
+                WHERE l.id=? AND l.site_id=? AND l.organization_id=? FOR UPDATE OF l,s',
+                [$locationId,$siteId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$row) { throw new Failure(404,'LOCATION_NOT_FOUND','Location not found.'); }
+            if ($row['status']!=='INACTIVE' || !in_array($row['site_status'],['DRAFT','ACTIVE'],true)) {
+                throw new Failure(409,'LOCATION_NOT_REACTIVATABLE','This location cannot be reactivated.');
+            }
+            if (!$this->q("SELECT 1 FROM audit_events WHERE entity_type='location' AND entity_id=?
+                AND action='LOCATION_DEACTIVATED' LIMIT 1",[$locationId])->fetchColumn()) {
+                throw new Failure(409,'COMMISSIONING_REQUIRED','New locations require a commissioning workflow before activation.');
+            }
+            $this->q("UPDATE locations SET status='ACTIVE' WHERE id=?",[$locationId]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'LOCATION_REACTIVATED','location',?,?)",[$actor,$locationId,$reason]);
         });
     }
 

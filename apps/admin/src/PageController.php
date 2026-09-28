@@ -131,6 +131,8 @@ final class PageController
                     ]),
                 'location-deactivate' => (new SiteInventory($db,$crypto))->deactivateLocation($user,$id,
                     (string)$request->post('location_id',''),(string)$request->post('reason','')),
+                'location-reactivate' => (new SiteInventory($db,$crypto))->reactivateLocation($user,$id,
+                    (string)$request->post('location_id',''),(string)$request->post('reason','')),
                 'locker-body-add' => (new SiteInventory($db,$crypto))->addBody($user,$id,[
                     'code'=>$request->post('code',''),'position'=>$request->post('position',''),
                     'reason'=>$request->post('reason',''),
@@ -159,7 +161,7 @@ final class PageController
                     (string)$request->post('address_id',''),(string)$request->post('reason','')),
             };
             if ($operation==='site-create') { return self::redirect('/admin/sites/'.$result); }
-            if (in_array($operation,['site-update','site-overdue','site-location-create','location-overdue','location-deactivate'],true)) { return self::redirect('/admin/sites/'.$id); }
+            if (in_array($operation,['site-update','site-overdue','site-location-create','location-overdue','location-deactivate','location-reactivate'],true)) { return self::redirect('/admin/sites/'.$id); }
             if (str_starts_with($operation,'locker-')) { return self::redirect('/admin/lockers/'.$id); }
             if (in_array($operation,['customer-rename','address-save','address-archive'],true)) { return self::redirect('/admin/customers/'.$id); }
             $page = match ($operation) {
@@ -178,7 +180,7 @@ final class PageController
                     'route-assign'=>'/admin/pickup-routes',
                     'customer-restrict','customer-revoke'=>'/admin/customers',
                     'partner-create'=>'/admin/partners',
-                    'site-create','site-update','site-location-create','site-overdue','location-overdue','location-deactivate'=>'/admin/sites',
+                    'site-create','site-update','site-location-create','site-overdue','location-overdue','location-deactivate','location-reactivate'=>'/admin/sites',
                     'locker-body-add','locker-module-add','locker-box-add','locker-box-assign'=>'/admin/sites',
                     'customer-rename','address-save','address-archive'=>'/admin/customers',
                     default=>'/admin/pickup-recovery',

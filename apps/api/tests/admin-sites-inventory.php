@@ -36,6 +36,8 @@ try {
     $detail=$sites->site($customerAdmin,$site);
     check(count($detail['locations'])===1 && $detail['locations'][0]['status']==='INACTIVE',
         'site contains inactive service location');
+    failsIdentity(fn()=>$sites->reactivateLocation($customerAdmin,$site,$location,'Premature commissioning test'),409,
+        'new inactive location cannot bypass commissioning');
     $locker=(string)$detail['locations'][0]['locker_id'];
     check(count($sites->locker($customerAdmin,$locker)['boxes'])===0,'new locker has no commissioned boxes');
     $sites->addBody($customerAdmin,$locker,['code'=>'BODY-A','position'=>'1','reason'=>'Synthetic body inventory setup']);
@@ -79,6 +81,9 @@ try {
         'deactivated location disappears from new shipping choices');
     failsIdentity(fn()=>$sites->deactivateLocation($customerAdmin,$site,$location,'Repeated safety pause test'),409,
         'duplicate location deactivation rejected');
+    $sites->reactivateLocation($customerAdmin,$site,$location,'Synthetic location review cleared');
+    check(in_array($location,array_column($shipping->locations()['items'],'id'),true),
+        'previously active location can be reactivated with audit reason');
     $before=count($people->addresses($customerAdmin,$sender));
     $address=['line1'=>'22 Test Street','line2'=>'Unit 4','city'=>'Austin','region'=>'TX','postal_code'=>'00000','country_code'=>'US'];
     $people->save($customerAdmin,$sender,['address_id'=>'','kind'=>'RETURN','label'=>'Office',
