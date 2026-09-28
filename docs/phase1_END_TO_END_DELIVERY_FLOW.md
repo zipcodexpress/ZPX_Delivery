@@ -202,6 +202,8 @@ After accepting assigned pickup work:
 
 Completing a stop or run cannot silently remove missing packages from custody.
 
+For a missed pickup after other parcels on the same offer-created run were scanned, an administrator may release only an individually unscanned parcel still recorded with origin-locker custody. The administrator records a site-inspection or locker-inventory reference and a reason. The original manifest item remains as `RELEASED` history, its active allocation is removed, the demand can be offered again, and the run revision changes so stale driver scans fail. The parcel's package state, custody and version do not change. `RELEASED` items are excluded from driver and hub expected counts; collected parcels continue to hub receiving on the original run. An operator reference is a manual assertion, not authenticated device evidence. If a receiving session has started or custody is ambiguous, recovery requires discrepancy resolution rather than reopening the demand.
+
 ## 12. Hub receiving and sorting
 
 Hub receiving is independent from the driver.

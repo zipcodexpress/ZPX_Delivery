@@ -1,5 +1,7 @@
 # Hub management and asset custody
 
+2026-09-27 presentation amendment: Richard selected ThinkPHP-rendered admin pages like `zpxadmin-tp8`. See [admin development handoff](../admin/README.md) and [presentation contract](../admin/THINKPHP_PRESENTATION.md). These supersede this record's proposed React admin location only. Equipment ledger, actor/hub attribution and no per-scan hardware tracking remain unchanged. Independent admin software tasks can be prepared with synthetic data; physical delivery/commissioning gates remain required.
+
 Purpose: fix the scope, data model and sequencing for hub management before any
 implementation begins. Audience: developers and reviewers.
 Status: Accepted for development. Owner: unassigned. Reviewed: 2026-09-21.
