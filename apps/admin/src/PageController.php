@@ -238,9 +238,13 @@ final class PageController
             'customers'=>(new CustomerManagement($db,$crypto))->list($user,(string)$request->get('cursor','')),
             'customer-detail'=>(new CustomerManagement($db,$crypto))->detail($user,$resource)
                 + ['addresses'=>(new PeopleEditor($db,$crypto))->addresses($user,$resource)],
+            'customer-history'=>(new History($db,$crypto))->page($user,'customer',$resource,
+                (string)$request->get('kind','shipments'),(string)$request->get('cursor','')),
             'drivers'=>(new DriverService($db,$crypto))->listPending($user)
                 + ['all'=>(new DriverAdministration($db,$crypto))->list($user,(string)$request->get('cursor',''))],
             'driver-detail'=>(new DriverAdministration($db,$crypto))->detail($user,$resource),
+            'driver-history'=>(new History($db,$crypto))->page($user,'driver',$resource,
+                (string)$request->get('kind','runs'),(string)$request->get('cursor','')),
             'partners'=>(new PartnerRegistry($db,$crypto))->list($user,(string)$request->get('cursor','')),
             'partner-detail'=>(new PartnerRegistry($db,$crypto))->detail($user,$resource),
             'sites'=>(new SiteInventory($db,$crypto))->sites($user,(string)$request->get('cursor','')),
@@ -312,7 +316,8 @@ final class PageController
     {
         return match ($page) {
             'customers'=>'Customers', 'customer-detail'=>'Customer detail',
-            'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'pickup-routes'=>'Pickup routes',
+            'customer-history'=>'Customer history',
+            'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'driver-history'=>'Driver history', 'pickup-routes'=>'Pickup routes',
             'partners'=>'Partners', 'partner-detail'=>'Partner detail',
             'sites'=>'Sites', 'site-detail'=>'Site detail', 'locker-detail'=>'Locker inventory',
             'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments', 'shipment-detail'=>'Shipment lifecycle',

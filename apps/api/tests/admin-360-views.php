@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-use ZpxAdmin\{CustomerManagement,DriverAdministration,ShipmentOverview,SiteInventory,PartnerRegistry};
+use ZpxAdmin\{CustomerManagement,DriverAdministration,History,ShipmentOverview,SiteInventory,PartnerRegistry};
 use Zpx\Identity\Secrets;
 
 $previousOrg=getenv('ZPX_ORGANIZATION_ID'); putenv('ZPX_ORGANIZATION_ID='.$shippingOrg);
@@ -16,6 +16,12 @@ try {
     $customer=(new CustomerManagement($runtime,$crypto))->detail($customerAdmin,$sender);
     check((int)$customer['totals']['shipment_count']>=1 && is_array($customer['payments']),
         'customer view includes recorded shipping and payment history');
+    $history=new History($runtime,$crypto);
+    check(in_array($sid,array_column($history->page($customerAdmin,'customer',$sender,'shipments')['items'],'shipment_id'),true),
+        'customer shipment history remains reachable');
+    failsIdentity(fn()=>$history->page($sender,'customer',$sender,'shipments'),403,'customer cannot inspect admin history');
+    failsIdentity(fn()=>$history->page($customerAdmin,'customer',$foreignCustomer,'shipments'),404,'foreign customer history is hidden');
+    failsIdentity(fn()=>$history->page($customerAdmin,'customer',$sender,'shipments','bad'),422,'invalid history cursor rejected');
 
     $registry=new PartnerRegistry($runtime,$crypto);
     $host=$registry->create($customerAdmin,['code'=>'TEST-HOST-'.strtoupper(substr(bin2hex(random_bytes(4)),0,8)),'display_name'=>'Synthetic property host',
@@ -49,6 +55,7 @@ try {
     failsIdentity(fn()=>$sites->lockers($sender),403,'customer cannot inspect locker inventory');
     foreach (['/admin/shipments/'.$sid=>'Package lifecycle',
         '/admin/customers/'.$sender=>'Shipping and payment overview',
+        '/admin/customers/'.$sender.'/history'=>'History is ordered newest first',
         '/admin/sites/'.$siteId=>'Site contacts',
         '/admin/lockers'=>'Locker inventory'] as $path=>$expected) {
         $request=new think\Request();
@@ -60,4 +67,21 @@ try {
             'admin HTML renders '.$path);
         $app->http->end($response);
     }
+} finally { putenv($previousOrg===false?'ZPX_ORGANIZATION_ID':'ZPX_ORGANIZATION_ID='.$previousOrg); }
+
+$previousOrg=getenv('ZPX_ORGANIZATION_ID'); putenv('ZPX_ORGANIZATION_ID='.$reviewOrg);
+try {
+    for ($i=0;$i<27;$i++) {
+        $runtime->prepare("INSERT INTO driver_pay_entries(driver_id,policy_version,amount_cents,kind,operation_uuid)
+            VALUES (?,'TEST-1',100,'SHIFT_PAY',?)")->execute([$driverId,Secrets::uuid()]);
+    }
+    $history=new History($runtime,new Secrets());
+    $first=$history->page($adminUser,'driver',$driverId,'earnings');
+    $second=$history->page($adminUser,'driver',$driverId,'earnings',(string)$first['next_cursor']);
+    check(count($first['items'])===25 && $first['next_cursor']!==null && count($second['items'])>=2,
+        'driver earnings history pages through older transactions');
+    failsIdentity(fn()=>$history->page($applicant,'driver',$driverId,'earnings'),403,
+        'driver cannot inspect admin earnings history');
+    failsIdentity(fn()=>$history->page($adminUser,'driver',$foreignId,'earnings'),404,
+        'foreign driver earnings history is hidden');
 } finally { putenv($previousOrg===false?'ZPX_ORGANIZATION_ID':'ZPX_ORGANIZATION_ID='.$previousOrg); }

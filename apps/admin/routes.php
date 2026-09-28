@@ -16,7 +16,11 @@ foreach (['customers', 'drivers', 'partners', 'sites', 'lockers', 'pickup-routes
 }
 Route::any('admin/customers/<user_id>', static fn(Request $request, string $userId) => PageController::handle($request,'customer-detail',$userId))
     ->pattern(['user_id'=>'[1-9][0-9]{0,17}']);
+Route::any('admin/customers/<user_id>/history', static fn(Request $request, string $userId) => PageController::handle($request,'customer-history',$userId))
+    ->pattern(['user_id'=>'[1-9][0-9]{0,17}']);
 Route::any('admin/drivers/<driver_id>', static fn(Request $request, string $driverId) => PageController::handle($request,'driver-detail',$driverId))
+    ->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
+Route::any('admin/drivers/<driver_id>/history', static fn(Request $request, string $driverId) => PageController::handle($request,'driver-history',$driverId))
     ->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
 Route::any('admin/partners/<partner_id>', static fn(Request $request, string $partnerId) => PageController::handle($request,'partner-detail',$partnerId))
     ->pattern(['partner_id'=>'[1-9][0-9]{0,17}']);
