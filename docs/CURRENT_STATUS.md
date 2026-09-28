@@ -4,7 +4,7 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-routing`, based on merged `main` at `f350fd0` (PR #22).
+- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-routing`, feature commit `b6ef1aa`, based on merged `main` at `f350fd0` (PR #22). Current review: [PR #23](https://github.com/zipcodexpress/ZPX_Delivery/pull/23).
 - Objective: make driver pickup offers use an explicit origin-to-hub route and nearby-driver location eligibility.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -32,7 +32,7 @@
 
 ## Exact continuation point
 
-1. Review the current diff and create a PR against `main`; check CI and review feedback before merge.
+1. Check PR #23 CI and review feedback before merge.
 2. Add cancellation/reassignment for missed pickup work without silently changing custody or reusing ambiguous locker evidence.
 3. Complete the enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 
