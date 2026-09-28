@@ -71,7 +71,7 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 86, 'partner registry tables added without removing existing tables');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 89, 'site and inventory tables added without removing existing tables');
 require __DIR__ . '/seed.php';
 require __DIR__ . '/ownership.php';
 
@@ -178,6 +178,7 @@ require __DIR__ . '/hub-dispatch.php';
 require __DIR__ . '/driver-management.php';
 require __DIR__ . '/driver-administration.php';
 require __DIR__ . '/partner-registry.php';
+require __DIR__ . '/admin-sites-inventory.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
 $suiteComplete=true;

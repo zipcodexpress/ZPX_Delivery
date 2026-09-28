@@ -88,7 +88,7 @@ final class PageController
             $identity->limit('admin-form:'.$user, 50);
             $key = (string)$request->post('idempotency_key', '');
             $id = (string)$request->post('id', '');
-            match ($operation) {
+            $result = match ($operation) {
                 'driver-approve' => (new DriverService($db,$crypto))->approve($user,$id,$key),
                 'driver-reject' => (new DriverService($db,$crypto))->reject($user,$id,['reason'=>(string)$request->post('reason','')],$key),
                 'route-assign' => (new PickupRouting($db,$crypto))->assign($user, self::routeInput($request,$id),$key),
@@ -105,7 +105,63 @@ final class PageController
                     'legal_name'=>$request->post('legal_name',''),'roles'=>$request->post('roles',[]),
                     'reason'=>$request->post('reason',''),
                 ],$key),
+                'site-create' => (new SiteInventory($db,$crypto))->create($user,[
+                    'code'=>$request->post('code',''),'name'=>$request->post('name',''),
+                    'site_type'=>$request->post('site_type',''), 'address'=>self::addressInput($request),
+                    'timezone'=>$request->post('timezone',''), 'reason'=>$request->post('reason',''),
+                ],$key),
+                'site-update' => (new SiteInventory($db,$crypto))->updateDraft($user,$id,[
+                    'name'=>$request->post('name',''),'address'=>self::addressInput($request),
+                    'timezone'=>$request->post('timezone',''),'version'=>$request->post('version',''),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'site-overdue' => (new SiteInventory($db,$crypto))->setOverdueDraft($user,$id,[
+                    'grace_days'=>$request->post('grace_days',''),'daily_cents'=>$request->post('daily_cents',''),
+                    'cap_cents'=>$request->post('cap_cents',''),'version'=>$request->post('version',''),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'site-location-create' => (new SiteInventory($db,$crypto))->addLocation($user,$id,[
+                    'code'=>$request->post('code',''),'name'=>$request->post('name',''),
+                    'address_text'=>$request->post('address_text',''),'reason'=>$request->post('reason',''),
+                ],$key),
+                'location-overdue' => (new SiteInventory($db,$crypto))->setLocationOverdueDraft($user,$id,
+                    (string)$request->post('location_id',''),[
+                        'grace_days'=>$request->post('grace_days',''),'daily_cents'=>$request->post('daily_cents',''),
+                        'cap_cents'=>$request->post('cap_cents',''),'reason'=>$request->post('reason',''),
+                    ]),
+                'location-deactivate' => (new SiteInventory($db,$crypto))->deactivateLocation($user,$id,
+                    (string)$request->post('location_id',''),(string)$request->post('reason','')),
+                'locker-body-add' => (new SiteInventory($db,$crypto))->addBody($user,$id,[
+                    'code'=>$request->post('code',''),'position'=>$request->post('position',''),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'locker-module-add' => (new SiteInventory($db,$crypto))->addBoxModule($user,$id,[
+                    'body_id'=>$request->post('body_id',''),'code'=>$request->post('code',''),
+                    'position'=>$request->post('position',''),'reason'=>$request->post('reason',''),
+                ]),
+                'locker-box-add' => (new SiteInventory($db,$crypto))->addDraftBox($user,$id,[
+                    'code'=>$request->post('code',''),'module_id'=>$request->post('module_id',''),
+                    'width_mm'=>$request->post('width_mm',''),'height_mm'=>$request->post('height_mm',''),
+                    'depth_mm'=>$request->post('depth_mm',''),'max_weight_g'=>$request->post('max_weight_g',''),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'locker-box-assign' => (new SiteInventory($db,$crypto))->assignBox($user,$id,[
+                    'box_id'=>$request->post('box_id',''),'module_id'=>$request->post('module_id',''),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'customer-rename' => (new PeopleEditor($db,$crypto))->rename($user,$id,(string)$request->post('name',''),(string)$request->post('reason','')),
+                'address-save' => (new PeopleEditor($db,$crypto))->save($user,$id,[
+                    'address_id'=>$request->post('address_id',''),'kind'=>$request->post('kind',''),
+                    'label'=>$request->post('label',''),'address'=>self::addressInput($request),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'address-archive' => (new PeopleEditor($db,$crypto))->archive($user,$id,
+                    (string)$request->post('address_id',''),(string)$request->post('reason','')),
             };
+            if ($operation==='site-create') { return self::redirect('/admin/sites/'.$result); }
+            if (in_array($operation,['site-update','site-overdue','site-location-create','location-overdue','location-deactivate'],true)) { return self::redirect('/admin/sites/'.$id); }
+            if (str_starts_with($operation,'locker-')) { return self::redirect('/admin/lockers/'.$id); }
+            if (in_array($operation,['customer-rename','address-save','address-archive'],true)) { return self::redirect('/admin/customers/'.$id); }
             $page = match ($operation) {
                 'driver-approve','driver-reject','driver-suspend','driver-reactivate'=>'drivers',
                 'route-assign'=>'pickup-routes',
@@ -122,6 +178,9 @@ final class PageController
                     'route-assign'=>'/admin/pickup-routes',
                     'customer-restrict','customer-revoke'=>'/admin/customers',
                     'partner-create'=>'/admin/partners',
+                    'site-create','site-update','site-location-create','site-overdue','location-overdue','location-deactivate'=>'/admin/sites',
+                    'locker-body-add','locker-module-add','locker-box-add','locker-box-assign'=>'/admin/sites',
+                    'customer-rename','address-save','address-archive'=>'/admin/customers',
                     default=>'/admin/pickup-recovery',
                 };
                 return self::html(View::fetch('action_error', [
@@ -148,17 +207,28 @@ final class PageController
         return $input;
     }
 
+    private static function addressInput(Request $request): array
+    {
+        return ['line1'=>$request->post('line1',''),'line2'=>$request->post('line2',''),
+            'city'=>$request->post('city',''),'region'=>$request->post('region',''),
+            'postal_code'=>$request->post('postal_code',''),'country_code'=>$request->post('country_code','US')];
+    }
+
     private static function pageData(string $page, \PDO $db, string $user, Request $request, string $resource): array
     {
         $crypto = new Secrets();
         $data = match ($page) {
             'customers'=>(new CustomerManagement($db,$crypto))->list($user,(string)$request->get('cursor','')),
-            'customer-detail'=>(new CustomerManagement($db,$crypto))->detail($user,$resource),
+            'customer-detail'=>(new CustomerManagement($db,$crypto))->detail($user,$resource)
+                + ['addresses'=>(new PeopleEditor($db,$crypto))->addresses($user,$resource)],
             'drivers'=>(new DriverService($db,$crypto))->listPending($user)
                 + ['all'=>(new DriverAdministration($db,$crypto))->list($user,(string)$request->get('cursor',''))],
             'driver-detail'=>(new DriverAdministration($db,$crypto))->detail($user,$resource),
             'partners'=>(new PartnerRegistry($db,$crypto))->list($user,(string)$request->get('cursor','')),
             'partner-detail'=>(new PartnerRegistry($db,$crypto))->detail($user,$resource),
+            'sites'=>(new SiteInventory($db,$crypto))->sites($user,(string)$request->get('cursor','')),
+            'site-detail'=>(new SiteInventory($db,$crypto))->site($user,$resource),
+            'locker-detail'=>(new SiteInventory($db,$crypto))->locker($user,$resource),
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
@@ -174,6 +244,7 @@ final class PageController
             $data['all']['items'][$index]['form_key']=Secrets::uuid();
         }
         if ($page==='partners') { $data['create_key']=Secrets::uuid(); }
+        if ($page==='site-detail') { $data['create_key']=Secrets::uuid(); }
         return $data;
     }
 
@@ -224,6 +295,7 @@ final class PageController
             'customers'=>'Customers', 'customer-detail'=>'Customer detail',
             'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'pickup-routes'=>'Pickup routes',
             'partners'=>'Partners', 'partner-detail'=>'Partner detail',
+            'sites'=>'Sites', 'site-detail'=>'Site detail', 'locker-detail'=>'Locker inventory',
             'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments',
             default=>'Operations overview',
         };
