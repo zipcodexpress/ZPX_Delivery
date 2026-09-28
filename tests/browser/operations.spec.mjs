@@ -96,6 +96,9 @@ test('admin can reach driver approvals', async ({ page }) => {
   await page.getByLabel('local:AUS-001 longitude').fill('-97.7431');
   await page.getByRole('button', { name: 'Save route' }).first().click();
   await expect(page.locator('.notice[role="status"]')).toContainText('Pickup route saved');
+  await page.getByRole('button', { name: 'Pickup recovery' }).click();
+  await expect(page.getByRole('heading', { name: 'Pickup recovery' })).toBeVisible();
+  await expect(page.getByText('No active pickup runs.')).toBeVisible();
 });
 
 test('customer can view shipment history and open the draft form', async ({ page }) => {

@@ -34,6 +34,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/pickup-recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active offer-created inbound runs and whether all parcels still have recorded origin-locker custody. */
+        get: operations["admin_pickup_recovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/pickup-recovery/{run_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a wholly uncollected offer run and reopen its demands without changing package custody. */
+        post: operations["admin_pickup_recovery_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/driver/pickup-availability": {
         parameters: {
             query?: never;
@@ -2477,6 +2511,91 @@ export interface operations {
                         origin_location_id: string;
                         hub_id: string;
                         version: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_pickup_recovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pickup runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            run_id: string;
+                            state: string;
+                            revision: number;
+                            driver: string;
+                            /** Format: date-time */
+                            planned_end: string;
+                            package_count: number;
+                            can_release: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_pickup_recovery_release: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Uncollected parcels released for new offers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        run_id: string;
+                        state: string;
+                        revision: number;
+                        released_count: number;
                     };
                 };
             };
