@@ -31,23 +31,50 @@ final class CustomerManagement
                 WHERE g.user_id=u.id AND g.organization_id=u.organization_id AND r.code='CUSTOMER'
                 AND (g.expires_at IS NULL OR g.expires_at>now()))".$cursorWhere.' ORDER BY u.id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
         $more=count($rows)>25; $rows=array_slice($rows,0,25);
-        $items=[];
-        foreach ($rows as $row) {
-            $contacts=$this->query('SELECT kind,value_ciphertext,verified_at FROM user_contacts WHERE user_id=?',[$row['id']])->fetchAll(PDO::FETCH_ASSOC);
-            $masked=[]; $verified=[];
-            foreach ($contacts as $contact) {
-                $kind=$contact['kind'];
-                $value=$this->crypto->decrypt($contact['value_ciphertext']);
-                $masked[$kind]=$kind==='EMAIL' ? self::maskEmail($value) : self::maskPhone($value);
-                $verified[$kind]=$contact['verified_at']!==null;
-            }
-            $items[]=['user_id'=>(string)$row['id'],'name'=>$row['display_name'],'status'=>$row['status'],
-                'created_at'=>$row['created_at'],'shipping_restricted'=>$row['restriction_id']!==null,
-                'restriction_id'=>$row['restriction_id']===null?null:(string)$row['restriction_id'],
-                'masked_email'=>$masked['EMAIL']??null,'masked_phone'=>$masked['PHONE']??null,
-                'email_verified'=>$verified['EMAIL']??false,'phone_verified'=>$verified['PHONE']??false];
-        }
+        $items=array_map(fn($row)=>$this->present($row),$rows);
         return ['items'=>$items,'next_cursor'=>$more?(string)end($rows)['id']:null];
+    }
+
+    private function present(array $row): array
+    {
+        $contacts=$this->query('SELECT kind,value_ciphertext,verified_at FROM user_contacts WHERE user_id=?',[$row['id']])->fetchAll(PDO::FETCH_ASSOC);
+        $masked=[]; $verified=[];
+        foreach ($contacts as $contact) {
+            $kind=$contact['kind'];
+            $value=$this->crypto->decrypt($contact['value_ciphertext']);
+            $masked[$kind]=$kind==='EMAIL' ? self::maskEmail($value) : self::maskPhone($value);
+            $verified[$kind]=$contact['verified_at']!==null;
+        }
+        return ['user_id'=>(string)$row['id'],'name'=>$row['display_name'],'status'=>$row['status'],
+            'created_at'=>$row['created_at'],'shipping_restricted'=>$row['restriction_id']!==null,
+            'restriction_id'=>$row['restriction_id']===null?null:(string)$row['restriction_id'],
+            'masked_email'=>$masked['EMAIL']??null,'masked_phone'=>$masked['PHONE']??null,
+            'email_verified'=>$verified['EMAIL']??false,'phone_verified'=>$verified['PHONE']??false];
+    }
+
+    public function detail(string $actor, string $user): array
+    {
+        $this->authorize($actor);
+        if (!preg_match('/^[1-9][0-9]{0,17}$/D',$user)) { throw new Failure(422,'INVALID_INPUT','Invalid customer ID.'); }
+        $row=$this->query("SELECT u.id,u.display_name,u.status,u.created_at,
+            (SELECT sr.id FROM customer_shipping_restrictions sr WHERE sr.user_id=u.id AND sr.revoked_at IS NULL) AS restriction_id
+            FROM users u WHERE u.id=? AND u.organization_id=? AND EXISTS(
+                SELECT 1 FROM scoped_role_grants g JOIN roles r ON r.id=g.role_id
+                WHERE g.user_id=u.id AND g.organization_id=u.organization_id AND r.code='CUSTOMER'
+                AND (g.expires_at IS NULL OR g.expires_at>now()))",[$user,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new Failure(404,'CUSTOMER_NOT_FOUND','Customer not found.'); }
+        $shipments=$this->query("SELECT s.id,s.public_reference,s.order_status,s.payment_status,s.created_at,
+            p.state AS package_state,CASE WHEN s.sender_user_id=? THEN 'SENDER' ELSE 'RECIPIENT' END AS relationship
+            FROM shipments s LEFT JOIN packages p ON p.shipment_id=s.id AND p.sequence_no=1
+            WHERE s.organization_id=? AND (s.sender_user_id=? OR EXISTS(
+                SELECT 1 FROM shipment_parties sp WHERE sp.shipment_id=s.id AND sp.party_role='RECIPIENT' AND sp.user_id=?))
+            ORDER BY s.id DESC LIMIT 10",[$user,$this->org(),$user,$user])->fetchAll(PDO::FETCH_ASSOC);
+        $activity=$this->query("SELECT action,created_at FROM audit_events WHERE entity_type='customer' AND entity_id=? ORDER BY id DESC LIMIT 10",[$user])->fetchAll(PDO::FETCH_ASSOC);
+        return ['customer'=>$this->present($row),'shipments'=>array_map(static fn($s)=>[
+            'shipment_id'=>(string)$s['id'],'public_reference'=>$s['public_reference'],'order_status'=>$s['order_status'],
+            'payment_status'=>$s['payment_status'],'package_state'=>$s['package_state'],'relationship'=>$s['relationship'],
+            'created_at'=>$s['created_at'],
+        ],$shipments),'activity'=>$activity];
     }
 
     private static function maskEmail(string $email): string

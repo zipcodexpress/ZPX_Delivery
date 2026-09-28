@@ -14,3 +14,7 @@ Route::any('admin/action/<operation>', static fn(Request $request, string $opera
 foreach (['customers', 'drivers', 'pickup-routes', 'pickup-recovery', 'shipments'] as $page) {
     Route::any('admin/'.$page, static fn(Request $request) => PageController::handle($request, $page));
 }
+Route::any('admin/customers/<user_id>', static fn(Request $request, string $userId) => PageController::handle($request,'customer-detail',$userId))
+    ->pattern(['user_id'=>'[1-9][0-9]{0,17}']);
+Route::any('admin/drivers/<driver_id>', static fn(Request $request, string $driverId) => PageController::handle($request,'driver-detail',$driverId))
+    ->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);

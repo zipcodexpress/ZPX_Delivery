@@ -1,0 +1,13 @@
+<p><a href="/admin/drivers">← Drivers</a></p>
+<section class="table-panel"><h2>{$data.driver.name}</h2><p>Driver ID {$data.driver.driver_id} · Applied {$data.driver.applied_at}</p>
+<div class="table-scroll"><table><tbody>
+<tr><th scope="row">Status</th><td>{$data.driver.status}</td></tr>
+<tr><th scope="row">Engagement</th><td>{$data.driver.engagement_type}</td></tr>
+<tr><th scope="row">Verification</th><td>{$data.driver.verification_status}</td></tr>
+<tr><th scope="row">License expiry</th><td>{$data.driver.license_expiry|default='Not recorded'}</td></tr>
+<tr><th scope="row">Vehicle</th><td>{$data.driver.vehicle_description|default='Not recorded'}</td></tr>
+<tr><th scope="row">Availability</th><td>{$data.driver.availability_status}</td></tr>
+<tr><th scope="row">Last shared location</th><td>{$data.driver.location_updated_at|default='Not shared'}</td></tr>
+</tbody></table></div></section>
+<section class="table-panel"><h2>Recent assignments</h2>{empty name="data.runs"}<p class="empty">No assigned runs.</p>{else /}<div class="table-scroll"><table><thead><tr><th>Run</th><th>Kind</th><th>Status</th><th>Hub</th><th>Vehicle</th><th>Planned</th></tr></thead><tbody>{volist name="data.runs" id="row"}<tr><td>{$row.run_id}</td><td>{$row.kind}</td><td>{$row.state}</td><td>{$row.hub_name}</td><td>{$row.vehicle_code}</td><td>{$row.planned_start} – {$row.planned_end}</td></tr>{/volist}</tbody></table></div>{/empty}</section>
+<section class="table-panel"><h2>Recent driver actions</h2><p>Audit reasons and private evidence values are omitted from this view.</p>{empty name="data.activity"}<p class="empty">No driver administration actions recorded.</p>{else /}<div class="table-scroll"><table><thead><tr><th>Action</th><th>When</th></tr></thead><tbody>{volist name="data.activity" id="row"}<tr><td>{$row.action}</td><td>{$row.created_at}</td></tr>{/volist}</tbody></table></div>{/empty}</section>

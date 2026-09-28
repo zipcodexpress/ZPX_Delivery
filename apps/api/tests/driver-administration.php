@@ -32,12 +32,33 @@ try {
         && $runtime->query("SELECT status FROM driver_availability WHERE driver_id=$driverId")->fetchColumn()==='OFFLINE'
         && $runtime->query("SELECT state FROM route_runs WHERE id=$run")->fetchColumn()==='IN_PROGRESS',
         'suspension cancels offered work and leaves assigned custody intact');
+    $detail=$adminDrivers->detail($adminUser,$driverId);
+    check($detail['driver']['status']==='SUSPENDED' && in_array($run,array_column($detail['runs'],'run_id'),true)
+        && in_array('DRIVER_SUSPENDED',array_column($detail['activity'],'action'),true)
+        && !str_contains(json_encode($detail,JSON_THROW_ON_ERROR),'Synthetic safety review'),
+        'driver detail keeps assigned run visible without exposing audit reason');
+    failsIdentity(fn()=>$adminDrivers->detail($adminUser,$foreignId),404,'foreign driver detail is hidden');
+    failsIdentity(fn()=>$adminDrivers->detail($applicant,$driverId),403,'driver cannot inspect admin detail');
     failsIdentity(fn()=>(new PickupOffers($runtime,new Secrets()))->refresh($applicant),403,'suspended driver cannot request new offers');
     failsIdentity(fn()=>$adminDrivers->transition($adminUser,$driverId,['action'=>'REACTIVATE','reason'=>'Synthetic review cleared','expected_version'=>1],Secrets::uuid()),412,
         'stale driver version is rejected');
     $headers=['x-csrf-token'=>(new Secrets())->digest('csrf',$browserToken),'idempotency-key'=>Secrets::uuid()];
     [$response,$body]=identityHttp('GET',$base.'/admin/drivers',[],[],['zpx_delivery_session'=>$browserToken]);
     check($response->getCode()===200 && in_array($driverId,array_column($body['items'],'driver_id'),true),'HTTP driver directory is scoped');
+    [$response,$body]=identityHttp('GET',$base.'/admin/drivers/'.$driverId,[],[],['zpx_delivery_session'=>$browserToken]);
+    check($response->getCode()===200 && $body['driver']['driver_id']===$driverId,'HTTP driver detail is available');
+    [$response,$body]=identityHttp('GET',$base.'/admin/drivers/'.$foreignId,[],[],['zpx_delivery_session'=>$browserToken]);
+    check($response->getCode()===404,'HTTP foreign driver detail is hidden');
+    $detailRequest=new think\Request();
+    $detailRequest->withServer(['REQUEST_METHOD'=>'GET','REQUEST_URI'=>'/admin/drivers/'.$driverId,
+        'PATH_INFO'=>'/admin/drivers/'.$driverId,'HTTP_HOST'=>'localhost:8000']);
+    $detailRequest->withCookie(['zpx_delivery_session'=>$browserToken]);
+    $detailApp=new think\App(dirname(__DIR__)); $detailApp->debug(false);
+    $detailResponse=$detailApp->http->run($detailRequest);
+    check($detailResponse->getCode()===200 && str_contains($detailResponse->getContent(),'Recent assignments')
+        && str_contains($detailResponse->getContent(),'SUSPENDED'),
+        'driver HTML detail renders assigned run and suspended status');
+    $detailApp->http->end($detailResponse);
     [$response,$body]=identityHttp('POST',$base.'/admin/drivers/'.$driverId.'/transitions',
         ['action'=>'REACTIVATE','reason'=>'Synthetic review cleared'],$headers,['zpx_delivery_session'=>$browserToken]);
     check($response->getCode()===428,'HTTP driver transition requires If-Match version');

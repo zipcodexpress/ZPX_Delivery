@@ -31,6 +31,38 @@ final class DriverAdministration
         ],$rows),'next_cursor'=>$more?(string)end($rows)['id']:null];
     }
 
+    public function detail(string $actor, string $driver): array
+    {
+        $this->authorize($actor);
+        if (!preg_match('/^[1-9][0-9]{0,17}$/D',$driver)) { throw new Failure(422,'INVALID_INPUT','Invalid driver ID.'); }
+        $row=$this->query("SELECT d.id,d.user_id,d.status,d.engagement_type,d.applied_at,d.approved_at,d.version,
+            d.verification_status,d.license_expiry,d.vehicle_make,d.vehicle_model,u.display_name,
+            da.status AS availability_status,da.location_updated_at
+            FROM drivers d JOIN users u ON u.id=d.user_id LEFT JOIN driver_availability da ON da.driver_id=d.id
+            WHERE d.id=? AND u.organization_id=?",[$driver,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new Failure(404,'DRIVER_NOT_FOUND','Driver not found.'); }
+        $runs=$this->query("SELECT r.id,r.kind,r.state,r.planned_start,r.planned_end,l.name AS hub_name,v.code AS vehicle_code
+            FROM route_runs r JOIN hubs h ON h.id=r.hub_id JOIN locations l ON l.id=h.location_id
+            JOIN vehicles v ON v.id=r.vehicle_id WHERE r.driver_id=? AND r.organization_id=?
+            AND l.organization_id=? AND v.organization_id=?
+            ORDER BY CASE WHEN r.state IN ('PUBLISHED','ACKNOWLEDGED','IN_PROGRESS') THEN 0 ELSE 1 END,r.id DESC LIMIT 10",
+            [$driver,$this->org(),$this->org(),$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        $activity=$this->query("SELECT action,created_at FROM audit_events WHERE entity_type='driver' AND entity_id=? ORDER BY id DESC LIMIT 10",[$driver])->fetchAll(PDO::FETCH_ASSOC);
+        return ['driver'=>[
+            'driver_id'=>(string)$row['id'],'user_id'=>(string)$row['user_id'],'name'=>$row['display_name'],
+            'status'=>$row['status'],'engagement_type'=>$row['engagement_type'],'applied_at'=>$row['applied_at'],
+            'approved_at'=>$row['approved_at'],'version'=>(int)$row['version'],
+            'verification_status'=>$row['verification_status'],'license_expiry'=>$row['license_expiry'],
+            'vehicle_description'=>trim(implode(' ',array_filter([$row['vehicle_make'],$row['vehicle_model']]))),
+            'availability_status'=>$row['availability_status']??'OFFLINE',
+            'location_updated_at'=>$row['location_updated_at'],
+        ],'runs'=>array_map(static fn($r)=>[
+            'run_id'=>(string)$r['id'],'kind'=>$r['kind'],'state'=>$r['state'],
+            'planned_start'=>$r['planned_start'],'planned_end'=>$r['planned_end'],
+            'hub_name'=>$r['hub_name'],'vehicle_code'=>$r['vehicle_code'],
+        ],$runs),'activity'=>$activity];
+    }
+
     public function transition(string $actor, string $driver, array $input, string $key): array
     {
         $this->authorize($actor);

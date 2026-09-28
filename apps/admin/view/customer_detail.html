@@ -1,0 +1,10 @@
+<p><a href="/admin/customers">← Customer accounts</a></p>
+<section class="table-panel"><h2>{$data.customer.name}</h2><p>Customer ID {$data.customer.user_id} · Created {$data.customer.created_at}</p>
+<div class="table-scroll"><table><tbody>
+<tr><th scope="row">Account</th><td>{$data.customer.status}</td></tr>
+<tr><th scope="row">Shipping</th><td>{if $data.customer.shipping_restricted}Restricted{else /}Available{/if}</td></tr>
+<tr><th scope="row">Email</th><td>{$data.customer.masked_email|default='No email'}{if $data.customer.email_verified} · Verified{/if}</td></tr>
+<tr><th scope="row">Phone</th><td>{$data.customer.masked_phone|default='No phone'}{if $data.customer.phone_verified} · Verified{/if}</td></tr>
+</tbody></table></div></section>
+<section class="table-panel"><h2>Recent shipments</h2>{empty name="data.shipments"}<p class="empty">No linked shipments.</p>{else /}<div class="table-scroll"><table><thead><tr><th>Reference</th><th>Relationship</th><th>Order</th><th>Payment</th><th>Parcel</th><th>Created</th></tr></thead><tbody>{volist name="data.shipments" id="row"}<tr><td><strong>{$row.public_reference}</strong><small>ID {$row.shipment_id}</small></td><td>{$row.relationship}</td><td>{$row.order_status}</td><td>{$row.payment_status}</td><td>{$row.package_state|default='Unknown'}</td><td>{$row.created_at}</td></tr>{/volist}</tbody></table></div>{/empty}</section>
+<section class="table-panel"><h2>Recent account actions</h2><p>Audit reasons and private contact values are omitted from this view.</p>{empty name="data.activity"}<p class="empty">No customer administration actions recorded.</p>{else /}<div class="table-scroll"><table><thead><tr><th>Action</th><th>When</th></tr></thead><tbody>{volist name="data.activity" id="row"}<tr><td>{$row.action}</td><td>{$row.created_at}</td></tr>{/volist}</tbody></table></div>{/empty}</section>
