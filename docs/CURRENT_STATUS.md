@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-partner-registry`, based on `codex/admin-identity-details` (`4fe40f6`). PR #31 is open against `main`; PR #32 is stacked on #31; PR #33 is stacked on #32.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-partner-registry`, commit `08f78b5`, based on `codex/admin-identity-details` (`4fe40f6`). PR #31 is open against `main`; PR #32 is stacked on #31, PR #33 on #32, and PR #34 on #33.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls; PR #33 contains ADM-03 read-only details. This branch adds the first ADM-04 partner registry/draft creation. Search/filtering, support, fleet/commercial, delegated partner grants and resource relationships remain. Add site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -32,8 +32,8 @@
 
 ## Next exact actions
 
-1. Review diff, commit and open a stacked PR against `codex/admin-identity-details`.
-2. Follow with ADM-04 explicit delegated grants and resource relationships, then ADM-05 sites. Do not infer commercial affiliation, ownership, contact-reveal authority or partner access from registry roles.
+1. PR #34 contains the validated partner registry first slice; its contract checks have passed and browser/local-stack CI jobs are pending. Review and merge PRs #31–#34 in order, retargeting stacked PRs to `main` as their bases merge.
+2. Follow with ADM-04 explicit delegated grants and resource relationships, then ADM-05 sites. Do not infer commercial affiliation, ownership, contact-reveal authority or partner access from registry roles. Customer search/filtering, support and driver fleet/qualification views also remain.
 3. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`, respecting physical/payout evidence gates.
 
 ## Delivery baseline and gates
