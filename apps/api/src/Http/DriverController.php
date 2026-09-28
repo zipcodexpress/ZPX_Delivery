@@ -6,6 +6,7 @@ use think\Request;
 use think\Response;
 use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Custody\Service;
+use Zpx\Custody\PickupOffers;
 use Zpx\Infrastructure\Database\Connection;
 
 final class DriverController
@@ -17,6 +18,10 @@ final class DriverController
             $method = $request->method(true);
             $expected = match ($action) {
                 'runs' => 'GET',
+                'pickup-offers' => 'GET',
+                'pickup-refresh' => 'POST',
+                'pickup-availability' => 'POST',
+                'pickup-accept' => 'POST',
                 'run-detail' => 'GET',
                 'acknowledge' => 'POST',
                 'resolve' => 'POST',
@@ -36,6 +41,7 @@ final class DriverController
             $crypto = new Secrets();
             $identity = new Identity($db, $crypto);
             $custody = new Service($db, $crypto);
+            $offers = new PickupOffers($db, $crypto);
 
             $cookie = $request->cookie('zpx_delivery_session', '');
             $auth = $request->header('authorization', '');
@@ -69,6 +75,10 @@ final class DriverController
 
             $body = match ($action) {
                 'runs' => $custody->listRuns($user),
+                'pickup-offers' => $offers->list($user),
+                'pickup-refresh' => $offers->refresh($user),
+                'pickup-availability' => $offers->availability($user,$input),
+                'pickup-accept' => $offers->accept($user,$runId,$key),
                 'run-detail' => $custody->getRun($user, $runId),
                 'acknowledge' => $custody->acknowledgeRun($user, $runId, $key),
                 'resolve' => $custody->resolveScan($user, Input::text($input['label_payload'] ?? '', 1, 500), Input::text($input['action'] ?? '', 1, 40), isset($input['run_id']) ? Input::text($input['run_id'], 1, 18) : null),

@@ -11,6 +11,7 @@ type Run = {
 };
 type RunList = { items: Run[] };
 type DispatchCall = { dispatch_call_id: string; hub_name: string; destination: string; package_count: number; expires_at: string };
+type PickupOffer = { offer_id: string; origin: string; address: string; hub: string; package_count: number; expires_at: string };
 type ManifestItem = {
   manifest_item_id: string; package_id: string; package_uuid: string;
   public_reference: string; si: string | null;
@@ -192,6 +193,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
   const [tab, setTab] = useState<Tab>('runs');
   const [runs, setRuns] = useState<Run[]>([]);
   const [availableCalls, setAvailableCalls] = useState<DispatchCall[]>([]);
+  const [pickupOffers, setPickupOffers] = useState<PickupOffer[]>([]);
   const [selected, setSelected] = useState<RunDetail | null>(null);
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -207,8 +209,8 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
   const loadRuns = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [assigned, available] = await Promise.all([api<RunList>('/driver/runs'), api<{ items: DispatchCall[] }>('/hub/dispatch-calls/available')]);
-      setRuns(assigned.items); setAvailableCalls(available.items);
+      const [assigned, available, pickups] = await Promise.all([api<RunList>('/driver/runs'), api<{ items: DispatchCall[] }>('/hub/dispatch-calls/available'), api<{ items: PickupOffer[] }>('/driver/pickup-offers')]);
+      setRuns(assigned.items); setAvailableCalls(available.items); setPickupOffers(pickups.items);
     }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load runs.'); }
     finally { setLoading(false); }
@@ -273,6 +275,29 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
       setNotice('Dispatch accepted. Your outbound run is ready.');
       await loadRuns();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not accept dispatch.'); }
+    finally { setBusy(false); }
+  }
+
+  async function findPickups() {
+    if (busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api('/driver/pickup-availability', { status: 'AVAILABLE' }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      const result = await api<{ items: PickupOffer[] }>('/driver/pickup-offers/refresh', {}, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      setPickupOffers(result.items);
+      setNotice(result.items.length ? 'Pickup offers are ready. Accept one before it expires.' : 'No origin pickups are ready right now.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not find pickups.'); }
+    finally { setBusy(false); }
+  }
+
+  async function acceptPickup(offerId: string) {
+    if (busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await api<{ run_id: string; package_count: number }>('/driver/pickup-offers/' + offerId + '/accept', {}, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      setNotice(`${result.package_count} parcels assigned to inbound run ${result.run_id}. Acknowledge the run before scanning.`);
+      await loadRuns();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not accept pickup. Refresh offers and try again.'); }
     finally { setBusy(false); }
   }
 
@@ -346,7 +371,14 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     {tab === 'runs' && <div className="driver-layout">
       <aside className="driver-sidebar">
         <h2>Your Runs</h2>
-        <button type="button" disabled={loading || busy} onClick={() => void loadRuns()}>Refresh runs and dispatch calls</button>
+        <button type="button" disabled={loading || busy} onClick={() => void loadRuns()}>Refresh runs and offers</button>
+        <h3>Origin pickups</h3>
+        <button type="button" disabled={busy} onClick={() => void findPickups()}>I'm available · Find pickups</button>
+        {pickupOffers.length === 0 ? <p className="muted">No pickup offers. Use Find pickups during an assigned shift.</p> : <ul className="run-list">{pickupOffers.map(offer => <li key={offer.offer_id}>
+          <strong>{offer.origin} → {offer.hub}</strong>
+          <span className="run-meta">{offer.address} · {offer.package_count} parcels · expires {new Date(offer.expires_at).toLocaleTimeString()}</span>
+          <button type="button" disabled={busy} onClick={() => void acceptPickup(offer.offer_id)}>Accept pickup</button>
+        </li>)}</ul>}
         <h3>Available dispatch calls</h3>
         {availableCalls.length === 0 ? <p className="muted">No available calls.</p> : <ul className="run-list">{availableCalls.map(call => <li key={call.dispatch_call_id}>
           <strong>{call.hub_name} → {call.destination}</strong>
