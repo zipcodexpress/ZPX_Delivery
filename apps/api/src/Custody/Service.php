@@ -83,7 +83,7 @@ final class Service
         $rows = $this->q(
             "SELECT r.id, r.kind, r.state, r.revision, r.planned_start, r.planned_end, r.departed_at,
                     l.name AS hub_name, v.code AS vehicle_code,
-                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id) AS expected_count,
+                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id AND mi.state<>'RELEASED') AS expected_count,
                     (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id AND mi.state='LOADED') AS loaded_count
              FROM route_runs r
              JOIN hubs h ON h.id=r.hub_id
@@ -278,9 +278,9 @@ final class Service
             $hubId=$this->q('SELECT hs.hub_id FROM hub_staff hs JOIN hubs h ON h.id=hs.hub_id JOIN locations l ON l.id=h.location_id WHERE hs.user_id=? AND l.organization_id=?',[$user,$this->org()])->fetchColumn();
         }
         if ($driverId && $runId !== null && $label['package_state']==='AT_ORIGIN'
-            && $this->q("SELECT 1 FROM route_runs r JOIN manifest_items mi ON mi.run_id=r.id WHERE r.id=? AND r.driver_id=? AND r.organization_id=? AND r.kind='INBOUND' AND mi.package_id=?",[$runId,$driverId,$this->org(),$package])->fetchColumn()) { $allowed[]='INBOUND_PICKUP'; }
+            && $this->q("SELECT 1 FROM route_runs r JOIN manifest_items mi ON mi.run_id=r.id WHERE r.id=? AND r.driver_id=? AND r.organization_id=? AND r.kind='INBOUND' AND mi.package_id=? AND mi.state='EXPECTED'",[$runId,$driverId,$this->org(),$package])->fetchColumn()) { $allowed[]='INBOUND_PICKUP'; }
         if ($hubId && $runId !== null && $label['package_state']==='INBOUND_CUSTODY'
-            && $this->q("SELECT 1 FROM route_runs r JOIN manifest_items mi ON mi.run_id=r.id WHERE r.id=? AND r.hub_id=? AND r.organization_id=? AND r.kind='INBOUND' AND mi.package_id=?",[$runId,$hubId,$this->org(),$package])->fetchColumn()) { $allowed[]='HUB_RECEIVE'; }
+            && $this->q("SELECT 1 FROM route_runs r JOIN manifest_items mi ON mi.run_id=r.id WHERE r.id=? AND r.hub_id=? AND r.organization_id=? AND r.kind='INBOUND' AND mi.package_id=? AND mi.state IN ('EXPECTED','LOADED')",[$runId,$hubId,$this->org(),$package])->fetchColumn()) { $allowed[]='HUB_RECEIVE'; }
         if ($hubId && $label['package_state']==='AT_HUB' && $label['custodian_type']==='HUB' && (string)$label['custodian_ref']===(string)$hubId) { $allowed[]='STAGE'; }
         if ($driverId && $runId !== null && $label['package_state']==='STAGED'
             && $this->q('SELECT 1 FROM route_runs r JOIN staging_assignments sa ON sa.outbound_run_id=r.id WHERE r.id=? AND r.driver_id=? AND r.organization_id=? AND sa.package_id=?',[$runId,$driverId,$this->org(),$package])->fetchColumn()) { $allowed[]='OUTBOUND_LOAD'; }
@@ -402,10 +402,23 @@ final class Service
                 $this->recordRejectedScan($user, $runId, $packageId, 'INBOUND_PICKUP', 'ALREADY_LOADED');
                 throw new Failure(409, 'ALREADY_LOADED', 'Package already scanned for this run.');
             }
+            if ($manifestItem['state'] !== 'EXPECTED') {
+                throw new Failure(409, 'PICKUP_ASSIGNMENT_CHANGED', 'This parcel is no longer assigned to this run.');
+            }
             $demand=$this->q('SELECT status,assigned_run_id FROM pickup_demands WHERE package_id=? FOR UPDATE',[$packageId])->fetch(PDO::FETCH_ASSOC);
             if ($demand && ($demand['status']!=='ASSIGNED' || (string)$demand['assigned_run_id']!==$runId
                 || $package['custodian_type']!=='LOCKER' || (string)$package['current_location_id']!==(string)$package['origin_location_id'])) {
                 throw new Failure(409,'PICKUP_ASSIGNMENT_CHANGED','Pickup assignment or locker custody changed.');
+            }
+
+            // An origin occupancy claim follows the parcel out of the locker. Release only
+            // the exact occupied origin door as part of this accepted custody transfer.
+            $originClaim=$this->q("SELECT cc.id,cc.state,c.locker_id,k.location_id FROM compartment_claims cc
+                JOIN compartments c ON c.id=cc.compartment_id JOIN lockers k ON k.id=c.locker_id
+                WHERE cc.package_id=? FOR UPDATE OF cc",[$packageId])->fetch(PDO::FETCH_ASSOC);
+            if ($originClaim && ($originClaim['state']!=='OCCUPIED' || (string)$originClaim['locker_id']!==(string)$package['custodian_ref']
+                || (string)$originClaim['location_id']!==(string)$package['origin_location_id'])) {
+                throw new Failure(409,'ORIGIN_OCCUPANCY_UNRESOLVED','Origin compartment claim does not match parcel custody.');
             }
 
             // Perform custody transfer
@@ -439,6 +452,7 @@ final class Service
             // Update manifest item
             $this->q("UPDATE manifest_items SET state='LOADED' WHERE id=?", [$manifestItem['id']]);
             $this->q("UPDATE pickup_demands SET status='RESOLVED',version=version+1 WHERE package_id=? AND assigned_run_id=? AND status='ASSIGNED'",[$packageId,$runId]);
+            if ($originClaim) { $this->q("DELETE FROM compartment_claims WHERE id=? AND package_id=? AND state='OCCUPIED'",[$originClaim['id'],$packageId]); }
 
             // Outbox event
             (new Outbox($this->db))->append(
@@ -461,7 +475,7 @@ final class Service
                 [$runId]
             )->fetchColumn();
             $expectedCount = (int)$this->q(
-                "SELECT COUNT(*) FROM manifest_items WHERE run_id=?",
+                "SELECT COUNT(*) FROM manifest_items WHERE run_id=? AND state<>'RELEASED'",
                 [$runId]
             )->fetchColumn();
 

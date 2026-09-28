@@ -12,7 +12,7 @@ use Zpx\Infrastructure\Database\Connection;
 
 final class DriverManagementController
 {
-    public static function handle(Request $request, string $action, string $id = ''): Response
+    public static function handle(Request $request, string $action, string $id = '', string $packageId = ''): Response
     {
         $requestId = Secrets::uuid();
         try {
@@ -28,6 +28,7 @@ final class DriverManagementController
                 'pickup-route-assign' => 'POST',
                 'pickup-recovery' => 'GET',
                 'pickup-release' => 'POST',
+                'pickup-item-release' => 'POST',
                 'pay-run' => 'POST',
                 default => 'GET',
             };
@@ -87,6 +88,7 @@ final class DriverManagementController
                 'pickup-route-assign' => $routing->assign($user,$input,$key),
                 'pickup-recovery' => $recovery->list($user),
                 'pickup-release' => $recovery->release($user,$id,$input,$key),
+                'pickup-item-release' => $recovery->releaseItem($user,$id,$packageId,$input,$key),
                 'pay-run' => $service->recordRunPayment($user, $input['driver_id'] ?? '', $input['run_id'] ?? '', $key),
             };
 

@@ -99,6 +99,25 @@ test('admin can reach driver approvals', async ({ page }) => {
   await page.getByRole('button', { name: 'Pickup recovery' }).click();
   await expect(page.getByRole('heading', { name: 'Pickup recovery' })).toBeVisible();
   await expect(page.getByText('No active pickup runs.')).toBeVisible();
+  await page.route('**/api/delivery/v1/admin/pickup-recovery', route => route.fulfill({ json: { items: [{
+    run_id: '42', state: 'ACKNOWLEDGED', revision: 3, driver: 'Synthetic Driver',
+    planned_end: new Date().toISOString(), package_count: 2, collected_count: 1, released_count: 0,
+    can_release: false, parcels: [
+      { package_id: '99', reference: 'TEST-RECOVERY', si: 'SI-TEST', state: 'EXPECTED', can_release: true },
+      { package_id: '100', reference: 'TEST-COLLECTED', si: 'SI-COLLECTED', state: 'LOADED', can_release: false },
+    ],
+  }] } }));
+  let releaseInput;
+  await page.route('**/api/delivery/v1/admin/pickup-recovery/42/parcels/99/release', route => {
+    releaseInput = route.request().postDataJSON();
+    return route.fulfill({ json: { run_id: '42', package_id: '99', state: 'RELEASED', revision: 4 } });
+  });
+  await page.getByRole('button', { name: 'Refresh runs' }).click();
+  await page.getByLabel('TEST-RECOVERY recovery reason').fill('Parcel verified in locker');
+  await page.getByLabel('TEST-RECOVERY evidence reference').fill('site-visit-123');
+  await page.getByRole('button', { name: 'Release this parcel' }).click();
+  await expect(page.locator('.notice[role="status"]')).toContainText('TEST-RECOVERY released');
+  expect(releaseInput).toMatchObject({ evidence_kind: 'SITE_INSPECTION', evidence_reference: 'site-visit-123', expected_revision: 3 });
 });
 
 test('customer can view shipment history and open the draft form', async ({ page }) => {
