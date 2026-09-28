@@ -35,7 +35,7 @@ final class Access
             }
         }
         if ($networkAdmin) {
-            return ['capabilities'=>['admin.access','customers.read','customers.restrict','drivers.read','drivers.manage','drivers.review','partners.read','partners.manage','pickup_routes.manage','pickup_recovery.manage','shipments.read'],
+            return ['capabilities'=>['admin.access','customers.read','customers.manage','customers.restrict','drivers.read','drivers.manage','drivers.review','partners.read','partners.manage','sites.read','sites.manage','lockers.read','lockers.configure','pickup_routes.manage','pickup_recovery.manage','shipments.read'],
                 'scopes'=>[['kind'=>'NETWORK','id'=>$org]], 'policy_version'=>$policyVersion];
         }
         return ['capabilities'=>[], 'scopes'=>array_values($scopes), 'policy_version'=>$policyVersion];

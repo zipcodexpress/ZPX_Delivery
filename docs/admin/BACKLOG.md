@@ -53,6 +53,8 @@ Requirements: F06, F11. Dependencies: ADM-01, ADM-02.
 
 Requirements: F04. Dependencies: ADM-02, ADM-04.
 
+Current partial slice: draft site catalog/editing, additive backfill of existing locations, inactive locker-location creation, site and location overdue-policy drafts, and audited location deactivation/reactivation are implemented in the HTML admin console. Reactivation is limited to locations deactivated by this admin workflow; new site/locker activation remains gated. No site activation, calendar, host assignment, membership eligibility, production commissioning or billing is implied. JSON contracts and remaining lifecycle actions are still required.
+
 - Implement the concrete first-slice contracts in DATA_AND_API, including backward-compatible location creation and draft-site backfill.
 - Add site forms and location associations, calendar/eligibility policy, host assignment, lifecycle and origin-hub configuration using current route service.
 - Preserve one-locker-per-location and all existing IDs. Do not autoactivate a new site/locker or guess membership eligibility.
@@ -62,6 +64,8 @@ Requirements: F04. Dependencies: ADM-02, ADM-04.
 ## ADM-06 — locker catalog and physical inventory
 
 Requirements: F05. Dependencies: ADM-04, ADM-05.
+
+Current partial slice: locker detail lists existing boxes and controller positions; admins can create draft body/box modules, group unclaimed boxes and add frozen draft boxes only at inactive locations. Versioned model publication, physical commissioning, transfers, and device control remain outstanding.
 
 - Translate concepts from apartment `CabinetModelService`, `LockerService` and `ApartmentCabinetService` into delivery entities; do not copy their DB calls or status manipulation.
 - Add versioned model/layout and cabinet modules; instantiate physical compartments while preserving existing board/door uniqueness.
