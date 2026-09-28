@@ -79,10 +79,11 @@ final class FinalDeposit
                 throw new Failure(409,'DEVICE_NOT_ENROLLED','Destination device has no valid enrolled credential.');
             }
             $comp=$this->q("SELECT c.id,c.code,co.generation FROM compartments c
+                JOIN controller_boards cb ON cb.id=c.controller_board_id AND cb.locker_id=c.locker_id
                 JOIN compartment_ownership co ON co.compartment_id=c.id AND co.owner='DELIVERY'
                 JOIN ownership_manifests om ON om.id=co.manifest_id AND om.locker_id=c.locker_id AND om.generation=co.generation AND om.state='ACTIVE'
                 LEFT JOIN compartment_claims cc ON cc.compartment_id=c.id
-                WHERE c.locker_id=? AND c.status='AVAILABLE' AND cc.id IS NULL
+                WHERE c.locker_id=? AND c.status='AVAILABLE' AND c.door_address IS NOT NULL AND cc.id IS NULL
                   AND c.width_mm>=? AND c.height_mm>=? AND c.depth_mm>=? AND c.max_weight_g>=?
                   AND om.generation=(SELECT max(generation) FROM ownership_manifests WHERE locker_id=c.locker_id AND state='ACTIVE')
                 ORDER BY c.width_mm*c.height_mm*c.depth_mm,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED",

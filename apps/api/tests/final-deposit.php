@@ -10,9 +10,15 @@ foreach (array_slice($packageIds,0,2) as $index=>$packageId) {
 }
 $locker=insertId($runtime,"INSERT INTO lockers(location_id,capabilities) VALUES (?,?::jsonb)",[$destLocation,json_encode(['synthetic'=>false,'physical_commands_enabled'=>true])]);
 $device=insertId($runtime,"INSERT INTO locker_devices(locker_id,external_device_id,status) VALUES (?,?,'ACTIVE')",[$locker,'test-final-'.uuid()]);
+$deviceKeypair=sodium_crypto_sign_keypair();
+$deviceSecret=sodium_crypto_sign_secretkey($deviceKeypair);
+$devicePublic=base64_encode(sodium_crypto_sign_publickey($deviceKeypair));
+$deviceKeyId='test-key-'.uuid();
 $runtime->prepare("INSERT INTO device_credentials(device_id,key_id,public_key,valid_from) VALUES (?,?,?,now()-interval '1 hour')")
-    ->execute([$device,'test-key-'.uuid(),'test-public-key']);
+    ->execute([$device,$deviceKeyId,$devicePublic]);
+$board=insertId($runtime,"INSERT INTO controller_boards(locker_id,board_address,protocol_profile,display_sequence,serial_config) VALUES (?,1,'TEST_PROFILE',1,'{}')",[$locker]);
 $door=insertId($runtime,"INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status) VALUES (?,'D1',200,200,200,1000,'AVAILABLE')",[$locker]);
+$runtime->prepare('UPDATE compartments SET controller_board_id=?,door_address=1 WHERE id=?')->execute([$board,$door]);
 $ownership=insertId($owner,"INSERT INTO ownership_manifests(locker_id,generation,manifest_hash,signature_reference,state,issued_by,activated_at)
     VALUES (?,1,decode(repeat('aa',32),'hex'),'test-commissioned','ACTIVE',?,now())",[$locker,$staffUser]);
 $owner->prepare("INSERT INTO compartment_ownership(compartment_id,locker_id,manifest_id,owner,generation) VALUES (?,?,?,'DELIVERY',1)")

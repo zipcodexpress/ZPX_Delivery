@@ -5948,8 +5948,12 @@
       "get": {
         "operationId": "delivery_35__devices_me_commands",
         "summary": "Enrolled terminal polls its authorized commands.",
-        "description": "Enrolled terminal polls its authorized commands.",
-        "parameters": [],
+        "description": "Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. A repeat nonce is rejected. Polling never confirms custody.",
+        "parameters": [
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string","description":"Unix epoch seconds within 60 seconds of server time."}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
+        ],
         "responses": {
           "200": {
             "description": "Successful result",
@@ -7259,7 +7263,7 @@
       "DeviceAuth": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-Device-Credential"
+        "name": "X-Device-Signature"
       }
     },
     "schemas": {

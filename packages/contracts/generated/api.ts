@@ -1394,7 +1394,7 @@ export interface paths {
         };
         /**
          * Enrolled terminal polls its authorized commands.
-         * @description Enrolled terminal polls its authorized commands.
+         * @description Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. A repeat nonce is rejected. Polling never confirms custody.
          */
         get: operations["delivery_35__devices_me_commands"];
         put?: never;
@@ -7516,7 +7516,11 @@ export interface operations {
     delivery_35__devices_me_commands: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
+            };
             path?: never;
             cookie?: never;
         };
