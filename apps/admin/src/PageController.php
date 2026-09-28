@@ -115,6 +115,21 @@ final class PageController
                     'timezone'=>$request->post('timezone',''),'version'=>$request->post('version',''),
                     'reason'=>$request->post('reason',''),
                 ]),
+                'site-relationship' => (new SiteInventory($db,$crypto))->setRelationship($user,$id,[
+                    'owner_partner_id'=>$request->post('owner_partner_id',''),
+                    'host_partner_id'=>$request->post('host_partner_id',''),
+                    'contract_reference'=>$request->post('contract_reference',''),
+                    'starts_on'=>$request->post('starts_on',''),'ends_on'=>$request->post('ends_on',''),
+                    'version'=>$request->post('version',''),'reason'=>$request->post('reason',''),
+                ]),
+                'site-contact-add' => (new SiteInventory($db,$crypto))->addContact($user,$id,[
+                    'name'=>$request->post('name',''),'role_title'=>$request->post('role_title',''),
+                    'email'=>$request->post('email',''),'phone'=>$request->post('phone',''),
+                    'role_code'=>$request->post('role_code',''),'is_primary'=>$request->post('is_primary','0'),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'site-contact-archive' => (new SiteInventory($db,$crypto))->archiveContact($user,$id,
+                    (string)$request->post('assignment_id',''),(string)$request->post('reason','')),
                 'site-overdue' => (new SiteInventory($db,$crypto))->setOverdueDraft($user,$id,[
                     'grace_days'=>$request->post('grace_days',''),'daily_cents'=>$request->post('daily_cents',''),
                     'cap_cents'=>$request->post('cap_cents',''),'version'=>$request->post('version',''),
@@ -161,7 +176,7 @@ final class PageController
                     (string)$request->post('address_id',''),(string)$request->post('reason','')),
             };
             if ($operation==='site-create') { return self::redirect('/admin/sites/'.$result); }
-            if (in_array($operation,['site-update','site-overdue','site-location-create','location-overdue','location-deactivate','location-reactivate'],true)) { return self::redirect('/admin/sites/'.$id); }
+            if (in_array($operation,['site-update','site-relationship','site-contact-add','site-contact-archive','site-overdue','site-location-create','location-overdue','location-deactivate','location-reactivate'],true)) { return self::redirect('/admin/sites/'.$id); }
             if (str_starts_with($operation,'locker-')) { return self::redirect('/admin/lockers/'.$id); }
             if (in_array($operation,['customer-rename','address-save','address-archive'],true)) { return self::redirect('/admin/customers/'.$id); }
             $page = match ($operation) {
@@ -180,7 +195,7 @@ final class PageController
                     'route-assign'=>'/admin/pickup-routes',
                     'customer-restrict','customer-revoke'=>'/admin/customers',
                     'partner-create'=>'/admin/partners',
-                    'site-create','site-update','site-location-create','site-overdue','location-overdue','location-deactivate','location-reactivate'=>'/admin/sites',
+                    'site-create','site-update','site-relationship','site-contact-add','site-contact-archive','site-location-create','site-overdue','location-overdue','location-deactivate','location-reactivate'=>'/admin/sites',
                     'locker-body-add','locker-module-add','locker-box-add','locker-box-assign'=>'/admin/sites',
                     'customer-rename','address-save','address-archive'=>'/admin/customers',
                     default=>'/admin/pickup-recovery',
@@ -223,18 +238,24 @@ final class PageController
             'customers'=>(new CustomerManagement($db,$crypto))->list($user,(string)$request->get('cursor','')),
             'customer-detail'=>(new CustomerManagement($db,$crypto))->detail($user,$resource)
                 + ['addresses'=>(new PeopleEditor($db,$crypto))->addresses($user,$resource)],
+            'customer-history'=>(new History($db,$crypto))->page($user,'customer',$resource,
+                (string)$request->get('kind','shipments'),(string)$request->get('cursor','')),
             'drivers'=>(new DriverService($db,$crypto))->listPending($user)
                 + ['all'=>(new DriverAdministration($db,$crypto))->list($user,(string)$request->get('cursor',''))],
             'driver-detail'=>(new DriverAdministration($db,$crypto))->detail($user,$resource),
+            'driver-history'=>(new History($db,$crypto))->page($user,'driver',$resource,
+                (string)$request->get('kind','runs'),(string)$request->get('cursor','')),
             'partners'=>(new PartnerRegistry($db,$crypto))->list($user,(string)$request->get('cursor','')),
             'partner-detail'=>(new PartnerRegistry($db,$crypto))->detail($user,$resource),
             'sites'=>(new SiteInventory($db,$crypto))->sites($user,(string)$request->get('cursor','')),
             'site-detail'=>(new SiteInventory($db,$crypto))->site($user,$resource),
+            'lockers'=>(new SiteInventory($db,$crypto))->lockers($user,(string)$request->get('cursor','')),
             'locker-detail'=>(new SiteInventory($db,$crypto))->locker($user,$resource),
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
                 (string)$request->get('cursor','')),
+            'shipment-detail'=>(new ShipmentOverview($db,$crypto))->detail($user,$resource),
             default=>[],
         };
         foreach (['items','origins'] as $collection) {
@@ -295,10 +316,12 @@ final class PageController
     {
         return match ($page) {
             'customers'=>'Customers', 'customer-detail'=>'Customer detail',
-            'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'pickup-routes'=>'Pickup routes',
+            'customer-history'=>'Customer history',
+            'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'driver-history'=>'Driver history', 'pickup-routes'=>'Pickup routes',
             'partners'=>'Partners', 'partner-detail'=>'Partner detail',
             'sites'=>'Sites', 'site-detail'=>'Site detail', 'locker-detail'=>'Locker inventory',
-            'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments',
+            'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments', 'shipment-detail'=>'Shipment lifecycle',
+            'lockers'=>'Lockers',
             default=>'Operations overview',
         };
     }

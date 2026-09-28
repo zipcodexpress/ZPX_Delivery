@@ -56,6 +56,8 @@ try {
     $detailApp=new think\App(dirname(__DIR__)); $detailApp->debug(false);
     $detailResponse=$detailApp->http->run($detailRequest);
     check($detailResponse->getCode()===200 && str_contains($detailResponse->getContent(),'Recent assignments')
+        && str_contains($detailResponse->getContent(),'Approval recorded')
+        && str_contains($detailResponse->getContent(),'Earnings ledger')
         && str_contains($detailResponse->getContent(),'SUSPENDED'),
         'driver HTML detail renders assigned run and suspended status');
     $detailApp->http->end($detailResponse);

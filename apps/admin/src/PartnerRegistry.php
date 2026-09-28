@@ -9,7 +9,7 @@ use Zpx\Infrastructure\Database\Transaction;
 /** Registry identities only; no partner row or role grants access to delivery resources. */
 final class PartnerRegistry
 {
-    private const ROLES=['HOST','CARRIER','LOCKER_OWNER','LOCKER_OPERATOR','HUB_OPERATOR'];
+    private const ROLES=['HOST','SITE_OWNER','CARRIER','LOCKER_OWNER','LOCKER_OPERATOR','HUB_OPERATOR'];
     public function __construct(private PDO $db, private Secrets $crypto) {}
     private function q(string $sql,array $args=[]): \PDOStatement
     { $q=$this->db->prepare($sql); $q->execute($args); return $q; }

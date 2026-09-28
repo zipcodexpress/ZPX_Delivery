@@ -24,18 +24,52 @@ final class SiteInventory
         $args=[$this->org()]; $where='';
         if ($cursor!=='') { $where=' AND s.id<?'; $args[]=$cursor; }
         $rows=$this->q('SELECT s.id,s.code,s.name,s.site_type,s.status,s.version,s.address,
+            op.display_name AS owner_name,
             (SELECT count(*) FROM locations l WHERE l.site_id=s.id) AS location_count
-            FROM installation_sites s WHERE s.organization_id=?'.$where.' ORDER BY s.id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
+            FROM installation_sites s LEFT JOIN network_partners op ON op.id=s.owner_partner_id
+            WHERE s.organization_id=?'.$where.' ORDER BY s.id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
         $more=count($rows)>25; $rows=array_slice($rows,0,25);
         return ['items'=>$rows,'next_cursor'=>$more?(string)end($rows)['id']:null,'create_key'=>Secrets::uuid()];
+    }
+
+    public function lockers(string $actor,string $cursor=''): array
+    {
+        $this->authorize($actor);
+        if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid locker cursor.'); }
+        $args=[$this->org()]; $where='';
+        if ($cursor!=='') { $where=' AND k.id<?'; $args[]=$cursor; }
+        $rows=$this->q('SELECT k.id,k.external_locker_id,l.name AS location_name,l.status AS location_status,
+            s.id AS site_id,s.name AS site_name,s.status AS site_status,
+            (SELECT count(*) FROM compartments c WHERE c.locker_id=k.id) AS box_count
+            FROM lockers k JOIN locations l ON l.id=k.location_id
+            LEFT JOIN installation_sites s ON s.id=l.site_id
+            WHERE l.organization_id=?'.$where.' ORDER BY k.id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
+        $more=count($rows)>25; $rows=array_slice($rows,0,25);
+        return ['items'=>$rows,'next_cursor'=>$more?(string)end($rows)['id']:null];
     }
 
     public function site(string $actor,string $id): array
     {
         $this->authorize($actor); self::id($id);
-        $site=$this->q('SELECT * FROM installation_sites WHERE id=? AND organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        $site=$this->q('SELECT s.*,op.display_name AS owner_name,hp.display_name AS host_name
+            FROM installation_sites s LEFT JOIN network_partners op ON op.id=s.owner_partner_id
+            LEFT JOIN network_partners hp ON hp.id=s.host_partner_id
+            WHERE s.id=? AND s.organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
         if (!$site) { throw new Failure(404,'SITE_NOT_FOUND','Site not found.'); }
         $site['address']=json_decode($site['address'],true,512,JSON_THROW_ON_ERROR);
+        $partners=$this->q("SELECT p.id,p.display_name FROM network_partners p JOIN network_partner_roles r ON r.partner_id=p.id
+            WHERE p.organization_id=? AND r.role_code='HOST' AND p.status IN ('DRAFT','ACTIVE') ORDER BY p.display_name LIMIT 100",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        $owners=$this->q("SELECT p.id,p.display_name FROM network_partners p JOIN network_partner_roles r ON r.partner_id=p.id
+            WHERE p.organization_id=? AND r.role_code='SITE_OWNER' AND p.status IN ('DRAFT','ACTIVE') ORDER BY p.display_name LIMIT 100",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        $contacts=$this->q('SELECT a.id,a.role_code,a.is_primary,a.starts_on,a.ends_on,c.display_name,c.role_title,c.email_ciphertext,c.phone_ciphertext
+            FROM site_contact_assignments a JOIN network_contacts c ON c.id=a.contact_id
+            WHERE a.site_id=? AND a.organization_id=? ORDER BY a.id DESC LIMIT 100',[$id,$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($contacts as &$contact) {
+            $contact['email']=$contact['email_ciphertext'] ? $this->crypto->decrypt($contact['email_ciphertext']) : null;
+            $contact['phone']=$contact['phone_ciphertext'] ? $this->crypto->decrypt($contact['phone_ciphertext']) : null;
+            unset($contact['email_ciphertext'],$contact['phone_ciphertext']);
+        }
+        unset($contact);
         $locations=$this->q('SELECT l.id,l.code,l.name,l.kind,l.status,l.address_text,l.site_mode,l.timezone,
             l.overdue_grace_days,l.overdue_daily_cents,l.overdue_cap_cents,
             CASE WHEN EXISTS(SELECT 1 FROM audit_events a WHERE a.entity_type=\'location\' AND a.entity_id=l.id::text
@@ -44,7 +78,101 @@ final class SiteInventory
             (SELECT count(*) FROM compartments c WHERE c.locker_id=k.id) AS box_count
             FROM locations l LEFT JOIN lockers k ON k.location_id=l.id
             WHERE l.organization_id=? AND l.site_id=? ORDER BY l.id LIMIT 100',[$this->org(),$id])->fetchAll(PDO::FETCH_ASSOC);
-        return ['site'=>$site,'locations'=>$locations,'form_key'=>Secrets::uuid()];
+        return ['site'=>$site,'locations'=>$locations,'partners'=>$partners,'owners'=>$owners,'contacts'=>$contacts,'form_key'=>Secrets::uuid()];
+    }
+
+    public function setRelationship(string $actor,string $id,array $input): void
+    {
+        $this->authorize($actor); self::id($id);
+        Input::fields($input,['owner_partner_id','host_partner_id','contract_reference','starts_on','ends_on','version','reason']);
+        $owner=$input['owner_partner_id']===''?null:self::id((string)$input['owner_partner_id']);
+        $host=$input['host_partner_id']===''?null:self::id((string)$input['host_partner_id']);
+        $reference=trim(Input::text($input['contract_reference'],0,160));
+        $reference=$reference===''?null:$reference;
+        $start=$input['starts_on']===''?null:self::date($input['starts_on']);
+        $end=$input['ends_on']===''?null:self::date($input['ends_on']);
+        if ($end!==null && ($start===null || $end<$start) || !is_string($input['version']) || !ctype_digit($input['version'])) {
+            throw new Failure(422,'INVALID_INPUT','Invalid contract dates or version.');
+        }
+        $reason=Input::text(trim(Input::text($input['reason'],10,500)),10,500);
+        (new Transaction($this->db))->run(function() use($actor,$id,$owner,$host,$reference,$start,$end,$reason,$input) {
+            $site=$this->q('SELECT status,version FROM installation_sites WHERE id=? AND organization_id=? FOR UPDATE',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$site) { throw new Failure(404,'SITE_NOT_FOUND','Site not found.'); }
+            if ($site['status']!=='DRAFT') { throw new Failure(409,'SITE_NOT_DRAFT','Only draft site relationships can be edited.'); }
+            if ((int)$site['version']!==(int)$input['version']) { throw new Failure(412,'STALE_VERSION','Refresh the site before editing.'); }
+            if ($host!==null && !$this->q("SELECT 1 FROM network_partners p JOIN network_partner_roles r ON r.partner_id=p.id
+                WHERE p.id=? AND p.organization_id=? AND r.role_code='HOST' AND p.status IN ('DRAFT','ACTIVE')",[$host,$this->org()])->fetchColumn()) {
+                throw new Failure(422,'INVALID_HOST','Choose a host partner in this network.');
+            }
+            if ($owner!==null && !$this->q("SELECT 1 FROM network_partners p JOIN network_partner_roles r ON r.partner_id=p.id
+                WHERE p.id=? AND p.organization_id=? AND r.role_code='SITE_OWNER' AND p.status IN ('DRAFT','ACTIVE')",[$owner,$this->org()])->fetchColumn()) {
+                throw new Failure(422,'INVALID_OWNER','Choose a property owner in this network.');
+            }
+            $this->q('UPDATE installation_sites SET owner_partner_id=?,host_partner_id=?,contract_reference=?,starts_on=?,ends_on=?,version=version+1,updated_at=now() WHERE id=?',
+                [$owner,$host,$reference,$start,$end,$id]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'SITE_RELATIONSHIP_UPDATED','site',?,?)",[$actor,$id,$reason]);
+        });
+    }
+
+    private static function date(mixed $value): string
+    {
+        if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}$/D',$value) || \DateTimeImmutable::createFromFormat('!Y-m-d',$value)?->format('Y-m-d')!==$value) {
+            throw new Failure(422,'INVALID_DATE','Use a valid calendar date.');
+        }
+        return $value;
+    }
+
+    public function addContact(string $actor,string $siteId,array $input): void
+    {
+        $this->authorize($actor); self::id($siteId);
+        Input::fields($input,['name','role_title','email','phone','role_code','is_primary','reason']);
+        $name=trim(Input::text($input['name'],2,160));
+        if ($name==='') { throw new Failure(422,'INVALID_INPUT','Contact name is required.'); }
+        $title=trim(Input::text($input['role_title'],0,100));
+        $email=trim(Input::text($input['email'],0,254));
+        $phone=trim(Input::text($input['phone'],0,30));
+        if ($email==='' && $phone==='') { throw new Failure(422,'INVALID_INPUT','Enter email or phone.'); }
+        if ($email!=='' && !filter_var($email,FILTER_VALIDATE_EMAIL)) { throw new Failure(422,'INVALID_INPUT','Invalid email.'); }
+        if ($phone!=='' && !preg_match('/^[+0-9() .-]{7,30}$/D',$phone)) { throw new Failure(422,'INVALID_INPUT','Invalid phone.'); }
+        $role=$input['role_code'];
+        if (!in_array($role,['PROPERTY_MANAGER','SITE_HOST','SITE_STAFF','SECURITY','ACCESS_ASSISTANCE','EMERGENCY','MAINTENANCE'],true)) {
+            throw new Failure(422,'INVALID_INPUT','Invalid site contact role.');
+        }
+        if (!in_array($input['is_primary'],['0','1'],true)) { throw new Failure(422,'INVALID_INPUT','Invalid primary contact choice.'); }
+        $primary=$input['is_primary']==='1';
+        $reason=Input::text(trim(Input::text($input['reason'],10,500)),10,500);
+        (new Transaction($this->db))->run(function() use($actor,$siteId,$name,$title,$email,$phone,$role,$primary,$reason) {
+            if (!$this->q('SELECT 1 FROM installation_sites WHERE id=? AND organization_id=? FOR UPDATE',[$siteId,$this->org()])->fetchColumn()) {
+                throw new Failure(404,'SITE_NOT_FOUND','Site not found.');
+            }
+            if ($primary && $this->q('SELECT 1 FROM site_contact_assignments WHERE site_id=? AND role_code=? AND is_primary AND ends_on IS NULL',[$siteId,$role])->fetchColumn()) {
+                throw new Failure(409,'PRIMARY_EXISTS','This site already has a primary contact for that role.');
+            }
+            $contact=$this->q('INSERT INTO network_contacts(organization_id,display_name,role_title,email_ciphertext,phone_ciphertext) VALUES (?,?,?,?,?) RETURNING id',
+                [$this->org(),$name,$title?:null,$email!==''?$this->crypto->encrypt($email):null,$phone!==''?$this->crypto->encrypt($phone):null])->fetchColumn();
+            $this->q('INSERT INTO site_contact_assignments(organization_id,site_id,contact_id,role_code,is_primary) VALUES (?,?,?,?,?)',
+                [$this->org(),$siteId,$contact,$role,$primary]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'SITE_CONTACT_ADDED','site',?,?)",[$actor,$siteId,$reason]);
+        });
+    }
+
+    public function archiveContact(string $actor,string $siteId,string $assignmentId,string $reason): void
+    {
+        $this->authorize($actor); self::id($siteId); self::id($assignmentId);
+        $reason=Input::text(trim(Input::text($reason,10,500)),10,500);
+        (new Transaction($this->db))->run(function() use($actor,$siteId,$assignmentId,$reason) {
+            $row=$this->q('SELECT a.contact_id,a.ends_on,a.is_primary,s.status AS site_status FROM site_contact_assignments a JOIN installation_sites s ON s.id=a.site_id
+                WHERE a.id=? AND a.site_id=? AND s.organization_id=? FOR UPDATE OF a',[$assignmentId,$siteId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$row) { throw new Failure(404,'CONTACT_NOT_FOUND','Site contact not found.'); }
+            if ($row['ends_on']!==null) { throw new Failure(409,'CONTACT_ARCHIVED','Site contact is already archived.'); }
+            if ($row['is_primary'] && $row['site_status']==='ACTIVE') {
+                throw new Failure(409,'PRIMARY_REQUIRED','Replace the active site primary contact before archiving it.');
+            }
+            $this->q('UPDATE site_contact_assignments SET ends_on=CURRENT_DATE WHERE id=?',[$assignmentId]);
+            $this->q("UPDATE network_contacts SET status='ARCHIVED' WHERE id=? AND NOT EXISTS
+                (SELECT 1 FROM site_contact_assignments WHERE contact_id=? AND ends_on IS NULL)",[$row['contact_id'],$row['contact_id']]);
+            $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'SITE_CONTACT_ARCHIVED','site',?,?)",[$actor,$siteId,$reason]);
+        });
     }
 
     public function updateDraft(string $actor,string $id,array $input): void
@@ -233,7 +361,11 @@ final class SiteInventory
             s.id AS site_id,s.name AS site_name,s.status AS site_status FROM lockers k JOIN locations l ON l.id=k.location_id
             LEFT JOIN installation_sites s ON s.id=l.site_id WHERE k.id=? AND l.organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
         if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
-        return ['locker'=>$locker,'bodies'=>$this->q('SELECT id,code,display_sequence,status FROM locker_body_modules WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
+        return ['locker'=>$locker,
+            'devices'=>$this->q('SELECT id,external_device_id,status,created_at FROM locker_devices WHERE locker_id=? ORDER BY id',[$id])->fetchAll(PDO::FETCH_ASSOC),
+            'boards'=>$this->q('SELECT id,board_address,protocol_profile,display_sequence FROM controller_boards WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
+            'ownership'=>$this->q('SELECT generation,state,activated_at,created_at FROM ownership_manifests WHERE locker_id=? ORDER BY generation DESC LIMIT 10',[$id])->fetchAll(PDO::FETCH_ASSOC),
+            'bodies'=>$this->q('SELECT id,code,display_sequence,status FROM locker_body_modules WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'modules'=>$this->q('SELECT m.id,m.code,m.body_module_id,m.display_sequence,m.status FROM locker_box_modules m WHERE m.locker_id=? ORDER BY m.body_module_id,m.display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boxes'=>$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,
                 b.board_address,c.door_address,c.display_row,c.display_column,

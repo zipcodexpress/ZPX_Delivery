@@ -68,13 +68,28 @@ final class CustomerManagement
             FROM shipments s LEFT JOIN packages p ON p.shipment_id=s.id AND p.sequence_no=1
             WHERE s.organization_id=? AND (s.sender_user_id=? OR EXISTS(
                 SELECT 1 FROM shipment_parties sp WHERE sp.shipment_id=s.id AND sp.party_role='RECIPIENT' AND sp.user_id=?))
-            ORDER BY s.id DESC LIMIT 10",[$user,$this->org(),$user,$user])->fetchAll(PDO::FETCH_ASSOC);
+            ORDER BY s.id DESC LIMIT 25",[$user,$this->org(),$user,$user])->fetchAll(PDO::FETCH_ASSOC);
         $activity=$this->query("SELECT action,created_at FROM audit_events WHERE entity_type='customer' AND entity_id=? ORDER BY id DESC LIMIT 10",[$user])->fetchAll(PDO::FETCH_ASSOC);
+        $payments=$this->query("SELECT p.id,p.shipment_id,p.amount_cents,p.status,p.provider,p.created_at,s.public_reference
+            FROM payments p JOIN shipments s ON s.id=p.shipment_id WHERE s.sender_user_id=? AND s.organization_id=?
+            ORDER BY p.id DESC LIMIT 25",[$user,$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        $totals=$this->query("SELECT
+            (SELECT count(*) FROM shipments s WHERE s.sender_user_id=? AND s.organization_id=?) AS shipment_count,
+            (SELECT count(*) FROM shipments s WHERE s.sender_user_id=? AND s.organization_id=? AND s.payment_status='PAID') AS paid_shipment_count,
+            (SELECT count(*) FROM shipment_parties sp JOIN shipments s ON s.id=sp.shipment_id
+                WHERE sp.party_role='RECIPIENT' AND sp.user_id=? AND s.organization_id=?) AS received_count",
+            [$user,$this->org(),$user,$this->org(),$user,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        $paymentTotals=$this->query("SELECT
+            (SELECT COALESCE(sum(p.amount_cents),0) FROM payments p JOIN shipments s ON s.id=p.shipment_id
+                WHERE s.sender_user_id=? AND s.organization_id=? AND p.status='PAID') AS captured_cents,
+            (SELECT COALESCE(sum(r.amount_cents),0) FROM refunds r JOIN payments p ON p.id=r.payment_id
+                JOIN shipments s ON s.id=p.shipment_id WHERE s.sender_user_id=? AND s.organization_id=? AND r.status='SUCCEEDED') AS refunded_cents",
+            [$user,$this->org(),$user,$this->org()])->fetch(PDO::FETCH_ASSOC);
         return ['customer'=>$this->present($row),'shipments'=>array_map(static fn($s)=>[
             'shipment_id'=>(string)$s['id'],'public_reference'=>$s['public_reference'],'order_status'=>$s['order_status'],
             'payment_status'=>$s['payment_status'],'package_state'=>$s['package_state'],'relationship'=>$s['relationship'],
             'created_at'=>$s['created_at'],
-        ],$shipments),'activity'=>$activity];
+        ],$shipments),'activity'=>$activity,'payments'=>$payments,'totals'=>$totals,'payment_totals'=>$paymentTotals];
     }
 
     private static function maskEmail(string $email): string
