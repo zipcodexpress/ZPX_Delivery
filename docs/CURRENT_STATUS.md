@@ -4,7 +4,7 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/partial-pickup-recovery`, based on merged `origin/main` at `338046c` (PR #24 merged).
+- Date: 2026-09-27. Agent: Codex. Branch: `codex/partial-pickup-recovery`, feature commit `08d0f08`, based on merged `origin/main` at `338046c` (PR #24 merged). Review: [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25).
 - Objective: safely reassign an uncollected parcel from a partly collected inbound run without changing collected-parcel custody or hub receiving expectations.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -31,8 +31,8 @@
 
 ## Exact continuation point
 
-1. Run isolated browser suite, review diff and schema compatibility, then commit/push `codex/partial-pickup-recovery` and open PR.
-2. Continue the next roadmap step without waiting for merge if independent: enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation as far as practical without hardware.
+1. Review and merge PR #25 after CI. Its local database, API, build and browser checks passed; the two untracked human notes remain untouched.
+2. Continue the next independent roadmap step without waiting for merge: P5 final destination deposit and recipient notification/pickup grant, then enrolled Android terminal integration as far as practical without hardware.
 
 ## Critical rules
 
