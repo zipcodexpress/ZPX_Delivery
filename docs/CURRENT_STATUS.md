@@ -2,10 +2,11 @@
 
 > Shared handoff for Codex, Qwen Code and human developers. Hard limit: 200 lines.
 
-## Current objective and baseline
+## Objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/destination-device-protocol`, stacked on [PR #26](https://github.com/zipcodexpress/ZPX_Delivery/pull/26) (`5bea389`); [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25) independently reviews partial-run pickup recovery.
-- Objective: add signed enrolled-device command polling for prepared P5 final destination deposit, still without assuming door evidence or transferring custody.
+- Date: 2026-09-28. Agent: Codex. Branch: `codex/admin-foundation`, commit `f34eb71`, PR #31 open against `main` (based on `e5658f8`).
+- Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
+- This branch is the bounded ADM-01/ADM-02 foundation; the full ADM-03–ADM-18 backlog remains. No schema migration is needed for these two tasks. Add partner/site tables only in their owning tasks after verifying relationships.
 - Date: 2026-09-27. Agent: Codex. Branch: `codex/partial-pickup-recovery`, feature commit `08d0f08`, based on merged `origin/main` at `338046c` (PR #24 merged). Review: [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25).
 - Objective: safely reassign an uncollected parcel from a partly collected inbound run without changing collected-parcel custody or hub receiving expectations.
 - Date: 2026-09-28. Agent: Codex. Branch: `docs/admin-development-spec`, application baseline `338046c` (PR #24 merged); initial design commit `f1e70e5`.
@@ -14,40 +15,38 @@
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
-## Implemented baseline
+## Implemented on this branch
 
-- Customer shipment initialization, verified contacts, size-only pricing, confirmed development payment, stable SI and replaceable label.
-- Development-only virtual origin deposit creates OPEN pickup demand with explicit synthetic evidence; no physical hardware is claimed.
-- Driver opt-in, expiring exact-item pickup offers, atomic acceptance into multi-locker inbound runs, and individual pickup scans/custody. Hub receiving/discrepancy, staging, outbound dispatch/load/departure and arrival are implemented.
-- Synthetic destination deposit/recipient pickup demo outcomes are assumptions, not device evidence.
+- `apps/admin` contains ThinkPHP routes, access resolver, page controller, view templates and scoped CSS. Network admins have dashboard, shipment list, pending-driver decisions, pickup routes and recovery pages, using existing services. Non-admins receive explicit denial.
+- `GET /api/delivery/v1/admin/access` returns deny-by-default capability hints and network/location scopes from current grants. No new role grants or authorization broadening. Contract and generated TS types updated.
+- Browser session cookie changes from API-only path to root so `/admin` can share identity; legacy path is explicitly expired on sign-in/logout. Admin login has pre-login CSRF cookie, Origin check and existing identity rate limiting. Existing JSON login/logout behavior is retained.
+- `topthink/think-view` is locked in Composer. API Docker image includes sibling `apps/admin` while keeping one application/database.
+- No new database migration was needed for ADM-01/02. The local development database had four pending existing migrations, including `021_pickup_routing.sql`; the migration image was rebuilt and they were applied. PostgreSQL remains exposed only on `127.0.0.1:5432` for DBeaver.
 
-## Current branch milestone
+## Validation
 
-- PR #25 separately reviews evidence-backed recovery of uncollected parcels from partially collected inbound runs; it is not a dependency of this branch.
-- This branch adds `POST /runs/{run_id}/stops/{stop_id}/final-deposits`: driver, run/stop revision, parcel version, active label, shipping identifier, exact arrived destination, current driver custody, approved pairing, active enrolled device, physical-command enablement and current DELIVERY compartment ownership are checked in one transaction. It reserves one compatible door and journals a pending command. It does not dispatch, open, claim delivery, create a pickup grant, or transfer custody.
-- Accepted origin pickup now releases only an occupied claim matching that parcel's origin locker. An unresolved/mismatched claim blocks transfer. A pending final-deposit claim is never automatically freed on timeout; it requires evidence reconciliation.
-- This stacked branch adds Ed25519-signed per-device GET command poll, timestamp and durable nonce replay fence, own-locker/ownership/session/package/run/physical-address checks, and an immutable first-dispatch payload hash. A terminal cannot poll a command after custody/version/ownership/address changes; polling never confirms door evidence or custody.
-
-## Validation and limitations
-
-- `npm run check` passed: 91 canonical OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps.
-- Disposable `npm run test-db` passed: final-deposit role/stop/revision/version/label/device credential/ownership fences, idempotency, unique claim, unchanged driver custody; origin claim release and unresolved-claim refusal. No physical hardware was tested.
-- On this branch, `npm run check` and disposable `npm run test-db` passed again with signed-device invalid-signature/stale-time/replay, own-command, immutable-address, stale-parcel and frozen-ownership cases. Physical actuation and event ingestion remain untested/unimplemented.
+- `npm run check` passed (95 validated OpenAPI operations, TypeScript, 9 Node tests). `npm run build` passed both React apps. Composer validation, PHP syntax checks and template escaping/rendering passed.
+- Disposable `npm run test-db` passed, including network/location/no-admin scopes, anonymous redirect, denial, missing-CSRF refusal and preexisting driver/workflow regressions. No physical hardware was tested.
+- Live local admin sign-in with the synthetic seed account, all four page families, `/admin/access`, stylesheet and sign-out passed. Browser route assignment changed one synthetic origin to the seeded hub and displayed the result. Existing operations portal remained authenticated after root cookie migration.
 - PR #24 is merged: administrators can cancel a wholly uncollected offer run and reopen its parcel demands without changing locker custody.
 - Migration 022 adds a historical `RELEASED` manifest-item state. This branch lets an administrator release one `EXPECTED` parcel from a partly collected run only after recording a site-inspection or locker-inventory reference and reason. The service checks the exact run, parcel, demand, allocation, scan and receiving state, increments run/manifest revision, reopens only that demand, and never changes package custody or version.
 - Driver and hub receiving counts exclude released items; the old run can receive and close its collected parcels without a false SHORT. The admin recovery tab shows per-parcel eligibility and evidence inputs. These references are operator assertions, not authenticated device telemetry.
 
-## Validation and limitations
+## Next exact actions
 
+1. Review and merge PR #31. ADM-01/02 are a bounded foundation, not full admin production readiness.
+2. ADM-03 customer/driver administration can be developed on a separate follow-up branch while PR #31 is reviewed, then rebased or retargeted after merge. It needs scoped lists, restrictions and eligibility checks; existing role/service fences must stay intact.
+3. ADM-04 partner entities/grants and ADM-05 sites require guarded, additive PostgreSQL migrations, backfills and synthetic fixtures; do not fabricate legal partner ownership. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`.
 - `npm run check` passed: 91 canonical OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps. Isolated `npm run test-e2e` passed all 5 browser tests, including the new partial-recovery UI test.
 - Disposable `npm run test-db` passed: partial release role/version/evidence/idempotency fences, collected-parcel custody preservation, hub receiving count and no false SHORT, a true SHORT for an unreceived collected parcel, and independent new-run reassignment. No physical hardware was tested.
 - Route matching is a straight-line eligibility screen, not drive-time routing or automatic push notification. Production site coordinates require administrator configuration. A driver must consent to location sharing; stale/missing location receives no production offers.
 - Real origin terminal pairing, authenticated physical door evidence, delayed/ambiguous evidence reconciliation, commissioning and supervised hardware pilot remain required. Live local Authorize.net sandbox capture previously returned a provider error; LOCAL_TEST payment is validated.
 
-## Exact continuation point
+## Delivery baseline and gates
 
-1. Review the signed device command poll PR stacked on PR #26 after CI. A real locker/device commissioning flow is still missing.
-2. Next development: authenticated device pairing creation/driver approval, signed physical event ingestion, then driver attestation and correlated deposit confirmation. After that, recipient notification/pickup grant and return/reconciliation.
+- Origin deposit/recipient pickup demo outcomes are synthetic assumptions, not physical evidence. Driver pickup, hub receiving/dispatch, route assignment and uncollected-run recovery have prior test coverage.
+- Physical locker commissioning, destination deposit, verified recipient pickup and payout activation retain separate real-evidence gates. Hardware ambiguity never becomes automatic completion.
+- Local dev: `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py up`; customer `http://localhost:5173`, operations `http://localhost:5174`, API/admin `http://localhost:8000/admin`.
 1. Review and merge PR #25 after CI. Its local database, API, build and browser checks passed; the two untracked human notes remain untouched.
 2. Continue the next independent roadmap step without waiting for merge: P5 final destination deposit and recipient notification/pickup grant, then enrolled Android terminal integration as far as practical without hardware.
 1. Begin ADM-01 in `docs/admin/BACKLOG.md`: reconcile existing admin runtime/API contracts and add scoped capability foundation. ADM-02 then implements ThinkPHP pages with session-cookie migration from API-only path to root; read `THINKPHP_PRESENTATION.md` before coding.

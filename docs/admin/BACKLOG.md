@@ -1,6 +1,6 @@
 # Admin implementation backlog
 
-Status: all tasks TODO. This document specifies work; it is not completion evidence.
+Status: ADM-01/ADM-02 implemented on `codex/admin-foundation` pending merge; ADM-03–ADM-18 TODO. This is a task map, not a substitute for code and test evidence.
 Start with [README](README.md); use [functions](FUNCTIONS.md) and [data/API](DATA_AND_API.md) for requirements.
 Each task is a bounded reviewable increment. Split large tasks further while retaining the parent ID; do not implement this entire backlog in one PR.
 

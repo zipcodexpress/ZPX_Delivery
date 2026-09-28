@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{$title} · ZipcodeXpress Management</title><link rel="stylesheet" href="/admin-style"></head>
+<body><div class="app-shell"><aside class="sidebar"><a class="brand" href="/admin">Zipcode<strong>Xpress</strong></a>
+<nav aria-label="Administration"><a href="/admin" class="nav-top">Overview</a><div class="nav-group"><div class="nav-head">Operations</div><a class="nav-link" href="/admin/shipments">Shipments</a><a class="nav-link" href="/admin/drivers">Driver reviews</a><a class="nav-link" href="/admin/pickup-routes">Pickup routes</a><a class="nav-link" href="/admin/pickup-recovery">Pickup recovery</a></div></nav></aside>
+<div class="workspace"><header class="topbar"><div><strong>Management Console</strong><small>ZipcodeXpress operations · Network {$network}</small></div><div class="user">{$name}</div><form method="post" action="/admin/logout"><input type="hidden" name="_csrf" value="{$csrf}"><button type="submit">Sign out</button></form></header>
+<main class="content"><div class="content-panel"><div class="dashboard-head"><div><h1>{$title}</h1><p>Current network operations and administration.</p></div></div>
+{switch name="page"}
+{case value="drivers"}{include file="drivers" /}{/case}
+{case value="pickup-routes"}{include file="pickup_routes" /}{/case}
+{case value="pickup-recovery"}{include file="pickup_recovery" /}{/case}
+{case value="shipments"}{include file="shipments" /}{/case}
+{default /}<section class="metric-grid" aria-label="Available areas"><div class="metric"><span>Driver administration</span><strong>Review applications</strong></div><div class="metric"><span>Pickup routing</span><strong>Manage origin hubs</strong></div><div class="metric"><span>Recovery</span><strong>Resolve pickup runs</strong></div></section><section class="quick-panel"><h2>Available management areas</h2><div class="quick-links"><a href="/admin/shipments">Shipments →</a><a href="/admin/drivers">Driver reviews →</a><a href="/admin/pickup-routes">Pickup routes →</a><a href="/admin/pickup-recovery">Pickup recovery →</a><a href="{$operationsUrl}">Existing operations portal →</a></div></section>
+{/switch}
+</div></main></div></div></body></html>

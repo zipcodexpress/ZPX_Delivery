@@ -55,21 +55,20 @@ final class IdentityController
             };
             $headers=[];
             if (isset($body['_cookie'])) {
-                $headers['Set-Cookie']=self::cookie($body['_cookie'],28800);
+                $headers['Set-Cookie']=SessionCookies::value($body['_cookie'],28800,'/');
                 unset($body['_cookie']);
             }
             if ($action==='me' && $kind==='BROWSER') { $body['csrf_token']=$secrets->digest('csrf',$token); }
-            if ($action==='logout' && $kind==='BROWSER') { $headers['Set-Cookie']=self::cookie('',0); }
-            return Reply::json($action==='register'?201:200,$body,$id,$headers);
+            if ($action==='logout' && $kind==='BROWSER') {
+                $headers['Set-Cookie']=SessionCookies::value('',0,'/');
+            }
+            $response=Reply::json($action==='register'?201:200,$body,$id,$headers);
+            if (isset($headers['Set-Cookie'])) { SessionCookies::clearLegacy($response); }
+            return $response;
         } catch (Failure $error) {
             $headers=$error->status===405?['Allow'=>$action==='me'?'GET':'POST']:[];
             if ($error->status===429) { $headers['Retry-After']='600'; }
             return Reply::json($error->status,['code'=>$error->errorCode,'message'=>$error->getMessage(),'correlation_id'=>$id,'retryable'=>in_array($error->status,[429,503],true)],$id,$headers);
         }
-    }
-    private static function cookie(string $token, int $age): string
-    {
-        $secure=getenv('APP_ENV')==='development'?'':'; Secure';
-        return 'zpx_delivery_session='.$token.'; Path=/api/delivery/v1; Max-Age='.$age.'; HttpOnly; SameSite=Strict'.$secure;
     }
 }

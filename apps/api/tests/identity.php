@@ -151,6 +151,9 @@ $base='/api/delivery/v1';
 check($response->getCode()===200 && isset($body['csrf_token']) && !isset($body['_cookie']) && !isset($body['access_token']),'HTTP browser login returns only safe session fields');
 $cookieHeader=$response->getHeader('Set-Cookie');
 check(str_contains($cookieHeader,'HttpOnly') && str_contains($cookieHeader,'SameSite=Strict') && str_contains($cookieHeader,'Secure'),'browser cookie security attributes');
+check(str_contains($cookieHeader,'Path=/;') && isset($response->getCookie()->getCookie()['zpx_delivery_session'])
+    && $response->getCookie()->getCookie()['zpx_delivery_session'][2]['path']==='/api/delivery/v1',
+    'browser login issues root cookie and expires old API-path cookie');
 preg_match('/zpx_delivery_session=([a-f0-9]{64})/',$cookieHeader,$matches);
 $cookies=['zpx_delivery_session'=>$matches[1]];
 $csrf=$body['csrf_token'];
@@ -162,6 +165,8 @@ check($response->getCode()===403 && $body['code']==='CSRF_REJECTED' && isset($bo
 check($response->getCode()===403 && $body['code']==='ORIGIN_REJECTED','cross-origin authenticated mutation denied');
 [$response,$body]=identityHttp('POST',$base.'/auth/logout',[],['idempotency-key'=>Secrets::uuid(),'x-csrf-token'=>$csrf],$cookies);
 check($response->getCode()===200 && str_contains($response->getHeader('Set-Cookie'),'Max-Age=0'),'HTTP logout clears cookie');
+check(str_contains($response->getHeader('Set-Cookie'),'Path=/;')
+    && isset($response->getCookie()->getCookie()['zpx_delivery_session']), 'logout expires both cookie paths');
 [$response,$body]=identityHttp('GET',$base.'/me',[],[],$cookies);
 check($response->getCode()===401,'logged-out browser cannot retrieve profile');
 [$response,$body]=identityHttp('POST',$base.'/auth/register',$registration,['content-type'=>'text/plain']);
