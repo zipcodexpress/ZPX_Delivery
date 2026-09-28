@@ -7,6 +7,7 @@ use think\Response;
 use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Custody\Service;
 use Zpx\Custody\PickupOffers;
+use Zpx\Custody\FinalDeposit;
 use Zpx\Infrastructure\Database\Connection;
 
 final class DriverController
@@ -28,6 +29,7 @@ final class DriverController
                 'scan' => 'POST',
                 'depart' => 'POST',
                 'arrive' => 'POST',
+                'final-deposit' => 'POST',
                 default => 'GET',
             };
             if ($method !== $expected) { throw new Failure(405, 'METHOD_NOT_ALLOWED', 'Unsupported method.'); }
@@ -87,6 +89,7 @@ final class DriverController
                     : $custody->inboundPickupScan($user, $runId, $input, $key, $request->header('if-match','')),
                 'depart' => $custody->departRun($user, $runId, $input, $key, $request->header('if-match','')),
                 'arrive' => $custody->arriveAtStop($user, $runId, $stopId, $input, $key, $request->header('if-match','')),
+                'final-deposit' => (new FinalDeposit($db,$crypto))->prepare($user,$runId,$stopId,$input,$key,$request->header('if-match','')),
             };
 
             return Reply::json(200, $body, $requestId);
