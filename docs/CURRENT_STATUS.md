@@ -4,7 +4,7 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/destination-device-events`, stacked on [PR #28](https://github.com/zipcodexpress/ZPX_Delivery/pull/28) → [PR #27](https://github.com/zipcodexpress/ZPX_Delivery/pull/27) → [PR #26](https://github.com/zipcodexpress/ZPX_Delivery/pull/26); [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25) independently reviews partial-run pickup recovery.
+- Date: 2026-09-28. Agent: Codex. Branch: `codex/destination-device-events` at `5d6f34a`, [PR #29](https://github.com/zipcodexpress/ZPX_Delivery/pull/29) stacked on [PR #28](https://github.com/zipcodexpress/ZPX_Delivery/pull/28) → [PR #27](https://github.com/zipcodexpress/ZPX_Delivery/pull/27) → [PR #26](https://github.com/zipcodexpress/ZPX_Delivery/pull/26); [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25) independently reviews partial-run pickup recovery.
 - Objective: retain signed, correlated destination terminal observations without claiming unverified physical completion or transferring custody.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -31,14 +31,14 @@
 - Disposable `npm run test-db` passed: final-deposit role/stop/revision/version/label/device credential/ownership fences, idempotency, unique claim, unchanged driver custody; origin claim release and unresolved-claim refusal. No physical hardware was tested.
 - On this branch, `npm run check` and disposable `npm run test-db` passed again with signed-device invalid-signature/stale-time/replay, own-command, immutable-address, stale-parcel and frozen-ownership cases. Physical actuation and event ingestion remain untested/unimplemented.
 - On the pairing branch, `npm run check` passed with 93 canonical operations and 9 Node tests; disposable `npm run test-db` passed device scene creation, driver preview/approval, idempotent replay, wrong actor/stop and approved-scene consumption into a second parcel reservation. No physical hardware was tested.
-- On this branch, `npm run check` passed with 93 operations and 9 Node tests; disposable `npm run test-db` passed signed event submission, identical-event replay, conflicting event/boot sequence/address refusal, late event retention after command expiry, open/close journaling and unchanged custody.
+- On this branch, `npm run check` passed with 93 operations and 9 Node tests; disposable `npm run test-db` passed signed event submission, identical-event replay, conflicting event/boot sequence/address refusal, late event retention after command expiry, open/close journaling and unchanged custody. CI for PR #26–#28 passed; PR #29 checks passed while browser/local-stack jobs were pending at last check.
 - Route matching is a straight-line eligibility screen, not drive-time routing or automatic push notification. Production site coordinates require administrator configuration. A driver must consent to location sharing; stale/missing location receives no production offers.
 - Real origin terminal pairing, authenticated physical door evidence, delayed/ambiguous evidence reconciliation, commissioning and supervised hardware pilot remain required. Live local Authorize.net sandbox capture previously returned a provider error; LOCAL_TEST payment is validated.
 
 ## Exact continuation point
 
-1. Review signed device event intake PR stacked on PR #28 after CI. A real locker/device commissioning flow is still missing.
-2. Next development requires a supervised physical terminal pilot to validate actual door frame semantics and event ordering before a custody-confirming driver attestation is enabled. Then recipient notification/pickup grant and return/reconciliation.
+1. Review/merge stacked PRs #26 → #27 → #28 → #29 in order after CI; PR #25 is independent. Retarget each child PR to `main` after its parent merges if GitHub has not done so.
+2. Next production custody-confirming driver attestation needs the Android terminal protocol or staging device plus a supervised pilot to validate actual door frame semantics and event ordering. Until then, signed events remain unverified telemetry and the parcel stays with the driver. Recipient notification/pickup grant and return/reconciliation follow confirmation.
 
 ## Critical rules
 
