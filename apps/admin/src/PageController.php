@@ -167,6 +167,29 @@ final class PageController
                     'box_id'=>$request->post('box_id',''),'module_id'=>$request->post('module_id',''),
                     'reason'=>$request->post('reason',''),
                 ]),
+                'locker-model-box-add' => (new LockerModels($db))->addBoxModel($user,[
+                    'code'=>$request->post('code',''),'version'=>$request->post('version',''),
+                    'name'=>$request->post('name',''),'width_mm'=>$request->post('width_mm',''),
+                    'height_mm'=>$request->post('height_mm',''),'depth_mm'=>$request->post('depth_mm',''),
+                    'max_weight_g'=>$request->post('max_weight_g',''),'reason'=>$request->post('reason',''),
+                ]),
+                'locker-model-body-add' => (new LockerModels($db))->addBodyModel($user,[
+                    'code'=>$request->post('code',''),'version'=>$request->post('version',''),
+                    'name'=>$request->post('name',''),'reason'=>$request->post('reason',''),
+                ]),
+                'locker-model-slot-add' => (new LockerModels($db))->addSlot($user,[
+                    'body_model_id'=>$request->post('body_model_id',''),'box_model_id'=>$request->post('box_model_id',''),
+                    'row'=>$request->post('row',''),'column'=>$request->post('column',''),
+                    'reason'=>$request->post('reason',''),
+                ]),
+                'locker-model-slot-remove' => (new LockerModels($db))->removeSlot($user,
+                    (string)$request->post('slot_id',''),(string)$request->post('reason','')),
+                'locker-model-ready' => (new LockerModels($db))->ready($user,
+                    (string)$request->post('body_model_id',''),(string)$request->post('reason','')),
+                'locker-model-instantiate' => (new LockerModels($db))->instantiate($user,$id,[
+                    'body_model_id'=>$request->post('body_model_id',''),'body_code'=>$request->post('body_code',''),
+                    'position'=>$request->post('position',''),'reason'=>$request->post('reason',''),
+                ]),
                 'customer-rename' => (new PeopleEditor($db,$crypto))->rename($user,$id,(string)$request->post('name',''),(string)$request->post('reason','')),
                 'address-save' => (new PeopleEditor($db,$crypto))->save($user,$id,[
                     'address_id'=>$request->post('address_id',''),'kind'=>$request->post('kind',''),
@@ -178,6 +201,7 @@ final class PageController
             };
             if ($operation==='site-create') { return self::redirect('/admin/sites/'.$result); }
             if (in_array($operation,['site-update','site-relationship','site-contact-add','site-contact-archive','site-overdue','site-location-create','location-overdue','location-deactivate','location-reactivate'],true)) { return self::redirect('/admin/sites/'.$id); }
+            if (in_array($operation,['locker-model-box-add','locker-model-body-add','locker-model-slot-add','locker-model-slot-remove','locker-model-ready'],true)) { return self::redirect('/admin/locker-models'); }
             if (str_starts_with($operation,'locker-')) { return self::redirect('/admin/lockers/'.$id); }
             if (in_array($operation,['customer-rename','address-save','address-archive'],true)) { return self::redirect('/admin/customers/'.$id); }
             $page = match ($operation) {
@@ -197,7 +221,8 @@ final class PageController
                     'customer-restrict','customer-revoke'=>'/admin/customers',
                     'partner-create'=>'/admin/partners',
                     'site-create','site-update','site-relationship','site-contact-add','site-contact-archive','site-location-create','site-overdue','location-overdue','location-deactivate','location-reactivate'=>'/admin/sites',
-                    'locker-body-add','locker-module-add','locker-box-add','locker-box-assign'=>'/admin/lockers/'.$id,
+                    'locker-body-add','locker-module-add','locker-box-add','locker-box-assign','locker-model-instantiate'=>'/admin/lockers/'.$id,
+                    'locker-model-box-add','locker-model-body-add','locker-model-slot-add','locker-model-slot-remove','locker-model-ready'=>'/admin/locker-models',
                     'customer-rename','address-save','address-archive'=>'/admin/customers',
                     default=>'/admin/pickup-recovery',
                 };
@@ -251,7 +276,9 @@ final class PageController
             'sites'=>(new SiteInventory($db,$crypto))->sites($user,(string)$request->get('cursor','')),
             'site-detail'=>(new SiteInventory($db,$crypto))->site($user,$resource),
             'lockers'=>(new SiteInventory($db,$crypto))->lockers($user,(string)$request->get('cursor','')),
-            'locker-detail'=>(new SiteInventory($db,$crypto))->locker($user,$resource,(string)$request->get('cursor','')),
+            'locker-detail'=>(new SiteInventory($db,$crypto))->locker($user,$resource,(string)$request->get('cursor',''))
+                + ['model_options'=>(new LockerModels($db))->readyBodies($user)],
+            'locker-models'=>(new LockerModels($db))->catalog($user),
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
@@ -322,7 +349,7 @@ final class PageController
             'partners'=>'Partners', 'partner-detail'=>'Partner detail',
             'sites'=>'Sites', 'site-detail'=>'Site detail', 'locker-detail'=>'Locker inventory',
             'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments', 'shipment-detail'=>'Shipment lifecycle',
-            'lockers'=>'Lockers',
+            'lockers'=>'Lockers', 'locker-models'=>'Locker models',
             default=>'Operations overview',
         };
     }

@@ -362,7 +362,7 @@ final class SiteInventory
             s.id AS site_id,s.name AS site_name,s.status AS site_status FROM lockers k JOIN locations l ON l.id=k.location_id
             LEFT JOIN installation_sites s ON s.id=l.site_id WHERE k.id=? AND l.organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
         if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
-        $boxes=$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,
+        $boxes=$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,c.box_model_id,
                 m.code AS module_code,body.code AS body_code,
                 b.board_address,c.door_address,c.display_row,c.display_column,o.owner AS partition,
                 cc.state AS claim_state,cc.expires_at AS claim_expires_at,p.id AS package_id,p.state AS package_state,
@@ -440,7 +440,7 @@ final class SiteInventory
             'devices'=>$this->q('SELECT id,external_device_id,status,created_at FROM locker_devices WHERE locker_id=? ORDER BY id',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boards'=>$this->q('SELECT id,board_address,protocol_profile,display_sequence FROM controller_boards WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'ownership'=>$this->q('SELECT generation,state,activated_at,created_at FROM ownership_manifests WHERE locker_id=? ORDER BY generation DESC LIMIT 10',[$id])->fetchAll(PDO::FETCH_ASSOC),
-            'bodies'=>$this->q('SELECT id,code,display_sequence,status FROM locker_body_modules WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
+            'bodies'=>$this->q('SELECT id,code,display_sequence,status,body_model_id FROM locker_body_modules WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'modules'=>$this->q('SELECT m.id,m.code,m.body_module_id,m.display_sequence,m.status FROM locker_box_modules m WHERE m.locker_id=? ORDER BY m.body_module_id,m.display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boxes'=>$boxes];
     }
