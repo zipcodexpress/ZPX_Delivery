@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-customer-driver`, based on `codex/admin-foundation` (`e4a8617`); PR #31 is open against `main`.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-customer-driver`, commit `893002b`, based on `codex/admin-foundation` (`e4a8617`). PR #31 is open against `main`; stacked PR #32 is open against `codex/admin-foundation`.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - PR #31 contains ADM-01/02. This branch implements the first ADM-03 customer/driver slice. Customer/driver detail and activity screens remain; ADM-04–ADM-18 remain. Add partner/site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -28,8 +28,8 @@
 
 ## Next exact actions
 
-1. Review final diff, commit and create a stacked PR against `codex/admin-foundation` while PR #31 is open.
-2. Complete ADM-03 customer/driver detail and activity views in a later bounded increment, then ADM-04 partner entities/grants and ADM-05 sites with guarded additive migrations and synthetic fixtures; do not fabricate legal ownership.
+1. PR #32 contains the validated ADM-03 customer/driver first slice; it awaits review after/alongside PR #31. Begin a new branch from PR #32 for scoped customer/driver detail and activity views, without waiting for the merges.
+2. After ADM-03 detail views, tackle ADM-04 partner entities/grants and ADM-05 sites with guarded additive migrations and synthetic fixtures; do not fabricate legal ownership.
 3. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`, respecting physical/payout evidence gates.
 
 ## Delivery baseline and gates
