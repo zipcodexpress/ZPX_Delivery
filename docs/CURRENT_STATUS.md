@@ -4,6 +4,8 @@
 
 ## Current objective and baseline
 
+- Date: 2026-09-27. Agent: Codex. Branch: `codex/destination-device-protocol`, stacked on [PR #26](https://github.com/zipcodexpress/ZPX_Delivery/pull/26) (`5bea389`); [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25) independently reviews partial-run pickup recovery.
+- Objective: add signed enrolled-device command polling for prepared P5 final destination deposit, still without assuming door evidence or transferring custody.
 - Date: 2026-09-27. Agent: Codex. Branch: `codex/partial-pickup-recovery`, feature commit `08d0f08`, based on merged `origin/main` at `338046c` (PR #24 merged). Review: [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25).
 - Objective: safely reassign an uncollected parcel from a partly collected inbound run without changing collected-parcel custody or hub receiving expectations.
 - Date: 2026-09-28. Agent: Codex. Branch: `docs/admin-development-spec`, application baseline `338046c` (PR #24 merged); initial design commit `f1e70e5`.
@@ -21,6 +23,16 @@
 
 ## Current branch milestone
 
+- PR #25 separately reviews evidence-backed recovery of uncollected parcels from partially collected inbound runs; it is not a dependency of this branch.
+- This branch adds `POST /runs/{run_id}/stops/{stop_id}/final-deposits`: driver, run/stop revision, parcel version, active label, shipping identifier, exact arrived destination, current driver custody, approved pairing, active enrolled device, physical-command enablement and current DELIVERY compartment ownership are checked in one transaction. It reserves one compatible door and journals a pending command. It does not dispatch, open, claim delivery, create a pickup grant, or transfer custody.
+- Accepted origin pickup now releases only an occupied claim matching that parcel's origin locker. An unresolved/mismatched claim blocks transfer. A pending final-deposit claim is never automatically freed on timeout; it requires evidence reconciliation.
+- This stacked branch adds Ed25519-signed per-device GET command poll, timestamp and durable nonce replay fence, own-locker/ownership/session/package/run/physical-address checks, and an immutable first-dispatch payload hash. A terminal cannot poll a command after custody/version/ownership/address changes; polling never confirms door evidence or custody.
+
+## Validation and limitations
+
+- `npm run check` passed: 91 canonical OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps.
+- Disposable `npm run test-db` passed: final-deposit role/stop/revision/version/label/device credential/ownership fences, idempotency, unique claim, unchanged driver custody; origin claim release and unresolved-claim refusal. No physical hardware was tested.
+- On this branch, `npm run check` and disposable `npm run test-db` passed again with signed-device invalid-signature/stale-time/replay, own-command, immutable-address, stale-parcel and frozen-ownership cases. Physical actuation and event ingestion remain untested/unimplemented.
 - PR #24 is merged: administrators can cancel a wholly uncollected offer run and reopen its parcel demands without changing locker custody.
 - Migration 022 adds a historical `RELEASED` manifest-item state. This branch lets an administrator release one `EXPECTED` parcel from a partly collected run only after recording a site-inspection or locker-inventory reference and reason. The service checks the exact run, parcel, demand, allocation, scan and receiving state, increments run/manifest revision, reopens only that demand, and never changes package custody or version.
 - Driver and hub receiving counts exclude released items; the old run can receive and close its collected parcels without a false SHORT. The admin recovery tab shows per-parcel eligibility and evidence inputs. These references are operator assertions, not authenticated device telemetry.
@@ -34,6 +46,8 @@
 
 ## Exact continuation point
 
+1. Review the signed device command poll PR stacked on PR #26 after CI. A real locker/device commissioning flow is still missing.
+2. Next development: authenticated device pairing creation/driver approval, signed physical event ingestion, then driver attestation and correlated deposit confirmation. After that, recipient notification/pickup grant and return/reconciliation.
 1. Review and merge PR #25 after CI. Its local database, API, build and browser checks passed; the two untracked human notes remain untouched.
 2. Continue the next independent roadmap step without waiting for merge: P5 final destination deposit and recipient notification/pickup grant, then enrolled Android terminal integration as far as practical without hardware.
 1. Begin ADM-01 in `docs/admin/BACKLOG.md`: reconcile existing admin runtime/API contracts and add scoped capability foundation. ADM-02 then implements ThinkPHP pages with session-cookie migration from API-only path to root; read `THINKPHP_PRESENTATION.md` before coding.
