@@ -39,8 +39,18 @@ check($second['run_id']===$accepted['run_id'] && $second['revision']===$accepted
 $detail=$custody->getRun($driverUser,$accepted['run_id']);
 check(count($detail['stops'])===2 && count($detail['manifest'])===2,'run freezes both exact packages and stops');
 $custody->acknowledgeRun($driverUser,$accepted['run_id'],Secrets::uuid());
+$originLocker=insertId($runtime,'INSERT INTO lockers(location_id) VALUES (?)',[$originLocation]);
+$originDoor=insertId($runtime,"INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status) VALUES (?,'O1',200,200,200,1000,'AVAILABLE')",[$originLocker]);
+$originSession=insertId($runtime,"INSERT INTO locker_sessions(package_id,compartment_id,actor_user_id,action,status,expires_at,evidence_policy) VALUES (?,?,?,'ORIGIN_DEPOSIT','CONFIRMED',now()+interval '1 day','SYNTHETIC')",[$offerPackages[0][0],$originDoor,$senderUser]);
+$runtime->prepare("INSERT INTO compartment_claims(compartment_id,package_id,session_id,state) VALUES (?,?,?,'OCCUPIED')")
+    ->execute([$originDoor,$offerPackages[0][0],$originSession]);
+$runtime->prepare("UPDATE packages SET custodian_ref=? WHERE id=?")->execute([$originLocker,$offerPackages[0][0]]);
+$runtime->exec("UPDATE compartment_claims SET state='HELD' WHERE package_id={$offerPackages[0][0]}");
+failsIdentity(fn()=> $custody->inboundPickupScan($driverUser,$accepted['run_id'],['label_payload'=>$offerPackages[0][1],'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>$second['revision'],'expected_package_version'=>1],Secrets::uuid(),'"'.$second['revision'].'"'),409,'unresolved origin door claim blocks pickup custody transfer');
+$runtime->exec("UPDATE compartment_claims SET state='OCCUPIED' WHERE package_id={$offerPackages[0][0]}");
 $pickup=$custody->inboundPickupScan($driverUser,$accepted['run_id'],['label_payload'=>$offerPackages[0][1],'action'=>'INBOUND_PICKUP','client_event_id'=>Secrets::uuid(),'run_revision'=>$second['revision'],'expected_package_version'=>1],Secrets::uuid(),'"'.$second['revision'].'"');
 check($pickup['result']==='ACCEPTED' && $runtime->query("SELECT status FROM pickup_demands WHERE package_id={$offerPackages[0][0]}")->fetchColumn()==='RESOLVED','physical pickup scan resolves only its own demand');
+check((int)$runtime->query("SELECT count(*) FROM compartment_claims WHERE package_id={$offerPackages[0][0]}")->fetchColumn()===0,'accepted origin pickup releases exact occupied locker claim');
 check($runtime->query("SELECT status FROM pickup_demands WHERE package_id={$offerPackages[1][0]}")->fetchColumn()==='ASSIGNED','uncollected second parcel remains assigned');
 $fresh=$offers->refresh($otherDriverUser)['items'];
 check(count($fresh)===1 && $fresh[0]['package_count']===1 && $fresh[0]['origin']==='Test Origin','refresh replaces stale offers with newly ready demand only');
