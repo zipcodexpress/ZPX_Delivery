@@ -8,11 +8,12 @@ use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Custody\Service;
 use Zpx\Custody\PickupOffers;
 use Zpx\Custody\FinalDeposit;
+use Zpx\Custody\DevicePairings;
 use Zpx\Infrastructure\Database\Connection;
 
 final class DriverController
 {
-    public static function handle(Request $request, string $action, string $runId = '', string $stopId = ''): Response
+    public static function handle(Request $request, string $action, string $runId = '', string $stopId = '', string $sceneId = ''): Response
     {
         $requestId = Secrets::uuid();
         try {
@@ -30,6 +31,8 @@ final class DriverController
                 'depart' => 'POST',
                 'arrive' => 'POST',
                 'final-deposit' => 'POST',
+                'pairing-preview' => 'GET',
+                'pairing-approve' => 'POST',
                 default => 'GET',
             };
             if ($method !== $expected) { throw new Failure(405, 'METHOD_NOT_ALLOWED', 'Unsupported method.'); }
@@ -90,6 +93,8 @@ final class DriverController
                 'depart' => $custody->departRun($user, $runId, $input, $key, $request->header('if-match','')),
                 'arrive' => $custody->arriveAtStop($user, $runId, $stopId, $input, $key, $request->header('if-match','')),
                 'final-deposit' => (new FinalDeposit($db,$crypto))->prepare($user,$runId,$stopId,$input,$key,$request->header('if-match','')),
+                'pairing-preview' => (new DevicePairings($db,$crypto))->preview($user,$sceneId,$runId,$stopId),
+                'pairing-approve' => (new DevicePairings($db,$crypto))->approve($user,$sceneId,$runId,$stopId,$input,$key,$request->header('if-match','')),
             };
 
             return Reply::json(200, $body, $requestId);

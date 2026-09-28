@@ -4,8 +4,8 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/destination-device-protocol`, stacked on [PR #26](https://github.com/zipcodexpress/ZPX_Delivery/pull/26) (`5bea389`); [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25) independently reviews partial-run pickup recovery.
-- Objective: add signed enrolled-device command polling for prepared P5 final destination deposit, still without assuming door evidence or transferring custody.
+- Date: 2026-09-28. Agent: Codex. Branch: `codex/destination-device-events` at `5d6f34a`, [PR #29](https://github.com/zipcodexpress/ZPX_Delivery/pull/29) stacked on [PR #28](https://github.com/zipcodexpress/ZPX_Delivery/pull/28) → [PR #27](https://github.com/zipcodexpress/ZPX_Delivery/pull/27) → [PR #26](https://github.com/zipcodexpress/ZPX_Delivery/pull/26); [PR #25](https://github.com/zipcodexpress/ZPX_Delivery/pull/25) independently reviews partial-run pickup recovery.
+- Objective: retain signed, correlated destination terminal observations without claiming unverified physical completion or transferring custody.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
@@ -22,19 +22,23 @@
 - This branch adds `POST /runs/{run_id}/stops/{stop_id}/final-deposits`: driver, run/stop revision, parcel version, active label, shipping identifier, exact arrived destination, current driver custody, approved pairing, active enrolled device, physical-command enablement and current DELIVERY compartment ownership are checked in one transaction. It reserves one compatible door and journals a pending command. It does not dispatch, open, claim delivery, create a pickup grant, or transfer custody.
 - Accepted origin pickup now releases only an occupied claim matching that parcel's origin locker. An unresolved/mismatched claim blocks transfer. A pending final-deposit claim is never automatically freed on timeout; it requires evidence reconciliation.
 - This stacked branch adds Ed25519-signed per-device GET command poll, timestamp and durable nonce replay fence, own-locker/ownership/session/package/run/physical-address checks, and an immutable first-dispatch payload hash. A terminal cannot poll a command after custody/version/ownership/address changes; polling never confirms door evidence or custody.
+- This branch adds signed device-created FINAL_DEPOSIT pairing scenes, driver preview and revision-fenced approval tied to an arrived stop, then consumption by final-deposit preparation. Other actors/stops and repeat approval are refused.
+- This branch preserves the first-dispatched command payload and accepts signed destination device event IDs/boot sequences against that immutable address, including delayed observations after command expiry. It journals observations only. No custody or session completion occurs on telemetry alone.
 
 ## Validation and limitations
 
 - `npm run check` passed: 91 canonical OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps.
 - Disposable `npm run test-db` passed: final-deposit role/stop/revision/version/label/device credential/ownership fences, idempotency, unique claim, unchanged driver custody; origin claim release and unresolved-claim refusal. No physical hardware was tested.
 - On this branch, `npm run check` and disposable `npm run test-db` passed again with signed-device invalid-signature/stale-time/replay, own-command, immutable-address, stale-parcel and frozen-ownership cases. Physical actuation and event ingestion remain untested/unimplemented.
+- On the pairing branch, `npm run check` passed with 93 canonical operations and 9 Node tests; disposable `npm run test-db` passed device scene creation, driver preview/approval, idempotent replay, wrong actor/stop and approved-scene consumption into a second parcel reservation. No physical hardware was tested.
+- On this branch, `npm run check` passed with 93 operations and 9 Node tests; disposable `npm run test-db` passed signed event submission, identical-event replay, conflicting event/boot sequence/address refusal, late event retention after command expiry, open/close journaling and unchanged custody. CI for PR #26–#28 passed; PR #29 checks passed while browser/local-stack jobs were pending at last check.
 - Route matching is a straight-line eligibility screen, not drive-time routing or automatic push notification. Production site coordinates require administrator configuration. A driver must consent to location sharing; stale/missing location receives no production offers.
 - Real origin terminal pairing, authenticated physical door evidence, delayed/ambiguous evidence reconciliation, commissioning and supervised hardware pilot remain required. Live local Authorize.net sandbox capture previously returned a provider error; LOCAL_TEST payment is validated.
 
 ## Exact continuation point
 
-1. Review the signed device command poll PR stacked on PR #26 after CI. A real locker/device commissioning flow is still missing.
-2. Next development: authenticated device pairing creation/driver approval, signed physical event ingestion, then driver attestation and correlated deposit confirmation. After that, recipient notification/pickup grant and return/reconciliation.
+1. Review/merge stacked PRs #26 → #27 → #28 → #29 in order after CI; PR #25 is independent. Retarget each child PR to `main` after its parent merges if GitHub has not done so.
+2. Next production custody-confirming driver attestation needs the Android terminal protocol or staging device plus a supervised pilot to validate actual door frame semantics and event ordering. Until then, signed events remain unverified telemetry and the parcel stays with the driver. Recipient notification/pickup grant and return/reconciliation follow confirmation.
 
 ## Critical rules
 

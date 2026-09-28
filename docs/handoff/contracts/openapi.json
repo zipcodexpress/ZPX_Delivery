@@ -5179,19 +5179,12 @@
     "/devices/me/pairings": {
       "post": {
         "operationId": "delivery_29__devices_me_pairings",
-        "summary": "Enrolled terminal creates short-lived customer/driver pairing scene.",
-        "description": "Enrolled terminal creates short-lived customer/driver pairing scene.",
+        "summary": "Enrolled terminal creates a short-lived final destination pairing scene.",
+        "description": "Ed25519-signed POST over this path and raw JSON body; a unique nonce is required. Only FINAL_DEPOSIT is currently implemented.",
         "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 16,
-              "maxLength": 100
-            }
-          }
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
         "responses": {
           "201": {
@@ -5199,7 +5192,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Pairing"
+                  "type":"object","additionalProperties":false,
+                  "properties":{"scene_uuid":{"type":"string","format":"uuid"},"pairing_id":{"type":"string"},
+                    "workflow":{"type":"string","enum":["FINAL_DEPOSIT"]},"status":{"type":"string","enum":["PENDING"]},
+                    "location_id":{"type":"string"},"location_name":{"type":"string"},"expires_at":{"type":"string","format":"date-time"}},
+                  "required":["scene_uuid","pairing_id","workflow","status","location_id","location_name","expires_at"]
                 }
               }
             }
@@ -5295,10 +5292,52 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PairingCreate"
+                "type":"object","additionalProperties":false,
+                "properties":{"workflow":{"type":"string","enum":["FINAL_DEPOSIT"]}},"required":["workflow"]
               }
             }
           }
+        }
+      }
+    },
+    "/runs/{run_id}/stops/{stop_id}/pairings/{scene_uuid}": {
+      "get": {
+        "operationId":"driver_preview_destination_pairing",
+        "summary":"Assigned arrived driver previews the enrolled terminal's site and action before approving.",
+        "parameters":[
+          {"name":"run_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"stop_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"scene_uuid","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}
+        ],
+        "responses":{
+          "200":{"description":"Bound site and action","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+            "properties":{"scene_uuid":{"type":"string","format":"uuid"},"workflow":{"type":"string","enum":["FINAL_DEPOSIT"]},
+              "status":{"type":"string"},"location_id":{"type":"string"},"location_name":{"type":"string"},"expires_at":{"type":"string","format":"date-time"}},
+            "required":["scene_uuid","workflow","status","location_id","location_name","expires_at"]}}}},
+          "default":{"description":"Structured error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+        }
+      }
+    },
+    "/runs/{run_id}/stops/{stop_id}/pairings/{scene_uuid}/approve": {
+      "post": {
+        "operationId":"driver_approve_destination_pairing",
+        "summary":"Assigned arrived driver approves a current destination device scene.",
+        "parameters":[
+          {"name":"run_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"stop_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"scene_uuid","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},
+          {"name":"Idempotency-Key","in":"header","required":true,"schema":{"type":"string","minLength":16,"maxLength":100}},
+          {"name":"If-Match","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-CSRF-Token","in":"header","required":false,"description":"Required for browser cookie authentication.","schema":{"type":"string"}}
+        ],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+          "properties":{"expected_revision":{"type":"integer","minimum":1}},"required":["expected_revision"]}}}},
+        "responses":{
+          "200":{"description":"Scene approved for this driver and destination","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+            "properties":{"pairing_id":{"type":"string"},"scene_uuid":{"type":"string","format":"uuid"},"status":{"type":"string","enum":["APPROVED"]},
+              "workflow":{"type":"string","enum":["FINAL_DEPOSIT"]},"location_id":{"type":"string"},"location_name":{"type":"string"},"expires_at":{"type":"string","format":"date-time"}},
+            "required":["pairing_id","scene_uuid","status","workflow","location_id","location_name","expires_at"]}}}},
+          "default":{"description":"Structured error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
         }
       }
     },
@@ -6056,19 +6095,12 @@
     "/devices/me/events": {
       "post": {
         "operationId": "delivery_36__devices_me_events",
-        "summary": "Terminal submits durable correlated device observation; replay-safe.",
-        "description": "Terminal submits durable correlated device observation; replay-safe.",
+        "summary": "Enrolled terminal submits immutable correlated telemetry without claiming custody transfer.",
+        "description": "Ed25519 signature covers POST, exact path, timestamp, nonce and SHA-256 of raw JSON body. Door open/close observations require a 64-character SHA-256 frame_hash. An event ID plus identical content replays as DUPLICATE; boot sequence reuse with different content fails.",
         "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 16,
-              "maxLength": 100
-            }
-          }
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
         "responses": {
           "200": {
@@ -9334,12 +9366,17 @@
           },
           "session_status": {
             "type": "string"
+          },
+          "custody_transferred": {
+            "type": "boolean",
+            "enum": [false]
           }
         },
         "required": [
           "event_id",
           "result",
-          "session_status"
+          "session_status",
+          "custody_transferred"
         ]
       },
       "ExceptionRequest": {

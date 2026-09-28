@@ -1275,10 +1275,44 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enrolled terminal creates short-lived customer/driver pairing scene.
-         * @description Enrolled terminal creates short-lived customer/driver pairing scene.
+         * Enrolled terminal creates a short-lived final destination pairing scene.
+         * @description Ed25519-signed POST over this path and raw JSON body; a unique nonce is required. Only FINAL_DEPOSIT is currently implemented.
          */
         post: operations["delivery_29__devices_me_pairings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{run_id}/stops/{stop_id}/pairings/{scene_uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assigned arrived driver previews the enrolled terminal's site and action before approving. */
+        get: operations["driver_preview_destination_pairing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{run_id}/stops/{stop_id}/pairings/{scene_uuid}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assigned arrived driver approves a current destination device scene. */
+        post: operations["driver_approve_destination_pairing"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1415,8 +1449,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Terminal submits durable correlated device observation; replay-safe.
-         * @description Terminal submits durable correlated device observation; replay-safe.
+         * Enrolled terminal submits immutable correlated telemetry without claiming custody transfer.
+         * @description Ed25519 signature covers POST, exact path, timestamp, nonce and SHA-256 of raw JSON body. Door open/close observations require a 64-character SHA-256 frame_hash. An event ID plus identical content replays as DUPLICATE; boot sequence reuse with different content fails.
          */
         post: operations["delivery_36__devices_me_events"];
         delete?: never;
@@ -2287,6 +2321,8 @@ export interface components {
             /** @enum {string} */
             result: "RECORDED" | "DUPLICATE" | "AWAITING_CORRELATION";
             session_status: string;
+            /** @enum {boolean} */
+            custody_transferred: false;
         };
         ExceptionRequest: {
             /** @description Opaque identifier; serialize as string. */
@@ -6925,14 +6961,19 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
             };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PairingCreate"];
+                "application/json": {
+                    /** @enum {string} */
+                    workflow: "FINAL_DEPOSIT";
+                };
             };
         };
         responses: {
@@ -6942,7 +6983,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Pairing"];
+                    "application/json": {
+                        /** Format: uuid */
+                        scene_uuid: string;
+                        pairing_id: string;
+                        /** @enum {string} */
+                        workflow: "FINAL_DEPOSIT";
+                        /** @enum {string} */
+                        status: "PENDING";
+                        location_id: string;
+                        location_name: string;
+                        /** Format: date-time */
+                        expires_at: string;
+                    };
                 };
             };
             /** @description Structured error */
@@ -7010,6 +7063,105 @@ export interface operations {
             };
             /** @description Structured error */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    driver_preview_destination_pairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                stop_id: string;
+                scene_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bound site and action */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        scene_uuid: string;
+                        /** @enum {string} */
+                        workflow: "FINAL_DEPOSIT";
+                        status: string;
+                        location_id: string;
+                        location_name: string;
+                        /** Format: date-time */
+                        expires_at: string;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    driver_approve_destination_pairing: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+                /** @description Required for browser cookie authentication. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                run_id: string;
+                stop_id: string;
+                scene_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Scene approved for this driver and destination */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pairing_id: string;
+                        /** Format: uuid */
+                        scene_uuid: string;
+                        /** @enum {string} */
+                        status: "APPROVED";
+                        /** @enum {string} */
+                        workflow: "FINAL_DEPOSIT";
+                        location_id: string;
+                        location_name: string;
+                        /** Format: date-time */
+                        expires_at: string;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7613,7 +7765,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
             };
             path?: never;
             cookie?: never;
