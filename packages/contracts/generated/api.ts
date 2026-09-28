@@ -266,7 +266,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List active offer-created inbound runs and whether all parcels still have recorded origin-locker custody. */
+        /** List active offer-created inbound runs and per-parcel pickup recovery eligibility. */
         get: operations["admin_pickup_recovery"];
         put?: never;
         post?: never;
@@ -287,6 +287,23 @@ export interface paths {
         put?: never;
         /** Cancel a wholly uncollected offer run and reopen its demands without changing package custody. */
         post: operations["admin_pickup_recovery_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/pickup-recovery/{run_id}/parcels/{package_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release one manually verified uncollected parcel from a partly collected run, preserving other parcels' custody. */
+        post: operations["admin_pickup_recovery_release_parcel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1393,6 +1410,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{run_id}/stops/{stop_id}/final-deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reserve an eligible destination compartment and queue a device command; custody stays with the driver. */
+        post: operations["driver_prepare_final_deposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{run_id}/complete": {
         parameters: {
             query?: never;
@@ -1603,7 +1637,7 @@ export interface paths {
         };
         /**
          * Enrolled terminal polls its authorized commands.
-         * @description Enrolled terminal polls its authorized commands.
+         * @description Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. A repeat nonce is rejected. Polling never confirms custody.
          */
         get: operations["delivery_35__devices_me_commands"];
         put?: never;
@@ -1894,6 +1928,27 @@ export interface components {
                 action: string;
                 /** Format: date-time */
                 created_at: string;
+            }[];
+        };
+        PickupRecoveryList: {
+            items: {
+                run_id: string;
+                state: string;
+                revision: number;
+                driver: string;
+                /** Format: date-time */
+                planned_end: string;
+                package_count: number;
+                collected_count: number;
+                released_count: number;
+                can_release: boolean;
+                parcels: {
+                    package_id: string;
+                    reference: string;
+                    si: string | null;
+                    state: string;
+                    can_release: boolean;
+                }[];
             }[];
         };
         PickupRouteList: {
@@ -3404,24 +3459,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Pickup runs */
+            /** @description Pickup runs and parcel release eligibility */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: {
-                            run_id: string;
-                            state: string;
-                            revision: number;
-                            driver: string;
-                            /** Format: date-time */
-                            planned_end: string;
-                            package_count: number;
-                            can_release: boolean;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["PickupRecoveryList"];
                 };
             };
             /** @description Structured error */
@@ -3466,6 +3510,56 @@ export interface operations {
                         state: string;
                         revision: number;
                         released_count: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_pickup_recovery_release_parcel: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                run_id: string;
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    /** @enum {string} */
+                    evidence_kind: "SITE_INSPECTION" | "LOCKER_INVENTORY";
+                    evidence_reference: string;
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Parcel released without a custody transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        run_id: string;
+                        package_id: string;
+                        /** @enum {string} */
+                        state: "RELEASED";
+                        revision: number;
                     };
                 };
             };
@@ -7308,6 +7402,65 @@ export interface operations {
             };
         };
     };
+    driver_prepare_final_deposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+                /** @description Required for browser cookie authentication. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                run_id: string;
+                stop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    package_id: string;
+                    pairing_id: string;
+                    label_payload: string;
+                    expected_package_version: number;
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Reservation pending physical evidence; no custody transfer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session_id: string;
+                        command_id: string;
+                        compartment_code: string;
+                        /** @enum {string} */
+                        status: "READY";
+                        package_version: number;
+                        run_revision: number;
+                        /** @enum {boolean} */
+                        custody_transferred: false;
+                        /** @enum {boolean} */
+                        awaiting_device_evidence: true;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     delivery_25__runs_run_id_complete: {
         parameters: {
             query?: never;
@@ -8354,7 +8507,11 @@ export interface operations {
     delivery_35__devices_me_commands: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
+            };
             path?: never;
             cookie?: never;
         };

@@ -53,10 +53,13 @@ foreach (['driver/runs'=>'runs','driver/pickup-offers'=>'pickup-offers','driver/
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $runId='') => Zpx\Http\DriverController::handle($request,$action,$runId))->pattern(['run_id'=>'[1-9][0-9]{0,17}']);
 }
 Route::any('api/delivery/v1/runs/<run_id>/stops/<stop_id>/arrive', static fn(Request $request, string $runId, string $stopId) => Zpx\Http\DriverController::handle($request,'arrive',$runId,$stopId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','stop_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/runs/<run_id>/stops/<stop_id>/final-deposits', static fn(Request $request, string $runId, string $stopId) => Zpx\Http\DriverController::handle($request,'final-deposit',$runId,$stopId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','stop_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/devices/me/commands', static fn(Request $request) => Zpx\Http\DeviceController::commands($request));
 foreach (['driver/register'=>'register','driver/profile'=>'profile','driver/profile/update'=>'update-profile','driver/wallet'=>'wallet','driver/transactions'=>'transactions','admin/drivers/pending'=>'pending','admin/drivers/<driver_id>/approve'=>'approve','admin/drivers/<driver_id>/reject'=>'reject','admin/driver-pay'=>'pay-run','admin/pickup-routes'=>'pickup-routes','admin/pickup-routes/assign'=>'pickup-route-assign','admin/pickup-recovery'=>'pickup-recovery'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $driverId='') => Zpx\Http\DriverManagementController::handle($request,$action,$driverId))->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
 }
 Route::any('api/delivery/v1/admin/pickup-recovery/<run_id>/release', static fn(Request $request, string $runId) => Zpx\Http\DriverManagementController::handle($request,'pickup-release',$runId))->pattern(['run_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/admin/pickup-recovery/<run_id>/parcels/<package_id>/release', static fn(Request $request, string $runId, string $packageId) => Zpx\Http\DriverManagementController::handle($request,'pickup-item-release',$runId,$packageId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','package_id'=>'[1-9][0-9]{0,17}']);
 foreach (['hub/receiving-sessions'=>'open','hub/receiving-scans'=>'scan','hub/receiving-sessions/<session_id>/close'=>'close','hub/receiving-sessions/<session_id>'=>'status'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $sessionId='') => Zpx\Http\HubReceivingController::handle($request,$action,$sessionId))->pattern(['session_id'=>'[1-9][0-9]{0,17}']);
 }
