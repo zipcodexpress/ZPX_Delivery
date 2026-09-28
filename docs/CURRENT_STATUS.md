@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Branch: `codex/admin-foundation`, based on `e5658f8` (admin specification merged to `main`).
+- Date: 2026-09-28. Agent: Codex. Branch: `codex/admin-foundation`, commit `f34eb71`, PR #31 open against `main` (based on `e5658f8`).
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - This branch is the bounded ADM-01/ADM-02 foundation; the full ADM-03–ADM-18 backlog remains. No schema migration is needed for these two tasks. Add partner/site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -25,8 +25,8 @@
 
 ## Next exact actions
 
-1. Review the final diff, commit/push and create a PR for ADM-01/02. This is a bounded foundation, not full admin production readiness.
-2. After this branch is integrated, begin ADM-03 customer/driver administration with scoped lists, restrictions and eligibility checks. Existing role/service fences must stay intact.
+1. Review and merge PR #31. ADM-01/02 are a bounded foundation, not full admin production readiness.
+2. ADM-03 customer/driver administration can be developed on a separate follow-up branch while PR #31 is reviewed, then rebased or retargeted after merge. It needs scoped lists, restrictions and eligibility checks; existing role/service fences must stay intact.
 3. ADM-04 partner entities/grants and ADM-05 sites require guarded, additive PostgreSQL migrations, backfills and synthetic fixtures; do not fabricate legal partner ownership. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`.
 
 ## Delivery baseline and gates
