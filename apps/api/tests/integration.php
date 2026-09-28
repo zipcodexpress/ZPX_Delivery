@@ -177,6 +177,7 @@ require __DIR__ . '/hub-dispatch.php';
 require __DIR__ . '/final-deposit.php';
 require __DIR__ . '/device-commands.php';
 require __DIR__ . '/device-pairings.php';
+require __DIR__ . '/device-events.php';
 require __DIR__ . '/driver-management.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 

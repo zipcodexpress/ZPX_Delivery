@@ -52,7 +52,8 @@ final class DeviceCommands
                 if ($row['payload_hash']!==null && !hash_equals($row['payload_hash'],$hash)) {
                     throw new Failure(409,'COMMAND_PAYLOAD_CHANGED','Physical address or command policy changed; reconcile before actuation.');
                 }
-                $this->q("UPDATE device_commands SET dispatched_at=COALESCE(dispatched_at,now()),payload_hash=decode(?,'hex') WHERE id=?",[$hash,$row['id']]);
+                $this->q("UPDATE device_commands SET dispatched_at=COALESCE(dispatched_at,now()),payload_hash=decode(?,'hex'),
+                    command_payload=COALESCE(command_payload,?::jsonb) WHERE id=?",[$hash,json_encode($command,JSON_THROW_ON_ERROR),$row['id']]);
                 $commands[]=$command;
             }
             return ['items'=>$commands];

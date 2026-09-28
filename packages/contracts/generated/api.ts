@@ -1449,8 +1449,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Terminal submits durable correlated device observation; replay-safe.
-         * @description Terminal submits durable correlated device observation; replay-safe.
+         * Enrolled terminal submits immutable correlated telemetry without claiming custody transfer.
+         * @description Ed25519 signature covers POST, exact path, timestamp, nonce and SHA-256 of raw JSON body. Door open/close observations require a 64-character SHA-256 frame_hash. An event ID plus identical content replays as DUPLICATE; boot sequence reuse with different content fails.
          */
         post: operations["delivery_36__devices_me_events"];
         delete?: never;
@@ -2321,6 +2321,8 @@ export interface components {
             /** @enum {string} */
             result: "RECORDED" | "DUPLICATE" | "AWAITING_CORRELATION";
             session_status: string;
+            /** @enum {boolean} */
+            custody_transferred: false;
         };
         ExceptionRequest: {
             /** @description Opaque identifier; serialize as string. */
@@ -7763,7 +7765,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
             };
             path?: never;
             cookie?: never;
