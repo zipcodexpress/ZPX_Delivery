@@ -210,13 +210,14 @@ for ($i = 0; $i < 3; $i++) {
 }
 
 $session2 = $hubService->openSession($staffUser, ['hub_id' => $hub, 'inbound_run_id' => $run2], Secrets::uuid());
+$runtime->exec("UPDATE manifest_items SET state='LOADED' WHERE package_id={$shortPkgIds[2]}");
 // Receive only 2 of 3
 $hubService->receiveScan($staffUser, ['label_payload' => $shortTokens[0], 'inbound_run_id' => $run2, 'receiving_session_id' => $session2['receiving_session_id'], 'expected_package_version' => 1], Secrets::uuid());
 $hubService->receiveScan($staffUser, ['label_payload' => $shortTokens[1], 'inbound_run_id' => $run2, 'receiving_session_id' => $session2['receiving_session_id'], 'expected_package_version' => 1], Secrets::uuid());
 
 $closeResult2 = $hubService->closeSession($staffUser, $session2['receiving_session_id'], Secrets::uuid());
 check($closeResult2['received_count'] === 2, 'shortage: two received');
-check($closeResult2['short_count'] === 1, 'shortage: one short');
+check($closeResult2['short_count'] === 1, 'shortage: one driver-collected parcel is short');
 
 // Test 12: Short manifest item marked SHORT
 $shortItem = $runtime->query("SELECT state FROM manifest_items WHERE package_id={$shortPkgIds[2]}")->fetchColumn();
