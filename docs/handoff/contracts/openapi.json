@@ -190,8 +190,8 @@
     "/admin/pickup-recovery": {
       "get": {
         "operationId": "admin_pickup_recovery",
-        "summary": "List active offer-created inbound runs and whether all parcels still have recorded origin-locker custody.",
-        "responses": { "200": { "description": "Pickup runs", "content": { "application/json": { "schema": { "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": { "run_id": { "type": "string" }, "state": { "type": "string" }, "revision": { "type": "integer" }, "driver": { "type": "string" }, "planned_end": { "type": "string", "format": "date-time" }, "package_count": { "type": "integer" }, "can_release": { "type": "boolean" } }, "required": ["run_id", "state", "revision", "driver", "planned_end", "package_count", "can_release"] } } }, "required": ["items"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+        "summary": "List active offer-created inbound runs and per-parcel pickup recovery eligibility.",
+        "responses": { "200": { "description": "Pickup runs and parcel release eligibility", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PickupRecoveryList" } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
     "/admin/pickup-recovery/{run_id}/release": {
@@ -201,6 +201,15 @@
         "parameters": [{ "name": "run_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "reason": { "type": "string", "minLength": 3, "maxLength": 500 }, "expected_revision": { "type": "integer", "minimum": 1 } }, "required": ["reason", "expected_revision"] } } } },
         "responses": { "200": { "description": "Uncollected parcels released for new offers", "content": { "application/json": { "schema": { "type": "object", "properties": { "run_id": { "type": "string" }, "state": { "type": "string" }, "revision": { "type": "integer" }, "released_count": { "type": "integer" } }, "required": ["run_id", "state", "revision", "released_count"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/pickup-recovery/{run_id}/parcels/{package_id}/release": {
+      "post": {
+        "operationId": "admin_pickup_recovery_release_parcel",
+        "summary": "Release one manually verified uncollected parcel from a partly collected run, preserving other parcels' custody.",
+        "parameters": [{ "name": "run_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "package_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "reason": { "type": "string", "minLength": 3, "maxLength": 500 }, "evidence_kind": { "type": "string", "enum": ["SITE_INSPECTION", "LOCKER_INVENTORY"] }, "evidence_reference": { "type": "string", "minLength": 3, "maxLength": 200 }, "expected_revision": { "type": "integer", "minimum": 1 } }, "required": ["reason", "evidence_kind", "evidence_reference", "expected_revision"] } } } },
+        "responses": { "200": { "description": "Parcel released without a custody transfer", "content": { "application/json": { "schema": { "type": "object", "properties": { "run_id": { "type": "string" }, "package_id": { "type": "string" }, "state": { "type": "string", "enum": ["RELEASED"] }, "revision": { "type": "integer" } }, "required": ["run_id", "package_id", "state", "revision"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
     "/driver/pickup-availability": {
@@ -4687,6 +4696,31 @@
         }
       }
     },
+    "/runs/{run_id}/stops/{stop_id}/final-deposits": {
+      "post": {
+        "operationId": "driver_prepare_final_deposit",
+        "summary": "Reserve an eligible destination compartment and queue a device command; custody stays with the driver.",
+        "parameters": [
+          {"name":"run_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"stop_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"Idempotency-Key","in":"header","required":true,"schema":{"type":"string","minLength":16,"maxLength":100}},
+          {"name":"If-Match","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-CSRF-Token","in":"header","required":false,"description":"Required for browser cookie authentication.","schema":{"type":"string"}}
+        ],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+          "properties":{"package_id":{"type":"string"},"pairing_id":{"type":"string"},"label_payload":{"type":"string"},
+            "expected_package_version":{"type":"integer","minimum":0},"expected_revision":{"type":"integer","minimum":1}},
+          "required":["package_id","pairing_id","label_payload","expected_package_version","expected_revision"]}}}},
+        "responses":{
+          "200":{"description":"Reservation pending physical evidence; no custody transfer.","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+            "properties":{"session_id":{"type":"string"},"command_id":{"type":"string"},"compartment_code":{"type":"string"},
+              "status":{"type":"string","enum":["READY"]},"package_version":{"type":"integer"},"run_revision":{"type":"integer"},
+              "custody_transferred":{"type":"boolean","enum":[false]},"awaiting_device_evidence":{"type":"boolean","enum":[true]}},
+            "required":["session_id","command_id","compartment_code","status","package_version","run_revision","custody_transferred","awaiting_device_evidence"]}}}},
+          "default":{"description":"Structured error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+        }
+      }
+    },
     "/runs/{run_id}/complete": {
       "post": {
         "operationId": "delivery_25__runs_run_id_complete",
@@ -6078,8 +6112,12 @@
       "get": {
         "operationId": "delivery_35__devices_me_commands",
         "summary": "Enrolled terminal polls its authorized commands.",
-        "description": "Enrolled terminal polls its authorized commands.",
-        "parameters": [],
+        "description": "Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. A repeat nonce is rejected. Polling never confirms custody.",
+        "parameters": [
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string","description":"Unix epoch seconds within 60 seconds of server time."}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
+        ],
         "responses": {
           "200": {
             "description": "Successful result",
@@ -7389,7 +7427,7 @@
       "DeviceAuth": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-Device-Credential"
+        "name": "X-Device-Signature"
       }
     },
     "schemas": {
@@ -7409,6 +7447,17 @@
             "action": { "type": "string" }, "created_at": { "type": "string", "format": "date-time" }
           }, "required": ["action", "created_at"] } }
         }, "required": ["partner", "activity"]
+      },
+      "PickupRecoveryList": {
+        "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": {
+          "run_id": { "type": "string" }, "state": { "type": "string" }, "revision": { "type": "integer" },
+          "driver": { "type": "string" }, "planned_end": { "type": "string", "format": "date-time" },
+          "package_count": { "type": "integer" }, "collected_count": { "type": "integer" }, "released_count": { "type": "integer" },
+          "can_release": { "type": "boolean" }, "parcels": { "type": "array", "items": { "type": "object", "properties": {
+            "package_id": { "type": "string" }, "reference": { "type": "string" }, "si": { "type": "string", "nullable": true },
+            "state": { "type": "string" }, "can_release": { "type": "boolean" }
+          }, "required": ["package_id", "reference", "si", "state", "can_release"] } }
+        }, "required": ["run_id", "state", "revision", "driver", "planned_end", "package_count", "collected_count", "released_count", "can_release", "parcels"] } } }, "required": ["items"]
       },
       "PickupRouteList": {
         "type": "object", "properties": {
