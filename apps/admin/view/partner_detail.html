@@ -1,0 +1,5 @@
+<p><a href="/admin/partners">← Partners</a></p>
+<section class="table-panel"><h2>{$data.partner.display_name}</h2><p>Registry ID {$data.partner.partner_id} · Created {$data.partner.created_at}</p><div class="table-scroll"><table><tbody>
+<tr><th scope="row">Code</th><td>{$data.partner.code}</td></tr><tr><th scope="row">Kind</th><td>{$data.partner.kind}</td></tr><tr><th scope="row">Status</th><td>{$data.partner.status}</td></tr><tr><th scope="row">Legal name</th><td>{$data.partner.legal_name|default='Not verified'}</td></tr><tr><th scope="row">Roles</th><td>{volist name="data.partner.roles" id="role"}{$role} {/volist}</td></tr>
+</tbody></table></div><p>This registry identity has no site, locker, parcel or financial access by itself.</p></section>
+<section class="table-panel"><h2>Recent registry actions</h2>{empty name="data.activity"}<p class="empty">No partner actions recorded.</p>{else /}<div class="table-scroll"><table><thead><tr><th>Action</th><th>When</th></tr></thead><tbody>{volist name="data.activity" id="row"}<tr><td>{$row.action}</td><td>{$row.created_at}</td></tr>{/volist}</tbody></table></div>{/empty}</section>

@@ -100,11 +100,17 @@ final class PageController
                     'action'=>$operation==='driver-suspend'?'SUSPEND':'REACTIVATE',
                     'reason'=>$request->post('reason',''), 'expected_version'=>$request->post('version',-1),
                 ],$key),
+                'partner-create' => (new PartnerRegistry($db,$crypto))->create($user,[
+                    'code'=>$request->post('code',''),'display_name'=>$request->post('display_name',''),
+                    'legal_name'=>$request->post('legal_name',''),'roles'=>$request->post('roles',[]),
+                    'reason'=>$request->post('reason',''),
+                ],$key),
             };
             $page = match ($operation) {
                 'driver-approve','driver-reject','driver-suspend','driver-reactivate'=>'drivers',
                 'route-assign'=>'pickup-routes',
                 'customer-restrict','customer-revoke'=>'customers',
+                'partner-create'=>'partners',
                 default=>'pickup-recovery',
             };
             return self::redirect('/admin/'.$page);
@@ -115,6 +121,7 @@ final class PageController
                     'driver-approve','driver-reject','driver-suspend','driver-reactivate'=>'/admin/drivers',
                     'route-assign'=>'/admin/pickup-routes',
                     'customer-restrict','customer-revoke'=>'/admin/customers',
+                    'partner-create'=>'/admin/partners',
                     default=>'/admin/pickup-recovery',
                 };
                 return self::html(View::fetch('action_error', [
@@ -150,6 +157,8 @@ final class PageController
             'drivers'=>(new DriverService($db,$crypto))->listPending($user)
                 + ['all'=>(new DriverAdministration($db,$crypto))->list($user,(string)$request->get('cursor',''))],
             'driver-detail'=>(new DriverAdministration($db,$crypto))->detail($user,$resource),
+            'partners'=>(new PartnerRegistry($db,$crypto))->list($user,(string)$request->get('cursor','')),
+            'partner-detail'=>(new PartnerRegistry($db,$crypto))->detail($user,$resource),
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
@@ -164,6 +173,7 @@ final class PageController
         foreach ($data['all']['items'] ?? [] as $index=>$row) {
             $data['all']['items'][$index]['form_key']=Secrets::uuid();
         }
+        if ($page==='partners') { $data['create_key']=Secrets::uuid(); }
         return $data;
     }
 
@@ -213,6 +223,7 @@ final class PageController
         return match ($page) {
             'customers'=>'Customers', 'customer-detail'=>'Customer detail',
             'drivers'=>'Drivers', 'driver-detail'=>'Driver detail', 'pickup-routes'=>'Pickup routes',
+            'partners'=>'Partners', 'partner-detail'=>'Partner detail',
             'pickup-recovery'=>'Pickup recovery', 'shipments'=>'Shipments',
             default=>'Operations overview',
         };

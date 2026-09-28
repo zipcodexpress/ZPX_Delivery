@@ -14,6 +14,8 @@ try {
     $result = $seed->run($fixture);
     $org = $result['organization_id'];
     check($result['created'] && count($result['credentials']) === 6, 'seed creates six synthetic credentials');
+    check((int)$runtime->query("SELECT count(*) FROM network_partners WHERE organization_id=$org AND kind='INTERNAL' AND code='ZPX-INTERNAL'")->fetchColumn()===1,
+        'fresh synthetic network receives one internal registry identity without ownership assignments');
     foreach ($result['credentials'] as $credential) {
         $q = $runtime->prepare('SELECT password_hash FROM auth_credentials c JOIN users u ON u.id=c.user_id WHERE external_auth_id=?');
         $q->execute([$credential['identity']]);
@@ -63,6 +65,8 @@ try {
     $runtime->exec("UPDATE package_labels SET token_hash=decode(repeat('ab',32),'hex') WHERE package_id={$seededPackages[0]}");
     $again = $seed->run($fixture);
     check(!$again['created'] && $again['credentials'] === [] && $again['organization_id'] === $org, 'repeat seed preserves credentials without redisplaying');
+    check((int)$runtime->query("SELECT count(*) FROM network_partners WHERE organization_id=$org AND kind='INTERNAL'")->fetchColumn()===1,
+        'repeat seed preserves one internal registry identity');
     check((int)$runtime->query("SELECT count(*) FROM users WHERE organization_id=$org AND display_name='Preserve local edit'")->fetchColumn() === 6, 'repeat seed preserves local edits');
     check((int)$runtime->query("SELECT count(*) FROM shipments WHERE organization_id=$org AND public_reference LIKE 'SYNTHETIC-$seedNamespace-%-DEMO'")->fetchColumn()===2, 'repeat seed does not duplicate assumed outcomes');
     check((string)$runtime->query("SELECT encode(token_hash,'hex') FROM package_labels WHERE package_id={$seededPackages[0]}")->fetchColumn() === hash('sha256', 'TEST-LABEL-001'), 'repeat seed upgrades a legacy random DRIVER-IN label hash');
