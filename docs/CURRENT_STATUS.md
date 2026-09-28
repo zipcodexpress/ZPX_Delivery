@@ -4,56 +4,47 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-26. Agent: Codex.
-- Branch: `codex/pickup-offers`, commit `3bda420`, started from `codex/origin-deposit` at `6d8ead7`. PR #21 merged into `main` on 2026-09-26 local time. Current review: [PR #22](https://github.com/zipcodexpress/ZPX_Delivery/pull/22).
-- Current objective: turn evidence-confirmed origin pickup demands into driver-accepted, exact inbound runs and carry individual parcels into driver custody.
-- Existing untracked human notes in `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md` are preserved and must not be staged.
-- Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended terminal; old Windows terminal is reference only.
+- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-routing`, based on merged `main` at `f350fd0` (PR #22).
+- Objective: make driver pickup offers use an explicit origin-to-hub route and nearby-driver location eligibility.
+- Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
+- Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
 ## Implemented baseline
 
-- Customer registration/contact verification, sender-as-recipient, encrypted recipient snapshot, shipment creation, size policy, server-confirmed development payment, stable SI and primary label/PDF.
-- Driver inbound pickup/custody, hub independent receiving and discrepancies, operations custody timeline, hub staging/dispatch and exact outbound load/departure gate. Customer/driver/hub portal follow-ups from PR #19/#20 are merged.
-- Synthetic destination deposit/pickup demo outcomes are assumptions, not device evidence.
+- Customer shipment initialization, verified contacts, size-only pricing, confirmed development payment, stable SI and replaceable label.
+- Development-only virtual origin deposit creates OPEN pickup demand with explicit synthetic evidence; no physical hardware is claimed.
+- Driver opt-in, expiring exact-item pickup offers, atomic acceptance into multi-locker inbound runs, and individual pickup scans/custody. Hub receiving/discrepancy, staging, outbound dispatch/load/departure and arrival are implemented.
+- Synthetic destination deposit/recipient pickup demo outcomes are assumptions, not device evidence.
 
 ## Current branch milestone
 
-- Migration 020 adds driver opt-in availability, expiring origin-group offers, demand assignment/version/deadline and a marker for runs created from offers. An approved driver with an active shift requests offers; the initial policy requires exactly one active hub in the organization and uses explicit driver request instead of geolocation or push notification.
-- Each offer snapshots exact demand ids/versions and expires after at most 15 minutes; refresh replaces prior unaccepted offers. Acceptance locks the driver, offer and snapshotted OPEN demands, verifies paid/ready package state and vehicle capacity, and creates or extends a published inbound run with exact manifest items and active allocations. First valid acceptance wins; idempotent retry returns the same assignment. The driver portal can request/accept offers. An authenticated package scan resolves only that package's demand.
-- Multi-hub routing, proximity filtering, automatic outbound notifications, partial-capacity assignment and a physical origin terminal remain future work. Current offers group by origin under a single active hub and an active shift.
+- Migration 021 adds `origin_hub_routes` and driver-location freshness timestamp. An administrator can map each active origin to an active hub in the same organization, optionally setting verified coordinates; route updates have version/idempotency fences and audit history.
+- A sole active hub remains the compatible fallback. With multiple hubs, unmapped origins receive no offers. Acceptance rechecks the route, so changing a route cannot redirect an older offer. Already assigned runs keep their frozen hub and manifest.
+- A driver explicitly requests offers and shares location through the driver portal. Production requires a location shared within 15 minutes and origin coordinates within a 25 km straight-line radius at both offer creation and acceptance. Going offline clears location and cancels unaccepted offers. Local development fixtures may omit coordinates.
+- Admin portal exposes pickup route setup. The existing virtual-deposit-to-driver-pickup browser flow now exercises route setup and driver geolocation.
 
-- Sender-only origin size options and upgrade quotes use the original paid `PHASE1_SIZE` rate-card version. Measured parcel dimensions must fit the requested class and both route endpoints. Only SMALL→MEDIUM/LARGE and MEDIUM→LARGE are accepted.
-- A separate price-difference checkout uses the existing LOCAL_TEST or Authorize.net sandbox provider. Pending/failed adjustment leaves the parcel in its original class and sender custody; confirmed payment updates size, dimensions and versions before any larger virtual door can open. Migration 018 extends `pricing_quotes` additively.
-- Seed creates distinct `SIM-*` virtual compartments and simulated devices. Existing physical demo compartments remain `FROZEN`; no real door address is invented or commanded.
-- Development-only origin session validates the sender, paid and labeled shipment, exact origin, active label, package version and compatible virtual claim. It journals a command, accepts correlated synthetic open/close or unknown events, then requires sender attestation before `CREATED → AT_ORIGIN` and locker custody. Unknown outcome never auto-reopens or transfers custody.
-- Confirmed virtual deposit appends scan/custody/package events with `synthetic_simulation=true` and `physical_hardware_verified=false`, occupies the claim and creates one OPEN pickup demand (migration 019). The test flow is available in the customer portal with explicit simulation labels.
-- The canonical flow document states that virtual evidence does not complete production Step C. Android terminal enrollment, authenticated real telemetry, commissioning and a supervised pilot remain required for real deposits.
+## Validation and limitations
 
-## Validation and current limitations
+- Disposable `npm run test-db` passed: multi-hub mapping, organization/role/version fences, near/far driver matching, stale-route rejection, frozen prior run hub, and offline location clearing. No physical hardware was tested.
+- `npm run check` passed: 88 canonical OpenAPI operations, TypeScript, and 9 Node tests. `npm run build` passed both web apps. Isolated `npm run test-e2e` passed all 5 browser tests.
+- Route matching is a straight-line eligibility screen, not drive-time routing or automatic push notification. Production site coordinates require administrator configuration. A driver must consent to location sharing; stale/missing location receives no production offers.
+- Real origin terminal pairing, authenticated physical door evidence, delayed/ambiguous evidence reconciliation, commissioning and supervised hardware pilot remain required. Live local Authorize.net sandbox capture previously returned a provider error; LOCAL_TEST payment is validated.
 
-- Disposable `npm run test-db` passed after the active-session and revoked-label gates. It covers upgrade pricing/payment, wrong site/label, CSRF, version fences, open/close/attestation, idempotent replay, unknown door, expired unopened claim recovery and production-mode refusal.
-- `npm run check` passed: 82 OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps.
-- Isolated `npm run test-e2e` passed all 5 browser tests, including size-difference payment resumption after reload and virtual origin deposit. The test stack forces LOCAL_TEST payment and is removed afterward.
-- No physical hardware was used or verified. Configured live local Authorize.net sandbox checkout previously returned a provider error; the local test adapter is verified, but provider troubleshooting remains separate.
-- The virtual door events are generated by the development API adapter; the standalone Node locker simulator and Android terminal are not yet integrated with these sessions. Real device telemetry and sandbox upgrade capture need separate validation.
-- Local validation and PR creation are complete. Check PR CI/review feedback before merge; no physical hardware validation was performed.
-- Current branch `npm run test-db` passed, including competing drivers, exact offer snapshots, idempotent acceptance, two-locker run assembly and scan resolution. `npm run check` (86 operations), `npm run build` and isolated `npm run test-e2e` (5 browser tests, including deposit → offer → scan) passed after final code edits. No physical hardware was tested.
+## Exact continuation point
 
-## Next development after this PR
-
-1. Check PR #22 CI and review feedback, then merge. After merge, add explicit multi-hub routing and location-aware offer eligibility. Then add cancellation/reassignment for missed pickups and continue real terminal integration.
-2. Real origin terminal path: independent enrolled-device authentication, ownership generation and physical address enforcement, delayed/ambiguous evidence reconciliation and supervised hardware pilot. Never treat development adapter events as real device evidence.
-3. P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
+1. Review the current diff and create a PR against `main`; check CI and review feedback before merge.
+2. Add cancellation/reassignment for missed pickup work without silently changing custody or reusing ambiguous locker evidence.
+3. Complete the enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 
 ## Critical rules
 
-- Physical eligibility depends on package state, custody, active manifest/session and version, not scan-event count alone.
-- Each handoff is package-specific, scoped and idempotent; wrong actor, locker, destination, revoked label or stale version fails closed.
+- Physical eligibility depends on package state, custody, active manifest/session and version, not scan-event count.
+- Each handoff is package-specific, scoped and idempotent. Wrong actor, locker, hub, revoked label or stale version fails closed.
 - Hardware ambiguity never becomes automatic completion or automatic reopen.
-- `docs/phase1_END_TO_END_DELIVERY_FLOW.md` is the canonical product flow. Keep this status concise and update it at handoffs.
+- `docs/phase1_END_TO_END_DELIVERY_FLOW.md` is the canonical product flow.
 
 ## Local development
 
 - Start: `ZPX_ORGANIZATION_ID=1 python3 scripts/dev.py up`; customer `http://localhost:5173`, operations `http://localhost:5174`, API `http://localhost:8000`.
 - Seed/reseed: `python3 scripts/dev.py seed`. Disposable tests preserve local development volumes.
-- One prior browser run left a development-only pending sandbox payment on `ZPX-ORDER-E3D16499A1B0F728AB8B54BA`, with no confirmed charge. Reconcile it before retrying checkout on that order.
+- One prior browser run left a development-only pending sandbox payment on `ZPX-ORDER-E3D16499A1B0F728AB8B54BA`, with no confirmed charge; reconcile before retrying that order.

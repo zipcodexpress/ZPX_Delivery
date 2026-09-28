@@ -6,6 +6,7 @@ use think\Request;
 use think\Response;
 use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Driver\Service;
+use Zpx\Custody\PickupRouting;
 use Zpx\Infrastructure\Database\Connection;
 
 final class DriverManagementController
@@ -22,6 +23,8 @@ final class DriverManagementController
                 'wallet' => 'GET',
                 'transactions' => 'GET',
                 'pending' => 'GET',
+                'pickup-routes' => 'GET',
+                'pickup-route-assign' => 'POST',
                 'pay-run' => 'POST',
                 default => 'GET',
             };
@@ -36,6 +39,7 @@ final class DriverManagementController
             $crypto = new Secrets();
             $identity = new Identity($db, $crypto);
             $service = new Service($db, $crypto);
+            $routing = new PickupRouting($db,$crypto);
 
             $cookie = $request->cookie('zpx_delivery_session', '');
             $auth = $request->header('authorization', '');
@@ -75,6 +79,8 @@ final class DriverManagementController
                 'wallet' => $service->wallet($user),
                 'transactions' => $service->transactions($user, Input::text($request->get('cursor', ''), 0, 18)),
                 'pending' => $service->listPending($user),
+                'pickup-routes' => $routing->list($user),
+                'pickup-route-assign' => $routing->assign($user,$input,$key),
                 'pay-run' => $service->recordRunPayment($user, $input['driver_id'] ?? '', $input['run_id'] ?? '', $key),
             };
 

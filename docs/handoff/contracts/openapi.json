@@ -19,13 +19,32 @@
     }
   ],
   "paths": {
+    "/admin/pickup-routes": {
+      "get": {
+        "operationId": "admin_pickup_routes",
+        "summary": "Administrator lists origin pickup routes and active hubs.",
+        "responses": { "200": { "description": "Origin routes and hubs", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PickupRouteList" } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/pickup-routes/assign": {
+      "post": {
+        "operationId": "admin_pickup_route_assign",
+        "summary": "Administrator assigns an origin to an active hub and optionally verifies its coordinates for future offers.",
+        "parameters": [{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "origin_location_id": { "type": "string" }, "hub_id": { "type": "string" }, "expected_version": { "type": "integer", "minimum": 0 },
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 }, "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+        }, "required": ["origin_location_id", "hub_id", "expected_version"] } } } },
+        "responses": { "200": { "description": "Route saved prospectively", "content": { "application/json": { "schema": { "type": "object", "properties": { "origin_location_id": { "type": "string" }, "hub_id": { "type": "string" }, "version": { "type": "integer" } }, "required": ["origin_location_id", "hub_id", "version"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
     "/driver/pickup-availability": {
       "post": {
         "operationId": "driver_pickup_availability",
         "summary": "Approved driver opts into or out of pickup offers during an active shift.",
         "parameters": [{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "enum": ["AVAILABLE", "OFFLINE"] } }, "required": ["status"] } } } },
-        "responses": { "200": { "description": "Availability updated", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" } }, "required": ["status"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "enum": ["AVAILABLE", "OFFLINE"] }, "latitude": { "type": "number", "minimum": -90, "maximum": 90 }, "longitude": { "type": "number", "minimum": -180, "maximum": 180 } }, "required": ["status"] } } } },
+        "responses": { "200": { "description": "Availability updated", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "location_shared": { "type": "boolean" } }, "required": ["status", "location_shared"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
     "/driver/pickup-offers": {
@@ -7203,6 +7222,16 @@
       }
     },
     "schemas": {
+      "PickupRouteList": {
+        "type": "object", "properties": {
+          "origins": { "type": "array", "items": { "type": "object", "properties": {
+            "origin_location_id": { "type": "string" }, "code": { "type": "string" }, "name": { "type": "string" }, "status": { "type": "string" },
+            "hub_id": { "type": "string", "nullable": true }, "hub_name": { "type": "string", "nullable": true },
+            "latitude": { "type": "number", "nullable": true }, "longitude": { "type": "number", "nullable": true }, "version": { "type": "integer" }
+          }, "required": ["origin_location_id", "code", "name", "status", "hub_id", "hub_name", "latitude", "longitude", "version"] } },
+          "hubs": { "type": "array", "items": { "type": "object", "properties": { "hub_id": { "type": "string" }, "code": { "type": "string" }, "name": { "type": "string" } }, "required": ["hub_id", "code", "name"] } }
+        }, "required": ["origins", "hubs"]
+      },
       "DriverPickupOfferList": {
         "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": {
           "offer_id": { "type": "string" }, "origin": { "type": "string" }, "address": { "type": "string" },

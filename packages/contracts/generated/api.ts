@@ -1,5 +1,39 @@
 // Generated from docs/handoff/contracts/openapi.json. Do not edit.
 export interface paths {
+    "/admin/pickup-routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Administrator lists origin pickup routes and active hubs. */
+        get: operations["admin_pickup_routes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/pickup-routes/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Administrator assigns an origin to an active hub and optionally verifies its coordinates for future offers. */
+        post: operations["admin_pickup_route_assign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/driver/pickup-availability": {
         parameters: {
             query?: never;
@@ -1580,6 +1614,24 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PickupRouteList: {
+            origins: {
+                origin_location_id: string;
+                code: string;
+                name: string;
+                status: string;
+                hub_id: string | null;
+                hub_name: string | null;
+                latitude: number | null;
+                longitude: number | null;
+                version: number;
+            }[];
+            hubs: {
+                hub_id: string;
+                code: string;
+                name: string;
+            }[];
+        };
         DriverPickupOfferList: {
             items: {
                 offer_id: string;
@@ -2365,6 +2417,80 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    admin_pickup_routes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Origin routes and hubs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupRouteList"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_pickup_route_assign: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    origin_location_id: string;
+                    hub_id: string;
+                    expected_version: number;
+                    latitude?: number;
+                    longitude?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Route saved prospectively */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        origin_location_id: string;
+                        hub_id: string;
+                        version: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     driver_pickup_availability: {
         parameters: {
             query?: never;
@@ -2379,6 +2505,8 @@ export interface operations {
                 "application/json": {
                     /** @enum {string} */
                     status: "AVAILABLE" | "OFFLINE";
+                    latitude?: number;
+                    longitude?: number;
                 };
             };
         };
@@ -2391,6 +2519,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         status: string;
+                        location_shared: boolean;
                     };
                 };
             };

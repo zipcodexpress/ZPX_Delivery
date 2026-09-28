@@ -90,6 +90,12 @@ test('admin can reach driver approvals', async ({ page }) => {
   await page.getByRole('button', { name: 'Driver approvals' }).click();
   await expect(page.getByRole('heading', { name: 'Pending drivers' })).toBeVisible();
   await expect(page.getByText('No pending applications.')).toBeVisible();
+  await page.getByRole('button', { name: 'Pickup routes' }).click();
+  await expect(page.getByRole('heading', { name: 'Origin pickup routes' })).toBeVisible();
+  await page.getByLabel('local:AUS-001 latitude').fill('30.2672');
+  await page.getByLabel('local:AUS-001 longitude').fill('-97.7431');
+  await page.getByRole('button', { name: 'Save route' }).first().click();
+  await expect(page.locator('.notice[role="status"]')).toContainText('Pickup route saved');
 });
 
 test('customer can view shipment history and open the draft form', async ({ page }) => {
@@ -177,6 +183,8 @@ test('customer can pay a size difference and finish a virtual origin deposit', a
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.goto('/');
   await signIn(page, 'DRIVER-IN');
+  await page.context().grantPermissions(['geolocation']);
+  await page.context().setGeolocation({ latitude: 30.2671, longitude: -97.7430 });
   await page.getByRole('button', { name: "I'm available · Find pickups" }).click();
   await expect(page.getByRole('button', { name: 'Accept pickup' })).toBeVisible();
   await page.getByRole('button', { name: 'Accept pickup' }).click();

@@ -169,6 +169,8 @@ Eligibility may use:
 
 The system may notify multiple eligible nearby drivers. The first valid acceptance wins the exclusive assignment for the affected demand/package set. Expired/stale offers cannot assign work.
 
+Current pickup routing policy: operations assigns each origin to an active hub. A one-hub organization may use that sole hub without an explicit mapping; an origin without a mapping in a multi-hub organization cannot be offered. Route edits affect future offers only, and an outstanding offer is rejected if its hub mapping changes. Production pickup matching requires a driver-shared location no older than 15 minutes and verified origin coordinates within a 25 km straight-line radius. Going offline clears the shared location. Development fixtures may omit coordinates; that exception is never used in production. This radius is an eligibility screen, not a travel-time or route promise.
+
 A driver can accept several nearby locker pickups within the configured collection window (for example approximately one hour) and carry all collected packages to the hub. Package custody remains individually tracked even when opportunities are grouped.
 
 Phase 1 compensation can remain route/shift configured; it does not require bidding.

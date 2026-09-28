@@ -32,64 +32,117 @@ final class PickupOffers
         if (!$row) { throw new Failure(409,'NO_ACTIVE_SHIFT','Start an assigned shift before requesting pickups.'); }
         return $row;
     }
-    public function availability(string $user,array $input): array {
-        Input::fields($input,['status']);
+    public function availability(string $user,array $input,string $key=''): array {
+        Input::fields($input,['status'],['latitude','longitude']);
         if (!in_array($input['status'],['AVAILABLE','OFFLINE'],true)) { throw new Failure(422,'INVALID_INPUT','Choose AVAILABLE or OFFLINE.'); }
-        $driver=$this->driver($user);
-        if ($input['status']==='AVAILABLE') { $this->shift((string)$driver['id']); }
-        $this->q("INSERT INTO driver_availability(driver_id,status,updated_at) VALUES (?,?,now())
-            ON CONFLICT(driver_id) DO UPDATE SET status=EXCLUDED.status,updated_at=now()",[$driver['id'],$input['status']]);
-        if ($input['status']==='OFFLINE') {
-            $this->q("UPDATE driver_offers SET status='CANCELLED' WHERE driver_id=? AND status='OFFERED'",[$driver['id']]);
+        $hasLatitude=array_key_exists('latitude',$input);
+        $hasLongitude=array_key_exists('longitude',$input);
+        if ($hasLatitude!==$hasLongitude || ($input['status']==='OFFLINE' && $hasLatitude)) {
+            throw new Failure(422,'INVALID_INPUT','Provide both coordinates only while available.');
         }
-        return ['status'=>$input['status']];
+        $latitude=null; $longitude=null;
+        if ($hasLatitude) {
+            if (!is_numeric($input['latitude']) || !is_numeric($input['longitude'])) { throw new Failure(422,'INVALID_INPUT','Coordinates must be numeric.'); }
+            $latitude=(float)$input['latitude']; $longitude=(float)$input['longitude'];
+            if (!is_finite($latitude) || !is_finite($longitude) || abs($latitude)>90 || abs($longitude)>180) {
+                throw new Failure(422,'INVALID_INPUT','Coordinates are outside the supported range.');
+            }
+        }
+        $driver=$this->driver($user);
+        return (new Transaction($this->db))->run(function () use ($user,$driver,$input,$latitude,$longitude,$key) {
+            $this->q('SELECT id FROM drivers WHERE id=? FOR UPDATE',[$driver['id']]);
+            $scope='pickup-availability:'.$this->org().':'.$user;
+            $hash=$this->crypto->digest('pickup-availability',json_encode([$input['status'],$latitude,$longitude],JSON_THROW_ON_ERROR));
+            if ($key!=='') {
+                $saved=$this->q("SELECT encode(payload_hash,'hex') AS hash,response_body FROM idempotency_records WHERE scope=? AND request_key=?",[$scope,$key])->fetch(PDO::FETCH_ASSOC);
+                if ($saved) {
+                    if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was used for different availability.'); }
+                    return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR);
+                }
+            }
+            if ($input['status']==='AVAILABLE') { $this->shift((string)$driver['id']); }
+            $this->q("INSERT INTO driver_availability(driver_id,status,latitude,longitude,updated_at,location_updated_at)
+                VALUES (?,?,?,?,now(),CASE WHEN ?::boolean THEN now() ELSE NULL END)
+                ON CONFLICT(driver_id) DO UPDATE SET status=EXCLUDED.status,latitude=EXCLUDED.latitude,
+                longitude=EXCLUDED.longitude,updated_at=now(),location_updated_at=EXCLUDED.location_updated_at",
+                [$driver['id'],$input['status'],$latitude,$longitude,$latitude!==null?'true':'false']);
+            if ($input['status']==='OFFLINE') {
+                $this->q("UPDATE driver_offers SET status='CANCELLED' WHERE driver_id=? AND status='OFFERED'",[$driver['id']]);
+            }
+            $result=['status'=>$input['status'],'location_shared'=>$latitude!==null];
+            if ($key!=='') { $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at)
+                VALUES (?,?,decode(?,'hex'),200,?,now()+interval '1 day')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]); }
+            return $result;
+        });
     }
     private function available(string $driver): void {
         if (!$this->q("SELECT 1 FROM driver_availability WHERE driver_id=? AND status='AVAILABLE' AND updated_at>now()-interval '4 hours'",[$driver])->fetchColumn()) {
             throw new Failure(409,'DRIVER_OFFLINE','Mark yourself available before requesting or accepting pickups.');
         }
     }
-    public function refresh(string $user): array {
+    private function position(string $driver): ?array {
+        $row=$this->q('SELECT latitude,longitude,location_updated_at FROM driver_availability WHERE driver_id=?',[$driver])->fetch(PDO::FETCH_ASSOC);
+        if ($row && $row['latitude']!==null && $row['longitude']!==null && $row['location_updated_at']!==null
+            && strtotime($row['location_updated_at'])>time()-900) { return $row; }
+        if ($this->developmentAllowed()==='true') { return null; }
+        throw new Failure(409,'LOCATION_REQUIRED','Share your current location to find nearby pickups.');
+    }
+    private function withinRadius(?array $position,array $origin): bool {
+        if ($position===null) { return true; } // Local development supports fixtures without coordinates.
+        if ($origin['latitude']===null || $origin['longitude']===null) { return $this->developmentAllowed()==='true'; }
+        $lat1=deg2rad((float)$position['latitude']); $lat2=deg2rad((float)$origin['latitude']);
+        $deltaLat=$lat2-$lat1; $deltaLon=deg2rad((float)$origin['longitude']-(float)$position['longitude']);
+        $a=sin($deltaLat/2)**2+cos($lat1)*cos($lat2)*sin($deltaLon/2)**2;
+        return 12742*asin(min(1,sqrt($a)))<=25; // 25 km service radius; no route optimization.
+    }
+    public function refresh(string $user,string $key=''): array {
         $driver=$this->driver($user);
-        $this->shift((string)$driver['id']);
-        $this->available((string)$driver['id']);
-        return (new Transaction($this->db))->run(function () use ($driver,$user) {
+        return (new Transaction($this->db))->run(function () use ($driver,$user,$key) {
             $this->q('SELECT id FROM drivers WHERE id=? FOR UPDATE',[$driver['id']]);
+            $scope='pickup-refresh:'.$this->org().':'.$user;
+            $hash=$this->crypto->digest('pickup-refresh','current');
+            if ($key!=='') {
+                $saved=$this->q("SELECT encode(payload_hash,'hex') AS hash,response_body FROM idempotency_records WHERE scope=? AND request_key=?",[$scope,$key])->fetch(PDO::FETCH_ASSOC);
+                if ($saved) {
+                    if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was used for another pickup request.'); }
+                    return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR);
+                }
+            }
+            $this->shift((string)$driver['id']);
+            $this->available((string)$driver['id']);
+            $position=$this->position((string)$driver['id']);
             $this->q("UPDATE driver_offers SET status='CANCELLED' WHERE driver_id=? AND status='OFFERED'",[$driver['id']]);
-            // A location is offered only when the organization has one active hub.
-            // Multi-hub routing needs an explicit origin-to-hub policy.
-            $hubs=$this->q("SELECT h.id FROM hubs h JOIN locations l ON l.id=h.location_id
-                WHERE l.organization_id=? AND h.status='ACTIVE' AND l.status='ACTIVE'",[$this->org()])->fetchAll(PDO::FETCH_COLUMN);
-            if (count($hubs)!==1) { throw new Failure(409,'HUB_ROUTING_REQUIRED','An unambiguous active destination hub is required.'); }
-            $origins=$this->q("SELECT pd.origin_location_id,MIN(pd.pickup_deadline) AS deadline
+            $origins=$this->q("SELECT pd.origin_location_id,l.latitude,l.longitude,MIN(pd.pickup_deadline) AS deadline
                 FROM pickup_demands pd JOIN packages p ON p.id=pd.package_id
                 JOIN shipments s ON s.id=p.shipment_id JOIN locations l ON l.id=pd.origin_location_id
                 WHERE s.organization_id=? AND pd.status='OPEN' AND pd.pickup_deadline>now()
                 AND p.state='AT_ORIGIN' AND p.custodian_type='LOCKER' AND p.current_location_id=pd.origin_location_id
                 AND s.payment_status='PAID' AND s.order_status='READY' AND (NOT s.development_only OR ?::boolean) AND l.status='ACTIVE'
                 AND NOT EXISTS(SELECT 1 FROM active_allocations a WHERE a.package_id=p.id)
-                GROUP BY pd.origin_location_id",[$this->org(),$this->developmentAllowed()])->fetchAll(PDO::FETCH_ASSOC);
+                GROUP BY pd.origin_location_id,l.latitude,l.longitude",[$this->org(),$this->developmentAllowed()])->fetchAll(PDO::FETCH_ASSOC);
             foreach ($origins as $origin) {
-                $active=$this->q("SELECT id FROM driver_offers WHERE driver_id=? AND origin_location_id=? AND hub_id=?
-                    AND status='OFFERED' AND expires_at>now() LIMIT 1",[$driver['id'],$origin['origin_location_id'],$hubs[0]])->fetchColumn();
-                if (!$active) {
-                    $offerId=(string)$this->q("INSERT INTO driver_offers(driver_id,origin_location_id,hub_id,status,expires_at)
-                        VALUES (?,?,?,'OFFERED',LEAST(now()+interval '15 minutes',?::timestamptz)) RETURNING id",
-                        [$driver['id'],$origin['origin_location_id'],$hubs[0],$origin['deadline']])->fetchColumn();
-                    $this->q("INSERT INTO driver_offer_items(offer_id,demand_id,demand_version)
-                        SELECT ?,pd.id,pd.version FROM pickup_demands pd JOIN packages p ON p.id=pd.package_id
-                        JOIN shipments s ON s.id=p.shipment_id
-                        WHERE pd.origin_location_id=? AND pd.status='OPEN' AND pd.pickup_deadline>now()
-                        AND s.organization_id=? AND s.payment_status='PAID' AND s.order_status='READY' AND (NOT s.development_only OR ?::boolean)
-                        AND p.state='AT_ORIGIN' AND p.custodian_type='LOCKER' AND p.current_location_id=pd.origin_location_id
-                        AND NOT EXISTS(SELECT 1 FROM active_allocations a WHERE a.package_id=p.id)",
-                        [$offerId,$origin['origin_location_id'],$this->org(),$this->developmentAllowed()]);
-                    if (!$this->q('SELECT 1 FROM driver_offer_items WHERE offer_id=?',[$offerId])->fetchColumn()) {
-                        $this->q("UPDATE driver_offers SET status='CANCELLED' WHERE id=?",[$offerId]);
-                    }
+                if (!$this->withinRadius($position,$origin)) { continue; }
+                $hub=PickupRouting::hubForOrigin($this->db,$this->org(),(string)$origin['origin_location_id']);
+                if ($hub===null) { continue; }
+                $offerId=(string)$this->q("INSERT INTO driver_offers(driver_id,origin_location_id,hub_id,status,expires_at)
+                    VALUES (?,?,?,'OFFERED',LEAST(now()+interval '15 minutes',?::timestamptz)) RETURNING id",
+                    [$driver['id'],$origin['origin_location_id'],$hub,$origin['deadline']])->fetchColumn();
+                $this->q("INSERT INTO driver_offer_items(offer_id,demand_id,demand_version)
+                    SELECT ?,pd.id,pd.version FROM pickup_demands pd JOIN packages p ON p.id=pd.package_id
+                    JOIN shipments s ON s.id=p.shipment_id
+                    WHERE pd.origin_location_id=? AND pd.status='OPEN' AND pd.pickup_deadline>now()
+                    AND s.organization_id=? AND s.payment_status='PAID' AND s.order_status='READY' AND (NOT s.development_only OR ?::boolean)
+                    AND p.state='AT_ORIGIN' AND p.custodian_type='LOCKER' AND p.current_location_id=pd.origin_location_id
+                    AND NOT EXISTS(SELECT 1 FROM active_allocations a WHERE a.package_id=p.id)",
+                    [$offerId,$origin['origin_location_id'],$this->org(),$this->developmentAllowed()]);
+                if (!$this->q('SELECT 1 FROM driver_offer_items WHERE offer_id=?',[$offerId])->fetchColumn()) {
+                    $this->q("UPDATE driver_offers SET status='CANCELLED' WHERE id=?",[$offerId]);
                 }
             }
-            return $this->list($user);
+            $result=$this->list($user);
+            if ($key!=='') { $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at)
+                VALUES (?,?,decode(?,'hex'),200,?,now()+interval '1 day')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]); }
+            return $result;
         });
     }
     public function list(string $user): array {
@@ -129,7 +182,7 @@ final class PickupOffers
                 return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR);
             }
             $this->q('SELECT id FROM drivers WHERE id=? FOR UPDATE',[$driver['id']]);
-            $offer=$this->q("SELECT o.* FROM driver_offers o JOIN locations l ON l.id=o.origin_location_id
+            $offer=$this->q("SELECT o.*,l.latitude,l.longitude FROM driver_offers o JOIN locations l ON l.id=o.origin_location_id
                 JOIN hubs h ON h.id=o.hub_id JOIN locations hl ON hl.id=h.location_id
                 WHERE o.id=? AND o.driver_id=? AND l.organization_id=? AND hl.organization_id=? FOR UPDATE OF o",
                 [$offerId,$driver['id'],$this->org(),$this->org()])->fetch(PDO::FETCH_ASSOC);
@@ -137,6 +190,11 @@ final class PickupOffers
             $shift=$this->shift((string)$driver['id']);
             $this->available((string)$driver['id']);
             if ($offer['status']!=='OFFERED' || strtotime($offer['expires_at'])<=time()) { throw new Failure(409,'OFFER_EXPIRED','This offer is no longer available.'); }
+            $hub=PickupRouting::hubForOrigin($this->db,$this->org(),(string)$offer['origin_location_id']);
+            if ($hub===null || $hub!==(string)$offer['hub_id']) { throw new Failure(409,'PICKUP_ROUTE_CHANGED','The origin hub changed. Request a fresh offer.'); }
+            if (!$this->withinRadius($this->position((string)$driver['id']),$offer)) {
+                throw new Failure(409,'OUTSIDE_PICKUP_AREA','The origin is outside your current pickup area.');
+            }
             $demands=$this->q("SELECT pd.id,pd.package_id,p.weight_g,(p.width_mm::bigint*p.height_mm*p.depth_mm) AS volume_mm3,
                 pd.status,pd.version,oi.demand_version,pd.pickup_deadline,p.state AS package_state,p.custodian_type,p.current_location_id,
                 s.payment_status,s.order_status,s.development_only,a.id AS allocation_id
