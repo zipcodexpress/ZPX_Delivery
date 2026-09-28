@@ -38,6 +38,22 @@
         "responses": { "200": { "description": "Route saved prospectively", "content": { "application/json": { "schema": { "type": "object", "properties": { "origin_location_id": { "type": "string" }, "hub_id": { "type": "string" }, "version": { "type": "integer" } }, "required": ["origin_location_id", "hub_id", "version"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
       }
     },
+    "/admin/pickup-recovery": {
+      "get": {
+        "operationId": "admin_pickup_recovery",
+        "summary": "List active offer-created inbound runs and whether all parcels still have recorded origin-locker custody.",
+        "responses": { "200": { "description": "Pickup runs", "content": { "application/json": { "schema": { "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object", "properties": { "run_id": { "type": "string" }, "state": { "type": "string" }, "revision": { "type": "integer" }, "driver": { "type": "string" }, "planned_end": { "type": "string", "format": "date-time" }, "package_count": { "type": "integer" }, "can_release": { "type": "boolean" } }, "required": ["run_id", "state", "revision", "driver", "planned_end", "package_count", "can_release"] } } }, "required": ["items"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
+    "/admin/pickup-recovery/{run_id}/release": {
+      "post": {
+        "operationId": "admin_pickup_recovery_release",
+        "summary": "Cancel a wholly uncollected offer run and reopen its demands without changing package custody.",
+        "parameters": [{ "name": "run_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 16 } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "reason": { "type": "string", "minLength": 3, "maxLength": 500 }, "expected_revision": { "type": "integer", "minimum": 1 } }, "required": ["reason", "expected_revision"] } } } },
+        "responses": { "200": { "description": "Uncollected parcels released for new offers", "content": { "application/json": { "schema": { "type": "object", "properties": { "run_id": { "type": "string" }, "state": { "type": "string" }, "revision": { "type": "integer" }, "released_count": { "type": "integer" } }, "required": ["run_id", "state", "revision", "released_count"] } } } }, "default": { "description": "Structured error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } }
+      }
+    },
     "/driver/pickup-availability": {
       "post": {
         "operationId": "driver_pickup_availability",

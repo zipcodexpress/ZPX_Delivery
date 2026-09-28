@@ -171,6 +171,7 @@ require __DIR__ . '/customer-portal.php';
 require __DIR__ . '/driver-inbound.php';
 require __DIR__ . '/pickup-offers.php';
 require __DIR__ . '/pickup-routing.php';
+require __DIR__ . '/pickup-recovery.php';
 require __DIR__ . '/hub-receiving.php';
 require __DIR__ . '/hub-dispatch.php';
 require __DIR__ . '/driver-management.php';

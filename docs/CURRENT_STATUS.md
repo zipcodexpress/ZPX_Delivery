@@ -4,8 +4,8 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-routing`, feature commit `b6ef1aa`, based on merged `main` at `f350fd0` (PR #22). Current review: [PR #23](https://github.com/zipcodexpress/ZPX_Delivery/pull/23).
-- Objective: make driver pickup offers use an explicit origin-to-hub route and nearby-driver location eligibility.
+- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-recovery`, based on merged `origin/main` at `73aec6c` (PR #23 merged).
+- Objective: let operations release and reassign a missed, wholly uncollected pickup run while preserving recorded locker custody.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
@@ -18,23 +18,21 @@
 
 ## Current branch milestone
 
-- Migration 021 adds `origin_hub_routes` and driver-location freshness timestamp. An administrator can map each active origin to an active hub in the same organization, optionally setting verified coordinates; route updates have version/idempotency fences and audit history.
-- A sole active hub remains the compatible fallback. With multiple hubs, unmapped origins receive no offers. Acceptance rechecks the route, so changing a route cannot redirect an older offer. Already assigned runs keep their frozen hub and manifest.
-- A driver explicitly requests offers and shares location through the driver portal. Production requires a location shared within 15 minutes and origin coordinates within a 25 km straight-line radius at both offer creation and acceptance. Going offline clears location and cancels unaccepted offers. Local development fixtures may omit coordinates.
-- Admin portal exposes pickup route setup. The existing virtual-deposit-to-driver-pickup browser flow now exercises route setup and driver geolocation.
+- PR #23 is merged: explicit origin-to-hub routes, fresh driver location, 25 km pickup eligibility, route recheck at offer acceptance and an admin route setup portal are in `main`.
+- This branch adds an admin recovery list and reasoned release action for offer-created inbound runs that are entirely uncollected. The action locks the run and parcels, refuses recorded pickup/receiving or custody ambiguity, cancels the old run, removes active allocations, reopens demand with a fresh four-hour operational pickup window, and records package/audit events. It never changes package state, locker custody or version.
+- The admin portal has a Pickup recovery tab. A driver can request and accept a new offer after release; partial runs remain assigned pending a separate discrepancy workflow.
 
 ## Validation and limitations
 
-- Disposable `npm run test-db` passed: multi-hub mapping, organization/role/version fences, near/far driver matching, stale-route rejection, frozen prior run hub, and offline location clearing. No physical hardware was tested.
-- `npm run check` passed: 88 canonical OpenAPI operations, TypeScript, and 9 Node tests. `npm run build` passed both web apps. Isolated `npm run test-e2e` passed all 5 browser tests.
+- `npm run check` passed: 90 canonical OpenAPI operations, TypeScript and 9 Node tests. `npm run build` passed both web apps. Isolated `npm run test-e2e` passed all 5 browser tests, including the recovery tab.
+- Disposable `npm run test-db` passed after the final recovery guard and list changes: role/version/idempotency fences, partial-run refusal, unchanged locker custody, released allocation, demand reopening and new-run reassignment. No physical hardware was tested.
 - Route matching is a straight-line eligibility screen, not drive-time routing or automatic push notification. Production site coordinates require administrator configuration. A driver must consent to location sharing; stale/missing location receives no production offers.
 - Real origin terminal pairing, authenticated physical door evidence, delayed/ambiguous evidence reconciliation, commissioning and supervised hardware pilot remain required. Live local Authorize.net sandbox capture previously returned a provider error; LOCAL_TEST payment is validated.
 
 ## Exact continuation point
 
-1. Check PR #23 CI and review feedback before merge.
-2. Add cancellation/reassignment for missed pickup work without silently changing custody or reusing ambiguous locker evidence.
-3. Complete the enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
+1. Review the final diff, commit/push `codex/pickup-recovery`, and open a PR.
+2. Next development: partial-run missed pickup discrepancy resolution with explicit evidence, then enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 
 ## Critical rules
 

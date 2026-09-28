@@ -10,13 +10,16 @@ type PickupRoutes = {
   origins: { origin_location_id: string; code: string; name: string; status: string; hub_id: string | null; hub_name: string | null; latitude: number | null; longitude: number | null; version: number }[];
   hubs: { hub_id: string; code: string; name: string }[];
 };
+type RecoveryRun = { run_id: string; state: string; revision: number; driver: string; planned_end: string; package_count: number; can_release: boolean };
 
 export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogout: () => void }) {
-  const [page, setPage] = useState<'shipments' | 'drivers' | 'routes'>('shipments');
+  const [page, setPage] = useState<'shipments' | 'drivers' | 'routes' | 'recovery'>('shipments');
   const [drivers, setDrivers] = useState<PendingDriver[]>([]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [routes, setRoutes] = useState<PickupRoutes>({ origins: [], hubs: [] });
   const [routeEdits, setRouteEdits] = useState<Record<string, { hub_id: string; latitude: string; longitude: string }>>({});
+  const [recoveryRuns, setRecoveryRuns] = useState<RecoveryRun[]>([]);
+  const [recoveryReasons, setRecoveryReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -33,10 +36,28 @@ export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogo
       latitude: origin.latitude?.toString() || '', longitude: origin.longitude?.toString() || '',
     }])));
   }
+  async function loadRecovery() {
+    const result = await api<{ items: RecoveryRun[] }>('/admin/pickup-recovery');
+    setRecoveryRuns(result.items);
+  }
   useEffect(() => {
     if (page === 'drivers') void loadDrivers().catch(e => setError(e instanceof Error ? e.message : 'Unable to load drivers.'));
     if (page === 'routes') void loadRoutes().catch(e => setError(e instanceof Error ? e.message : 'Unable to load pickup routes.'));
+    if (page === 'recovery') void loadRecovery().catch(e => setError(e instanceof Error ? e.message : 'Unable to load pickup runs.'));
   }, [page]);
+  async function releaseRun(run: RecoveryRun) {
+    const reason = recoveryReasons[run.run_id]?.trim();
+    if (!reason || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api(`/admin/pickup-recovery/${run.run_id}/release`, { reason, expected_revision: run.revision }, {
+        'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '',
+      });
+      await loadRecovery();
+      setNotice(`Run ${run.run_id} cancelled. Its uncollected parcels remain at the origin locker and are available for a new pickup offer.`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to release pickup run.'); }
+    finally { setBusy(false); }
+  }
   async function saveRoute(origin: PickupRoutes['origins'][number]) {
     const edit = routeEdits[origin.origin_location_id];
     if (!edit?.hub_id || busy) return;
@@ -65,9 +86,17 @@ export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogo
   }
   return <main className="hub-operations">
     <header><strong>ZipcodeXpress<span className="brand-dot">.</span></strong><span>ADMIN OPERATIONS</span><button className="secondary small" onClick={onLogout}>Sign out</button></header>
-    <nav className="hub-tabs" aria-label="Admin operations"><button aria-pressed={page === 'shipments'} onClick={() => setPage('shipments')}>Shipments</button><button aria-pressed={page === 'drivers'} onClick={() => setPage('drivers')}>Driver approvals</button><button aria-pressed={page === 'routes'} onClick={() => setPage('routes')}>Pickup routes</button></nav>
+    <nav className="hub-tabs" aria-label="Admin operations"><button aria-pressed={page === 'shipments'} onClick={() => setPage('shipments')}>Shipments</button><button aria-pressed={page === 'drivers'} onClick={() => setPage('drivers')}>Driver approvals</button><button aria-pressed={page === 'routes'} onClick={() => setPage('routes')}>Pickup routes</button><button aria-pressed={page === 'recovery'} onClick={() => setPage('recovery')}>Pickup recovery</button></nav>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
-    {page === 'shipments' ? <Shipping profile={profile} audience="operations" embedded onAccount={() => {}} onLogout={onLogout} /> : page === 'routes' ? <section className="hub-page hub-card">
+    {page === 'shipments' ? <Shipping profile={profile} audience="operations" embedded onAccount={() => {}} onLogout={onLogout} /> : page === 'recovery' ? <section className="hub-page hub-card">
+      <h1>Pickup recovery</h1><p>Release a run only after confirming that no parcel was collected. The parcels stay recorded at the origin locker; a driver must request a new offer.</p>
+      <button type="button" disabled={busy} onClick={() => void loadRecovery().catch(e => setError(e instanceof Error ? e.message : 'Unable to load pickup runs.'))}>Refresh runs</button>
+      {recoveryRuns.length === 0 ? <p>No active pickup runs.</p> : <ul>{recoveryRuns.map(run => <li key={run.run_id}>
+        <strong>Run {run.run_id}</strong> · {run.driver} · {run.state} · {run.package_count} parcel{run.package_count === 1 ? '' : 's'} · Due {new Date(run.planned_end).toLocaleString()}
+        {run.can_release ? <><label>Reason for reassignment <input aria-label={`Run ${run.run_id} recovery reason`} value={recoveryReasons[run.run_id] || ''} maxLength={500} onChange={e => setRecoveryReasons(current => ({ ...current, [run.run_id]: e.target.value }))} /></label>
+          <button type="button" disabled={busy || (recoveryReasons[run.run_id]?.trim().length || 0) < 3} onClick={() => void releaseRun(run)}>Release for new offer</button></> : <p>Custody or assignment needs reconciliation before this run can be released.</p>}
+      </li>)}</ul>}
+    </section> : page === 'routes' ? <section className="hub-page hub-card">
       <h1>Origin pickup routes</h1><p>Choose the hub that receives pickups from each origin. Confirm the locker coordinates before enabling nearby driver offers.</p>
       <button type="button" disabled={busy} onClick={() => void loadRoutes().catch(e => setError(e instanceof Error ? e.message : 'Unable to load pickup routes.'))}>Refresh routes</button>
       {routes.hubs.length === 0 ? <p>No active hubs are available.</p> : <ul>{routes.origins.map(origin => {
