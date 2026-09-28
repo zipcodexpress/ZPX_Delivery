@@ -31,6 +31,7 @@ final class Seed
         $ids = $existing->fetchAll(PDO::FETCH_COLUMN);
         if (count($ids) > 1) { throw new RuntimeException('Ambiguous seed organization; no data changed'); }
         if ($ids) {
+            $this->ensureInternalPartner((string)$ids[0]);
             $this->syncDriverInLabelHashes((string)$ids[0]);
             $this->ensureDemoShifts((string)$ids[0]);
             $this->ensureDemoSlots((string)$ids[0]);
@@ -43,6 +44,7 @@ final class Seed
         }
 
         $org = $this->insert('INSERT INTO organizations(name) VALUES (?)', [self::ORGANIZATION . ':' . $this->namespace]);
+        $this->ensureInternalPartner($org);
         $this->syncSizePolicy($org);
         $accounts = ['ADMIN' => 'ADMIN', 'CUSTOMER' => 'CUSTOMER', 'RECIPIENT' => 'CUSTOMER', 'HUB-STAFF' => 'HUB_STAFF', 'DRIVER-IN' => 'DRIVER', 'DRIVER-OUT' => 'DRIVER'];
         $users = []; $credentials = []; $roles = [];
@@ -142,6 +144,13 @@ final class Seed
     }
 
     /** Historical UI fixtures only. These do not commission doors or assert device evidence. */
+    private function ensureInternalPartner(string $org): void
+    {
+        $this->db->prepare("INSERT INTO network_partners(organization_id,code,display_name,kind,status)
+            VALUES (?,'ZPX-INTERNAL','Internal operations','INTERNAL','ACTIVE')
+            ON CONFLICT (organization_id,code) DO NOTHING")->execute([$org]);
+    }
+
     private function ensureAssumedLockerOutcomes(string $org): void
     {
         $user = $this->db->prepare('SELECT id FROM users WHERE organization_id=? AND external_auth_id=?');

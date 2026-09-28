@@ -33,6 +33,10 @@ Route::any('api/delivery/v1/admin/drivers/<driver_id>',
 Route::any('api/delivery/v1/admin/drivers/<driver_id>/transitions',
     static fn(Request $request, string $driverId) => ZpxAdmin\DriverAdministrationController::handle($request,'transition',$driverId))
     ->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/admin/partners', static fn(Request $request) => ZpxAdmin\PartnerController::handle($request,'collection'));
+Route::any('api/delivery/v1/admin/partners/<partner_id>',
+    static fn(Request $request, string $partnerId) => ZpxAdmin\PartnerController::handle($request,'detail',$partnerId))
+    ->pattern(['partner_id'=>'[1-9][0-9]{0,17}']);
 foreach (['me/profile'=>'profile-update','me/payment-methods'=>'wallet-methods','me/payment-methods/manage'=>'wallet-manage','me/payments'=>'wallet-history','shipments/lookup'=>'lookup','locations'=>'locations','shipments'=>'shipments','operations/shipments'=>'operations','operations/packages/search'=>'operations-search','recipient-claims/challenges'=>'claim-challenge','recipient-claims'=>'claim'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request) => Zpx\Http\ShippingController::handle($request,$action));
 }

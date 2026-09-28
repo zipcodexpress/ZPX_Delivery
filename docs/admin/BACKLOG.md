@@ -1,6 +1,6 @@
 # Admin implementation backlog
 
-Status: ADM-01/ADM-02 implemented on `codex/admin-foundation` pending merge. ADM-03 customer restriction and driver status slice is on `codex/admin-customer-driver`; read-only customer/driver detail and recent activity are on `codex/admin-identity-details`, both pending review. Search/filtering, support and fleet/commercial extensions remain. ADM-04–ADM-18 TODO. This is a task map, not a substitute for code and test evidence.
+Status: ADM-01/ADM-02 implemented on `codex/admin-foundation` pending merge. ADM-03 customer restriction/status and read-only detail slices are on `codex/admin-customer-driver` and `codex/admin-identity-details`. ADM-04 initial partner registry/draft creation is on `codex/admin-partner-registry`; delegated grants, resource relationships, approval and offboarding remain. ADM-05–ADM-18 TODO. This is a task map, not a substitute for code and test evidence.
 Start with [README](README.md); use [functions](FUNCTIONS.md) and [data/API](DATA_AND_API.md) for requirements.
 Each task is a bounded reviewable increment. Split large tasks further while retaining the parent ID; do not implement this entire backlog in one PR.
 

@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{$title} · ZipcodeXpress Management</title><link rel="stylesheet" href="/admin-style"></head>
 <body><div class="app-shell"><aside class="sidebar"><a class="brand" href="/admin">Zipcode<strong>Xpress</strong></a>
-<nav aria-label="Administration"><a href="/admin" class="nav-top">Overview</a><div class="nav-group"><div class="nav-head">Operations</div><a class="nav-link" href="/admin/shipments">Shipments</a><a class="nav-link" href="/admin/customers">Customers</a><a class="nav-link" href="/admin/drivers">Drivers</a><a class="nav-link" href="/admin/pickup-routes">Pickup routes</a><a class="nav-link" href="/admin/pickup-recovery">Pickup recovery</a></div></nav></aside>
+<nav aria-label="Administration"><a href="/admin" class="nav-top">Overview</a><div class="nav-group"><div class="nav-head">Operations</div><a class="nav-link" href="/admin/shipments">Shipments</a><a class="nav-link" href="/admin/customers">Customers</a><a class="nav-link" href="/admin/drivers">Drivers</a><a class="nav-link" href="/admin/pickup-routes">Pickup routes</a><a class="nav-link" href="/admin/pickup-recovery">Pickup recovery</a></div><div class="nav-group"><div class="nav-head">Network</div><a class="nav-link" href="/admin/partners">Partners</a></div></nav></aside>
 <div class="workspace"><header class="topbar"><div><strong>Management Console</strong><small>ZipcodeXpress operations · Network {$network}</small></div><div class="user">{$name}</div><form method="post" action="/admin/logout"><input type="hidden" name="_csrf" value="{$csrf}"><button type="submit">Sign out</button></form></header>
 <main class="content"><div class="content-panel"><div class="dashboard-head"><div><h1>{$title}</h1><p>Current network operations and administration.</p></div></div>
 {switch name="page"}
@@ -8,6 +8,8 @@
 {case value="customer-detail"}{include file="customer_detail" /}{/case}
 {case value="drivers"}{include file="drivers" /}{/case}
 {case value="driver-detail"}{include file="driver_detail" /}{/case}
+{case value="partners"}{include file="partners" /}{/case}
+{case value="partner-detail"}{include file="partner_detail" /}{/case}
 {case value="pickup-routes"}{include file="pickup_routes" /}{/case}
 {case value="pickup-recovery"}{include file="pickup_recovery" /}{/case}
 {case value="shipments"}{include file="shipments" /}{/case}

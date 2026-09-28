@@ -4,9 +4,9 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-identity-details`, commit `9b17d14`, based on `codex/admin-customer-driver` (`a6929d6`). PR #31 is open against `main`; PR #32 is stacked on #31; PR #33 is stacked on #32.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-partner-registry`, based on `codex/admin-identity-details` (`4fe40f6`). PR #31 is open against `main`; PR #32 is stacked on #31; PR #33 is stacked on #32.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
-- PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls. This branch adds ADM-03 read-only customer/driver detail and recent activity. Search/filtering, support and fleet/commercial extensions remain; ADM-04–ADM-18 remain. Add partner/site tables only in their owning tasks after verifying relationships.
+- PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls; PR #33 contains ADM-03 read-only details. This branch adds the first ADM-04 partner registry/draft creation. Search/filtering, support, fleet/commercial, delegated partner grants and resource relationships remain. Add site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
 ## Implemented on this branch
@@ -18,6 +18,7 @@
 - No new database migration was needed for ADM-01/02. The local development database had four pending existing migrations, including `021_pickup_routing.sql`; the migration image was rebuilt and they were applied. PostgreSQL remains exposed only on `127.0.0.1:5432` for DBeaver.
 - ADM-03 first slice: migration 022 adds audited customer SHIPPING restrictions and driver optimistic version. Admin pages and JSON endpoints list scoped customers/drivers and apply reasoned restriction/revocation or suspension/reactivation. Shipping checks restrictions only for new shipments. Suspension cancels open offers and takes driver offline; assigned runs and parcel custody remain. Offer actions recheck active driver status under lock. Reactivation does not restore availability.
 - ADM-03 detail slice: scoped JSON and HTML detail routes show masked customer contacts and ten recent linked shipments, or driver qualification/availability and up to ten recent runs with active assignments first. Both show redacted recent admin action names/times. No new schema or contact reveal.
+- ADM-04 first slice: migration 023 adds `network_partners` and typed classification roles with network-consistent keys. Existing networks receive a neutral internal identity; fresh synthetic networks seed one. Admin list/detail/create forms and JSON routes create audited EXTERNAL drafts only. Registry roles confer no resource access, activation, legal ownership or delegated grants.
 
 ## Validation
 
@@ -27,11 +28,12 @@
 - ADM-03 `npm run check` passed (100 OpenAPI operations, TypeScript, 9 Node tests); `npm run build` passed both React apps; PHP syntax checks passed. Disposable `npm run test-db` passed with customer/driver scope, restriction, idempotency, stale version, suspended offers and active-run preservation.
 - Local development migration 022 applied. With the synthetic admin, `/admin/customers` rendered masked contacts and restriction/restore forms completed; `/admin/drivers` rendered statuses and active-run counts. PostgreSQL stayed available to DBeaver at `127.0.0.1:5432` and API/admin at `127.0.0.1:8000`.
 - Detail slice: `npm run check` passed (102 OpenAPI operations, TypeScript, 9 Node tests); `npm run build` passed both React apps; PHP syntax and disposable `npm run test-db` passed. Local browser rendered customer shipment/action detail and driver assignment/status detail. Foreign resources returned 404 and audit reasons stayed redacted.
+- Partner slice: `npm run check` passed (105 OpenAPI operations, TypeScript, 9 Node tests); `npm run build`, PHP lint and the final disposable `npm run test-db` passed. Local migration 023 applied; browser created a synthetic draft partner and opened its detail. Final API image rebuilt and local page rechecked. DBeaver remains at `127.0.0.1:5432`; admin at `127.0.0.1:8000`.
 
 ## Next exact actions
 
-1. PR #33 contains the validated read-only detail slice and awaits review; PR #32 passed all CI jobs. Begin ADM-04 partner registry/access foundation on a new branch from PR #33, using synthetic partners and no invented legal ownership.
-2. Customer search/filtering, support and driver fleet/qualification views remain; do not invent commercial affiliations or contact-reveal authority.
+1. Review diff, commit and open a stacked PR against `codex/admin-identity-details`.
+2. Follow with ADM-04 explicit delegated grants and resource relationships, then ADM-05 sites. Do not infer commercial affiliation, ownership, contact-reveal authority or partner access from registry roles.
 3. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`, respecting physical/payout evidence gates.
 
 ## Delivery baseline and gates
