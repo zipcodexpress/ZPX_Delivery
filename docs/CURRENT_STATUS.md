@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-360-views`, based on `codex/admin-sites-inventory` (`de1d155`). PR #35 targets PR #34's branch; this admin 360 slice will be a stacked PR after validation.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-360-views`, latest implementation commit `d82c854`, based on `codex/admin-sites-inventory` (`de1d155`). PR #36 targets PR #35's branch; merge the stack in order.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls; PR #33 contains ADM-03 read-only details; PR #34 contains the first ADM-04 partner registry/draft creation. This branch implements an ADM-05/06 and people-address partial slice. Search/filtering, support, fleet/commercial, delegated partner grants and resource relationships remain.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -34,11 +34,11 @@
 
 - Shipment lifecycle HTML detail links from list/customer/driver and reads authoritative package/custody/scan/receiving/exception timeline, quotes, payment attempts/refunds, run assignments, locker sessions and pickup grants. Synthetic assumptions and missing payment evidence are labeled. Customer detail shows recorded payment history/totals; driver detail shows application/approval, offers, assignments, scans and earnings/settlement ledger without implying a cash wallet. Recent sections link to cursor-paged customer/driver histories.
 - Separate Sites and Lockers navigation. Locker detail includes recorded device, board, ownership manifest, body/box module and compartment inventory. Additive migrations 025–026 add explicit site property owner and host partner links, contract reference/start/end dates, and encrypted site contacts/assignments. Site partner role classification now includes SITE_OWNER. Changes to draft relationships are versioned and audited; contact changes are audited; no contract/hardware activation is implied.
-- Disposable `npm run test-db` passed, including new scope, cross-network owner/host, encrypted contact, history pagination and HTML render checks. `npm run check` passed 105 OpenAPI operations and nine Node tests; `npm run build` passed. Local migrations 025–026 applied with existing dev data preserved. Browser verified customer/shipment lifecycle, site and locker inventory, driver earnings/scans. PR #36 is open on top of #35; CI currently running. Preserve the two untracked human notes.
+- Disposable `npm run test-db` passed, including new scope, cross-network owner/host, encrypted contact, history pagination and HTML render checks. `npm run check` passed 105 OpenAPI operations and nine Node tests; `npm run build` passed. Local migrations 025–026 applied with existing dev data preserved. Browser verified customer/shipment lifecycle, site and locker inventory, driver earnings/scans and paged history routes. PR #36 is open on top of #35; CI currently running. Preserve the two untracked human notes.
 
 ## Next exact actions
 
-1. Commit and push the final cursor-paged history addition to PR #36; wait for CI. Do not stage the two human notes.
+1. Wait for PR #36's browser/local-stack CI jobs and address any failures. The current branch is pushed; do not stage the two human notes.
 2. Next development: searchable cross-entity history, shared contact directory with location overrides and coverage, contract document/effective-period workflow, explicit locker owner/operator assignments and commercial terms, and finance reconciliation/payout evidence. Read-only admin 360 views are not reconciliation or payment authority.
 3. Active site/location commissioning, versioned hardware catalog and real device mapping/evidence, delegated partner grants, calendar/access policy and the broader ADM backlog remain. Overdue amounts are draft configuration only; no real charge is collected. DBeaver PostgreSQL mapping remains `127.0.0.1:5432`.
 
