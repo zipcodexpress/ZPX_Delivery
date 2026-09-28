@@ -34,6 +34,8 @@ Docker/MySQL startup and service readiness passed in Linux GitHub Actions; the p
 
 ## Project map
 
+The [admin development handoff](docs/admin/README.md) specifies the ThinkPHP-rendered admin site, partner/site/locker management, access control, revenue-sharing records and sequenced implementation tasks.
+
 | Path | Responsibility |
 |---|---|
 | apps/api | ThinkPHP identity and local shipping services |
