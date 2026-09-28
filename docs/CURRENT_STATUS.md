@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-identity-details`, based on `codex/admin-customer-driver` (`a6929d6`). PR #31 is open against `main`; stacked PR #32 is open against `codex/admin-foundation`.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-identity-details`, commit `9b17d14`, based on `codex/admin-customer-driver` (`a6929d6`). PR #31 is open against `main`; PR #32 is stacked on #31; PR #33 is stacked on #32.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls. This branch adds ADM-03 read-only customer/driver detail and recent activity. Search/filtering, support and fleet/commercial extensions remain; ADM-04–ADM-18 remain. Add partner/site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -30,8 +30,8 @@
 
 ## Next exact actions
 
-1. Review diff, commit and open a stacked PR from `codex/admin-identity-details` against `codex/admin-customer-driver`. PR #32 passed all CI jobs; PR #31/#32 await merge.
-2. Next bounded work: customer search/filtering and driver fleet/qualification views, or ADM-04 partner entities/grants if access foundations are prioritized. Do not invent commercial affiliations or contact-reveal authority.
+1. PR #33 contains the validated read-only detail slice and awaits review; PR #32 passed all CI jobs. Begin ADM-04 partner registry/access foundation on a new branch from PR #33, using synthetic partners and no invented legal ownership.
+2. Customer search/filtering, support and driver fleet/qualification views remain; do not invent commercial affiliations or contact-reveal authority.
 3. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`, respecting physical/payout evidence gates.
 
 ## Delivery baseline and gates
