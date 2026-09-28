@@ -158,6 +158,7 @@ final class PageController
                 ]),
                 'locker-box-add' => (new SiteInventory($db,$crypto))->addDraftBox($user,$id,[
                     'code'=>$request->post('code',''),'module_id'=>$request->post('module_id',''),
+                    'row'=>$request->post('row',''),'column'=>$request->post('column',''),
                     'width_mm'=>$request->post('width_mm',''),'height_mm'=>$request->post('height_mm',''),
                     'depth_mm'=>$request->post('depth_mm',''),'max_weight_g'=>$request->post('max_weight_g',''),
                     'reason'=>$request->post('reason',''),
@@ -196,7 +197,7 @@ final class PageController
                     'customer-restrict','customer-revoke'=>'/admin/customers',
                     'partner-create'=>'/admin/partners',
                     'site-create','site-update','site-relationship','site-contact-add','site-contact-archive','site-location-create','site-overdue','location-overdue','location-deactivate','location-reactivate'=>'/admin/sites',
-                    'locker-body-add','locker-module-add','locker-box-add','locker-box-assign'=>'/admin/sites',
+                    'locker-body-add','locker-module-add','locker-box-add','locker-box-assign'=>'/admin/lockers/'.$id,
                     'customer-rename','address-save','address-archive'=>'/admin/customers',
                     default=>'/admin/pickup-recovery',
                 };
@@ -250,7 +251,7 @@ final class PageController
             'sites'=>(new SiteInventory($db,$crypto))->sites($user,(string)$request->get('cursor','')),
             'site-detail'=>(new SiteInventory($db,$crypto))->site($user,$resource),
             'lockers'=>(new SiteInventory($db,$crypto))->lockers($user,(string)$request->get('cursor','')),
-            'locker-detail'=>(new SiteInventory($db,$crypto))->locker($user,$resource),
+            'locker-detail'=>(new SiteInventory($db,$crypto))->locker($user,$resource,(string)$request->get('cursor','')),
             'pickup-routes'=>(new PickupRouting($db,$crypto))->list($user),
             'pickup-recovery'=>(new PickupRecovery($db,$crypto))->list($user),
             'shipments'=>(new ShippingService($db,$crypto))->list($user,'operations',
