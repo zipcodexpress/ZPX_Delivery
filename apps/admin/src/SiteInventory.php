@@ -354,24 +354,95 @@ final class SiteInventory
         });
     }
 
-    public function locker(string $actor,string $id): array
+    public function locker(string $actor,string $id,string $cursor=''): array
     {
         $this->authorize($actor); self::id($id);
+        if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid package cursor.'); }
         $locker=$this->q('SELECT k.id,k.external_locker_id,l.id AS location_id,l.name AS location_name,l.status AS location_status,
             s.id AS site_id,s.name AS site_name,s.status AS site_status FROM lockers k JOIN locations l ON l.id=k.location_id
             LEFT JOIN installation_sites s ON s.id=l.site_id WHERE k.id=? AND l.organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
         if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
-        return ['locker'=>$locker,
+        $boxes=$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,
+                m.code AS module_code,body.code AS body_code,
+                b.board_address,c.door_address,c.display_row,c.display_column,o.owner AS partition,
+                cc.state AS claim_state,cc.expires_at AS claim_expires_at,p.id AS package_id,p.state AS package_state,
+                p.custodian_type,p.custodian_ref,p.current_location_id,si.si,sh.id AS shipment_id,sh.public_reference,
+                sh.development_only,ls.status AS session_status
+                FROM compartments c LEFT JOIN locker_box_modules m ON m.id=c.box_module_id
+                LEFT JOIN locker_body_modules body ON body.id=m.body_module_id
+                LEFT JOIN controller_boards b ON b.id=c.controller_board_id
+                LEFT JOIN compartment_ownership o ON o.compartment_id=c.id
+                LEFT JOIN compartment_claims cc ON cc.compartment_id=c.id
+                LEFT JOIN packages p ON p.id=cc.package_id
+                LEFT JOIN shipments sh ON sh.id=p.shipment_id
+                LEFT JOIN shipping_identifiers si ON si.package_id=p.id
+                LEFT JOIN LATERAL (SELECT status FROM locker_sessions WHERE compartment_id=c.id ORDER BY id DESC LIMIT 1) ls ON true
+                WHERE c.locker_id=? ORDER BY c.display_row NULLS LAST,c.display_column NULLS LAST,c.id',[$id])->fetchAll(PDO::FETCH_ASSOC);
+        $occupancy=['available'=>0,'occupied'=>0,'reserved'=>0,'review'=>0,'unavailable'=>0];
+        $claimedPackages=[];
+        foreach ($boxes as &$box) {
+            if ($box['package_id']!==null) { $claimedPackages[(string)$box['package_id']]=['code'=>$box['code'],'state'=>$box['claim_state']]; }
+            $claim=$box['claim_state'];
+            $matches=$box['custodian_type']==='LOCKER' && (string)$box['current_location_id']===(string)$locker['location_id']
+                && (string)$box['custodian_ref']===$id;
+            $box['occupancy']=match (true) {
+                $claim==='OCCUPIED' && $matches && $box['status']==='ACTIVE' && $box['partition']==='DELIVERY'
+                    && $box['board_address']!==null && $box['door_address']!==null => 'OCCUPIED',
+                $claim==='HELD' && $box['status']==='ACTIVE' && $box['partition']==='DELIVERY'
+                    && $box['board_address']!==null && $box['door_address']!==null
+                    && ($box['claim_expires_at']===null || strtotime($box['claim_expires_at'])>time()) => 'RESERVED',
+                $claim!==null || $box['session_status']==='UNKNOWN' => 'REVIEW',
+                $box['status']==='ACTIVE' && $box['partition']==='DELIVERY' && $locker['location_status']==='ACTIVE'
+                    && $box['board_address']!==null && $box['door_address']!==null => 'AVAILABLE',
+                default => 'UNAVAILABLE',
+            };
+            $occupancy[strtolower($box['occupancy'])]++;
+        }
+        unset($box);
+        $unclaimedCustody=(int)$this->q("SELECT count(*) FROM packages p JOIN shipments sh ON sh.id=p.shipment_id
+            WHERE sh.organization_id=? AND p.current_location_id=? AND p.custodian_type='LOCKER'
+            AND NOT EXISTS (SELECT 1 FROM compartment_claims cc WHERE cc.package_id=p.id)",
+            [$this->org(),$locker['location_id']])->fetchColumn();
+        $args=[$locker['location_id'],$locker['location_id'],$locker['location_id'],$this->org()];
+        $where='';
+        if ($cursor!=='') { $where=' AND p.id<?'; $args[]=$cursor; }
+        $packages=$this->q('SELECT p.id,p.state,p.custodian_type,p.custodian_ref,p.current_location_id,
+                sh.id AS shipment_id,sh.public_reference,sh.origin_location_id,sh.destination_location_id,sh.development_only,si.si
+                FROM packages p JOIN shipments sh ON sh.id=p.shipment_id
+                LEFT JOIN shipping_identifiers si ON si.package_id=p.id
+                WHERE (sh.origin_location_id=? OR sh.destination_location_id=? OR p.current_location_id=?)
+                AND sh.organization_id=?'.$where.' ORDER BY p.id DESC LIMIT 51',$args)->fetchAll(PDO::FETCH_ASSOC);
+        $more=count($packages)>50; $packages=array_slice($packages,0,50);
+        foreach ($packages as &$package) {
+            $package['route_role']=$package['origin_location_id']==$locker['location_id']
+                ? ($package['destination_location_id']==$locker['location_id']?'Origin and destination':'Origin') : 'Destination';
+            if ($package['origin_location_id']!=$locker['location_id'] && $package['destination_location_id']!=$locker['location_id']) { $package['route_role']='Current location only'; }
+            $claim=$claimedPackages[(string)$package['id']] ?? null;
+            $package['box_code']=$claim['code'] ?? null;
+            $package['phase']=match ($package['state']) {
+                'CREATED'=>'Shipment created',
+                'AT_ORIGIN'=>'Initial outbound · awaiting driver pickup',
+                'INBOUND_CUSTODY'=>'Driver inbound',
+                'AT_HUB'=>'At hub',
+                'STAGED'=>'Hub staging',
+                'OUTBOUND_CUSTODY'=>'Driver outbound',
+                'AT_DESTINATION'=>'Waiting for final pickup',
+                'COLLECTED'=>'Recipient collected',
+                default=>$package['state'],
+            };
+            $package['location_evidence']=$claim!==null ? 'Box claim '.$claim['state'] :
+                ($package['custodian_type']==='LOCKER' && (string)$package['current_location_id']===(string)$locker['location_id']
+                    ? 'Locker custody; no box claim' : 'Route association only');
+        }
+        unset($package);
+        return ['locker'=>$locker,'occupancy'=>$occupancy,'unclaimed_custody'=>$unclaimedCustody,'packages'=>$packages,
+            'next_package_cursor'=>$more?(string)end($packages)['id']:null,
             'devices'=>$this->q('SELECT id,external_device_id,status,created_at FROM locker_devices WHERE locker_id=? ORDER BY id',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boards'=>$this->q('SELECT id,board_address,protocol_profile,display_sequence FROM controller_boards WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'ownership'=>$this->q('SELECT generation,state,activated_at,created_at FROM ownership_manifests WHERE locker_id=? ORDER BY generation DESC LIMIT 10',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'bodies'=>$this->q('SELECT id,code,display_sequence,status FROM locker_body_modules WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'modules'=>$this->q('SELECT m.id,m.code,m.body_module_id,m.display_sequence,m.status FROM locker_box_modules m WHERE m.locker_id=? ORDER BY m.body_module_id,m.display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
-            'boxes'=>$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,
-                b.board_address,c.door_address,c.display_row,c.display_column,
-                (SELECT count(*) FROM compartment_claims cc WHERE cc.compartment_id=c.id) AS claim_count
-                FROM compartments c LEFT JOIN controller_boards b ON b.id=c.controller_board_id
-                WHERE c.locker_id=? ORDER BY c.id LIMIT 500',[$id])->fetchAll(PDO::FETCH_ASSOC)];
+            'boxes'=>$boxes];
     }
 
     private function lockLocker(string $actor,string $id): void
@@ -427,8 +498,9 @@ final class SiteInventory
     }
     public function addDraftBox(string $actor,string $locker,array $input): void
     {
-        Input::fields($input,['code','module_id','width_mm','height_mm','depth_mm','max_weight_g','reason']);
+        Input::fields($input,['code','module_id','row','column','width_mm','height_mm','depth_mm','max_weight_g','reason']);
         $code=self::moduleCode($input['code']); $module=self::id((string)$input['module_id']);
+        $row=self::position($input['row']); $column=self::position($input['column']);
         $sizes=[];
         foreach (['width_mm','height_mm','depth_mm','max_weight_g'] as $field) {
             $value=$input[$field];
@@ -438,7 +510,7 @@ final class SiteInventory
             $sizes[]=(int)$value;
         }
         $reason=Input::text(trim(Input::text($input['reason'],10,500)),10,500);
-        (new Transaction($this->db))->run(function() use($actor,$locker,$code,$module,$sizes,$reason) {
+        (new Transaction($this->db))->run(function() use($actor,$locker,$code,$module,$row,$column,$sizes,$reason) {
             $this->lockLocker($actor,$locker);
             $status=$this->q('SELECT l.status FROM lockers k JOIN locations l ON l.id=k.location_id WHERE k.id=?',[$locker])->fetchColumn();
             if ($status!=='INACTIVE') { throw new Failure(409,'LOCKER_LOCATION_ACTIVE','New boxes require an inactive locker location.'); }
@@ -448,8 +520,13 @@ final class SiteInventory
             if ($this->q('SELECT 1 FROM compartments WHERE locker_id=? AND code=?',[$locker,$code])->fetchColumn()) {
                 throw new Failure(409,'BOX_CODE_EXISTS','Box code already exists at this locker.');
             }
-            $id=$this->q("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status,box_module_id)
-                VALUES (?,?,?,?,?,?,'FROZEN',?) RETURNING id",[$locker,$code,...$sizes,$module])->fetchColumn();
+            if ($this->q('SELECT 1 FROM compartments c JOIN locker_box_modules m ON m.id=c.box_module_id
+                WHERE m.body_module_id=(SELECT body_module_id FROM locker_box_modules WHERE id=?)
+                AND c.display_row=? AND c.display_column=?',[$module,$row,$column])->fetchColumn()) {
+                throw new Failure(409,'BOX_POSITION_EXISTS','This body position already has a box.');
+            }
+            $id=$this->q("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status,box_module_id,display_row,display_column)
+                VALUES (?,?,?,?,?,?,'FROZEN',?,?,?) RETURNING id",[$locker,$code,...$sizes,$module,$row,$column])->fetchColumn();
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'LOCKER_BOX_DRAFT_CREATED','locker',?,?)",[$actor,$locker,$reason.' [box '.$id.']']);
         });
     }
@@ -463,11 +540,17 @@ final class SiteInventory
             if (!$this->q('SELECT 1 FROM locker_box_modules WHERE id=? AND locker_id=?',[$module,$locker])->fetchColumn()) {
                 throw new Failure(404,'MODULE_NOT_FOUND','Box module not found at this locker.');
             }
-            $row=$this->q('SELECT box_module_id FROM compartments WHERE id=? AND locker_id=? FOR UPDATE',[$box,$locker])->fetch(PDO::FETCH_ASSOC);
+            $row=$this->q('SELECT box_module_id,display_row,display_column FROM compartments WHERE id=? AND locker_id=? FOR UPDATE',[$box,$locker])->fetch(PDO::FETCH_ASSOC);
             if (!$row) { throw new Failure(404,'BOX_NOT_FOUND','Box not found at this locker.'); }
             if ($this->q('SELECT 1 FROM compartment_claims WHERE compartment_id=?',[$box])->fetchColumn()
                 || $this->q("SELECT 1 FROM locker_sessions WHERE compartment_id=? AND status IN ('READY','OPEN','CLOSED','UNKNOWN','CONFIRMED') LIMIT 1",[$box])->fetchColumn()) {
                 throw new Failure(409,'BOX_IN_USE','Reconcile the box before changing its inventory grouping.');
+            }
+            if ($row['display_row']!==null && $row['display_column']!==null && $this->q('SELECT 1 FROM compartments c
+                JOIN locker_box_modules m ON m.id=c.box_module_id
+                WHERE m.body_module_id=(SELECT body_module_id FROM locker_box_modules WHERE id=?)
+                AND c.id<>? AND c.display_row=? AND c.display_column=?',[$module,$box,$row['display_row'],$row['display_column']])->fetchColumn()) {
+                throw new Failure(409,'BOX_POSITION_EXISTS','This body position already has a box.');
             }
             $this->q('UPDATE compartments SET box_module_id=? WHERE id=?',[$module,$box]);
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason) VALUES (?,'LOCKER_BOX_GROUPED','locker',?,?)",[$actor,$locker,$reason.' [box '.$box.']']);

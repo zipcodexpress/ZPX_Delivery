@@ -45,10 +45,14 @@ try {
     $sites->addBoxModule($customerAdmin,$locker,['body_id'=>$body,'code'=>'BOX-MOD-A','position'=>'1',
         'reason'=>'Synthetic box module setup']);
     $module=(string)$sites->locker($customerAdmin,$locker)['modules'][0]['id'];
-    $sites->addDraftBox($customerAdmin,$locker,['code'=>'DRAFT-S','module_id'=>$module,'width_mm'=>'250',
+    $sites->addDraftBox($customerAdmin,$locker,['code'=>'DRAFT-S','module_id'=>$module,'row'=>'1','column'=>'1','width_mm'=>'250',
         'height_mm'=>'250','depth_mm'=>'350','max_weight_g'=>'3000','reason'=>'Synthetic draft box creation']);
-    check($sites->locker($customerAdmin,$locker)['boxes'][0]['status']==='FROZEN',
+    check($sites->locker($customerAdmin,$locker)['boxes'][0]['status']==='FROZEN'
+        && (int)$sites->locker($customerAdmin,$locker)['boxes'][0]['display_row']===1,
         'new draft box is frozen without controller mapping');
+    failsIdentity(fn()=>$sites->addDraftBox($customerAdmin,$locker,['code'=>'DRAFT-DUP','module_id'=>$module,
+        'row'=>'1','column'=>'1','width_mm'=>'250','height_mm'=>'250','depth_mm'=>'350','max_weight_g'=>'3000',
+        'reason'=>'Duplicate body position test']),409,'duplicate body position is rejected');
     $box=insertId($runtime,"INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status)
         VALUES (?,'TEST-BOX',300,300,400,5000,'INACTIVE')",[$locker]);
     $sites->assignBox($customerAdmin,$locker,['box_id'=>$box,'module_id'=>$module,'reason'=>'Synthetic box grouping setup']);
@@ -73,7 +77,7 @@ try {
     $shipping=new Zpx\Shipping\Service($runtime,$crypto);
     check(in_array($location,array_column($shipping->locations()['items'],'id'),true),'synthetic active location appears in shipping choices');
     failsIdentity(fn()=>$sites->addDraftBox($customerAdmin,$locker,['code'=>'UNSAFE-BOX','module_id'=>$module,
-        'width_mm'=>'250','height_mm'=>'250','depth_mm'=>'350','max_weight_g'=>'3000',
+        'row'=>'1','column'=>'2','width_mm'=>'250','height_mm'=>'250','depth_mm'=>'350','max_weight_g'=>'3000',
         'reason'=>'Active locker guard test']),409,'active locker refuses draft box provisioning');
     $sites->deactivateLocation($customerAdmin,$site,$location,'Synthetic location safety pause');
     check($sites->site($customerAdmin,$site)['locations'][0]['status']==='INACTIVE','admin deactivates location');
@@ -84,6 +88,52 @@ try {
     $sites->reactivateLocation($customerAdmin,$site,$location,'Synthetic location review cleared');
     check(in_array($location,array_column($shipping->locations()['items'],'id'),true),
         'previously active location can be reactivated with audit reason');
+    $shipment=insertId($runtime,"INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status,development_only)
+        VALUES (?,?,?, ?,?,'STANDARD','READY','PAID',true)",[$shippingOrg,$sender,'SYNTHETIC-LOCKER-OCCUPANCY-'.$locker,$location,$location]);
+    $package=insertId($runtime,"INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,state,custodian_type,custodian_ref,current_location_id)
+        VALUES (?,?,1,100,100,100,500,'AT_DESTINATION','LOCKER',?,?)",[$shipment,uuid(),$locker,$location]);
+    $view=$sites->locker($customerAdmin,$locker);
+    check($view['packages'][0]['phase']==='Waiting for final pickup'
+        && $view['packages'][0]['location_evidence']==='Locker custody; no box claim'
+        && $view['occupancy']['occupied']===0 && $view['unclaimed_custody']===1,
+        'unclaimed synthetic locker custody is shown but never counted as occupied');
+    failsIdentity(fn()=>$sites->locker($customerAdmin,$locker,'invalid'),422,'invalid locker package cursor is rejected');
+    $draftBox=(string)$view['boxes'][0]['id'];
+    $board=insertId($owner,"INSERT INTO controller_boards(locker_id,board_address,protocol_profile,display_sequence,serial_config)
+        VALUES (?,1,'SYNTHETIC_TEST',1,'{}')",[$locker]);
+    $owner->prepare("UPDATE compartments SET status='ACTIVE',controller_board_id=?,door_address=1 WHERE id=?")->execute([$board,$draftBox]);
+    $manifest=insertId($owner,"INSERT INTO ownership_manifests(locker_id,generation,manifest_hash,signature_reference,state,issued_by)
+        VALUES (?,1,decode(repeat('ab',32),'hex'),'synthetic-test','ACTIVE',?)",[$locker,$customerAdmin]);
+    $owner->prepare("INSERT INTO compartment_ownership(compartment_id,manifest_id,owner,generation,locker_id)
+        VALUES (?,?,'DELIVERY',1,?)")->execute([$draftBox,$manifest,$locker]);
+    check($sites->locker($customerAdmin,$locker)['occupancy']['available']===1,
+        'active delivery-owned unclaimed box is available');
+    $session=insertId($runtime,"INSERT INTO locker_sessions(package_id,compartment_id,action,status,expires_at,evidence_policy)
+        VALUES (?,?,'FINAL_DEPOSIT','READY',now()+interval '1 hour','SYNTHETIC_TEST')",[$package,$draftBox]);
+    $runtime->prepare("INSERT INTO compartment_claims(compartment_id,package_id,session_id,state,expires_at)
+        VALUES (?,?,?,'HELD',now()+interval '1 hour')")->execute([$draftBox,$package,$session]);
+    $reserved=$sites->locker($customerAdmin,$locker);
+    check($reserved['occupancy']['reserved']===1 && $reserved['unclaimed_custody']===0,
+        'held claim is reserved and removes unclaimed-custody alert');
+    $runtime->prepare("UPDATE compartment_claims SET state='OCCUPIED' WHERE compartment_id=?")->execute([$draftBox]);
+    $occupied=$sites->locker($customerAdmin,$locker);
+    check($occupied['occupancy']['occupied']===1 && $occupied['packages'][0]['box_code']==='DRAFT-S',
+        'occupied claim links the package to its box');
+    $runtime->prepare("UPDATE packages SET state='STAGED',custodian_type='HUB',custodian_ref='synthetic',current_location_id=NULL WHERE id=?")->execute([$package]);
+    $stale=$sites->locker($customerAdmin,$locker);
+    check($stale['occupancy']['review']===1 && $stale['packages'][0]['phase']==='Hub staging',
+        'claim conflicting with hub staging is flagged for review, not counted as occupied');
+    $lockerRequest=new think\Request();
+    $lockerRequest->withServer(['REQUEST_METHOD'=>'GET','REQUEST_URI'=>'/admin/lockers/'.$locker,
+        'PATH_INFO'=>'/admin/lockers/'.$locker,'HTTP_HOST'=>'localhost:8000']);
+    $lockerRequest->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $lockerApp=new think\App(dirname(__DIR__)); $lockerApp->debug(false);
+    $lockerResponse=$lockerApp->http->run($lockerRequest);
+    check($lockerResponse->getCode()===200 && str_contains($lockerResponse->getContent(),'Hub staging')
+        && str_contains($lockerResponse->getContent(),'Body / module')
+        && str_contains($lockerResponse->getContent(),'REVIEW'),
+        'locker HTML renders structure, linked package phase and occupancy review');
+    $lockerApp->http->end($lockerResponse);
     $before=count($people->addresses($customerAdmin,$sender));
     $address=['line1'=>'22 Test Street','line2'=>'Unit 4','city'=>'Austin','region'=>'TX','postal_code'=>'00000','country_code'=>'US'];
     $people->save($customerAdmin,$sender,['address_id'=>'','kind'=>'RETURN','label'=>'Office',
