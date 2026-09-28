@@ -1,0 +1,53 @@
+<?php
+declare(strict_types=1);
+use Zpx\Custody\PickupRouting;
+use Zpx\Identity\Secrets;
+
+$routing=new PickupRouting($runtime,$crypto);
+failsIdentity(fn()=>$routing->list($driverUser),403,'driver cannot manage origin routing');
+$runtime->exec("INSERT INTO roles(code) VALUES ('ADMIN') ON CONFLICT DO NOTHING");
+$adminRole=$runtime->query("SELECT id FROM roles WHERE code='ADMIN'")->fetchColumn();
+$runtime->exec("INSERT INTO scoped_role_grants(user_id,role_id,organization_id,granted_by) VALUES ($senderUser,$adminRole,$custodyOrg,$senderUser)");
+$hubLocationB=insertId($runtime,"INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($custodyOrg,'TEST-HUB-B','Second Hub','HUB','Synthetic second hub','DELIVERY_ONLY','ACTIVE','{}')");
+$hubB=insertId($runtime,"INSERT INTO hubs(location_id,status) VALUES ($hubLocationB,'ACTIVE')");
+$foreignOrg=insertId($runtime,"INSERT INTO organizations(name) VALUES ('Foreign pickup routing test')");
+$foreignHubLocation=insertId($runtime,"INSERT INTO locations(organization_id,code,name,kind,address_text,site_mode,status,access_policy) VALUES ($foreignOrg,'FOREIGN-PICKUP-HUB','Foreign Hub','HUB','Foreign hub','DELIVERY_ONLY','ACTIVE','{}')");
+$foreignHub=insertId($runtime,"INSERT INTO hubs(location_id,status) VALUES ($foreignHubLocation,'ACTIVE')");
+failsIdentity(fn()=>$routing->assign($senderUser,['origin_location_id'=>$originLocation,'hub_id'=>$foreignHub,'expected_version'=>0],Secrets::uuid()),404,'administrator cannot route origin to another organization hub');
+check($offers->refresh($otherDriverUser)['items']===[],'unmapped origin is withheld when multiple hubs are active');
+$routeKey=Secrets::uuid();
+$route=$routing->assign($senderUser,['origin_location_id'=>$originLocation,'hub_id'=>$hubB,'expected_version'=>0,'latitude'=>30.2672,'longitude'=>-97.7431],$routeKey);
+check($route['version']===1 && $routing->assign($senderUser,['origin_location_id'=>$originLocation,'hub_id'=>$hubB,'expected_version'=>0,'latitude'=>30.2672,'longitude'=>-97.7431],$routeKey)['version']===1,'administrator route assignment is idempotent');
+failsIdentity(fn()=>$routing->assign($senderUser,['origin_location_id'=>$originLocation,'hub_id'=>$hub,'expected_version'=>0],Secrets::uuid()),409,'stale route version rejected');
+$routeList=$routing->list($senderUser);
+$configured=array_values(array_filter($routeList['origins'],fn($o)=>$o['origin_location_id']===$originLocation))[0];
+check($configured['hub_id']===$hubB && abs($configured['latitude']-30.2672)<0.00001,'admin sees explicit hub and verified origin coordinates');
+failsIdentity(fn()=>$offers->availability($otherDriverUser,['status'=>'AVAILABLE','latitude'=>91,'longitude'=>0]),422,'invalid driver coordinates rejected');
+putenv('APP_ENV=production');
+try { failsIdentity(fn()=>$offers->refresh($otherDriverUser),409,'production pickup request requires fresh shared location'); }
+finally { putenv('APP_ENV=test'); }
+$farKey=Secrets::uuid();
+$offers->availability($otherDriverUser,['status'=>'AVAILABLE','latitude'=>32.7767,'longitude'=>-96.7970],$farKey);
+check($offers->refresh($otherDriverUser)['items']===[],'distant available driver receives no pickup offer');
+$offers->availability($otherDriverUser,['status'=>'AVAILABLE','latitude'=>30.2670,'longitude'=>-97.7430]);
+$offers->availability($otherDriverUser,['status'=>'AVAILABLE','latitude'=>32.7767,'longitude'=>-96.7970],$farKey);
+check((float)$runtime->query("SELECT latitude FROM driver_availability WHERE driver_id=$otherDriverId")->fetchColumn()===30.267,'availability retry cannot overwrite newer driver location');
+$nearKey=Secrets::uuid();
+$near=$offers->refresh($otherDriverUser,$nearKey)['items'];
+check($offers->refresh($otherDriverUser,$nearKey)['items'][0]['offer_id']===$near[0]['offer_id'],'pickup refresh retry preserves the same offer');
+check(count($near)===1 && $near[0]['hub']==='Second Hub','nearby driver receives origin offer for its configured hub');
+$acceptedB=$offers->accept($otherDriverUser,$near[0]['offer_id'],Secrets::uuid());
+check($runtime->query("SELECT hub_id FROM route_runs WHERE id={$acceptedB['run_id']}")->fetchColumn()===$hubB,'accepted nearby work freezes the configured second hub');
+check($runtime->query("SELECT hub_id FROM route_runs WHERE id={$accepted['run_id']}")->fetchColumn()===$hub,'previously assigned inbound run keeps its original hub');
+$newShipment=insertId($runtime,"INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status) VALUES ($custodyOrg,$senderUser,'OFFER-ROUTE-CHANGE',$originLocation,$destLocation1,'STANDARD','READY','PAID')");
+$newPackage=insertId($runtime,"INSERT INTO packages(shipment_id,package_uuid,sequence_no,width_mm,height_mm,depth_mm,weight_g,state,custodian_type,custodian_ref,current_location_id,version) VALUES ($newShipment,'".Secrets::uuid()."',1,100,100,100,500,'AT_ORIGIN','LOCKER','origin',$originLocation,1)");
+$runtime->exec("INSERT INTO pickup_demands(package_id,origin_location_id,status) VALUES ($newPackage,$originLocation,'OPEN')");
+$stale=$offers->refresh($otherDriverUser)['items'][0]['offer_id'];
+$routing->assign($senderUser,['origin_location_id'=>$originLocation,'hub_id'=>$hub,'expected_version'=>1],Secrets::uuid());
+failsIdentity(fn()=>$offers->accept($otherDriverUser,$stale,Secrets::uuid()),409,'route change fences an older unaccepted offer');
+$updated=$offers->refresh($otherDriverUser)['items'][0];
+check($updated['hub']==='Test Hub','fresh offer uses updated hub route');
+$offers->availability($otherDriverUser,['status'=>'OFFLINE']);
+check(in_array($runtime->query("SELECT latitude IS NULL AND location_updated_at IS NULL FROM driver_availability WHERE driver_id=$otherDriverId")->fetchColumn(),[true,'t','1'],true),'going offline clears shared location');
+failsIdentity(fn()=>$offers->accept($otherDriverUser,$updated['offer_id'],Secrets::uuid()),409,'offline driver cannot accept prior offer');
+echo "Pickup routing and proximity tests complete.\n";

@@ -76,8 +76,8 @@ final class DriverController
             $body = match ($action) {
                 'runs' => $custody->listRuns($user),
                 'pickup-offers' => $offers->list($user),
-                'pickup-refresh' => $offers->refresh($user),
-                'pickup-availability' => $offers->availability($user,$input),
+                'pickup-refresh' => $offers->refresh($user,$key),
+                'pickup-availability' => $offers->availability($user,$input,$key),
                 'pickup-accept' => $offers->accept($user,$runId,$key),
                 'run-detail' => $custody->getRun($user, $runId),
                 'acknowledge' => $custody->acknowledgeRun($user, $runId, $key),

@@ -282,11 +282,27 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
     if (busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      await api('/driver/pickup-availability', { status: 'AVAILABLE' }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      const position = await new Promise<GeolocationPosition | null>(resolve => {
+        if (!navigator.geolocation) { resolve(null); return; }
+        navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { enableHighAccuracy: false, maximumAge: 0, timeout: 3000 });
+      });
+      if (!position && import.meta.env.PROD) throw new Error('Allow location access to request nearby pickup offers.');
+      await api('/driver/pickup-availability', { status: 'AVAILABLE', ...(position ? { latitude: position.coords.latitude, longitude: position.coords.longitude } : {}) }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       const result = await api<{ items: PickupOffer[] }>('/driver/pickup-offers/refresh', {}, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
       setPickupOffers(result.items);
       setNotice(result.items.length ? 'Pickup offers are ready. Accept one before it expires.' : 'No origin pickups are ready right now.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not find pickups.'); }
+    finally { setBusy(false); }
+  }
+
+  async function goOffline() {
+    if (busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api('/driver/pickup-availability', { status: 'OFFLINE' }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      setPickupOffers([]);
+      setNotice('You are offline for new origin pickups. Your already assigned runs remain yours.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not change pickup availability.'); }
     finally { setBusy(false); }
   }
 
@@ -374,6 +390,7 @@ export function DriverWorkspace({ profile, onLogout }: { profile: components['sc
         <button type="button" disabled={loading || busy} onClick={() => void loadRuns()}>Refresh runs and offers</button>
         <h3>Origin pickups</h3>
         <button type="button" disabled={busy} onClick={() => void findPickups()}>I'm available · Find pickups</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => void goOffline()}>Go offline</button>
         {pickupOffers.length === 0 ? <p className="muted">No pickup offers. Use Find pickups during an assigned shift.</p> : <ul className="run-list">{pickupOffers.map(offer => <li key={offer.offer_id}>
           <strong>{offer.origin} → {offer.hub}</strong>
           <span className="run-meta">{offer.address} · {offer.package_count} parcels · expires {new Date(offer.expires_at).toLocaleTimeString()}</span>
