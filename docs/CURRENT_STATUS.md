@@ -4,7 +4,7 @@
 
 ## Current objective and baseline
 
-- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-recovery`, based on merged `origin/main` at `73aec6c` (PR #23 merged).
+- Date: 2026-09-27. Agent: Codex. Branch: `codex/pickup-recovery`, feature commit `645f8ca`, based on merged `origin/main` at `73aec6c` (PR #23 merged). Review: [PR #24](https://github.com/zipcodexpress/ZPX_Delivery/pull/24).
 - Objective: let operations release and reassign a missed, wholly uncollected pickup run while preserving recorded locker custody.
 - Local Git source is authoritative. Platform: PostgreSQL, ThinkPHP 8, React. Android is the intended locker terminal; old Windows terminal is reference only.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -31,8 +31,8 @@
 
 ## Exact continuation point
 
-1. Review the final diff, commit/push `codex/pickup-recovery`, and open a PR.
-2. Next development: partial-run missed pickup discrepancy resolution with explicit evidence, then enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
+1. Review and merge PR #24 after CI. The branch is validated locally; the two untracked human notes remain untouched.
+2. After merge: partial-run missed pickup discrepancy resolution with explicit evidence, then enrolled Android origin terminal and P5 final destination deposit, recipient notification/pickup grant and return/reconciliation.
 
 ## Critical rules
 
