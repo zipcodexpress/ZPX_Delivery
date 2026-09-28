@@ -20,6 +20,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customers with masked contacts and current shipping eligibility within the admin network. */
+        get: operations["admin_customers_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/customers/{user_id}/restrictions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply an audited SHIPPING-only restriction; existing parcel access remains available. */
+        post: operations["admin_customer_shipping_restrict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/customers/{user_id}/restrictions/{restriction_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke one current SHIPPING restriction with a reason; stale restriction IDs conflict. */
+        post: operations["admin_customer_shipping_restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/drivers/pending": {
         parameters: {
             query?: never;
@@ -31,6 +82,23 @@ export interface paths {
         get: operations["admin_drivers_pending"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/drivers/{driver_id}/transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend or reactivate a driver with a reason and version check. Suspension blocks new offers without removing assigned custody. */
+        post: operations["admin_driver_transition"];
         delete?: never;
         options?: never;
         head?: never;
@@ -664,7 +732,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List network drivers with status, engagement, active-run count, and version. */
+        get: operations["admin_drivers_list"];
         put?: never;
         /**
          * Operations admin creates approved driver profile.
@@ -2576,6 +2645,139 @@ export interface operations {
             };
         };
     };
+    admin_customers_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded customer page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            user_id: string;
+                            name: string;
+                            status: string;
+                            /** Format: date-time */
+                            created_at: string;
+                            shipping_restricted: boolean;
+                            restriction_id: string | null;
+                            masked_email: string | null;
+                            masked_phone: string | null;
+                            email_verified: boolean;
+                            phone_verified: boolean;
+                        }[];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_customer_shipping_restrict: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Restriction applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        user_id: string;
+                        restriction_id: string;
+                        shipping_restricted: boolean;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_customer_shipping_restore: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                user_id: string;
+                restriction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Restriction revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        user_id: string;
+                        restriction_id: string;
+                        shipping_restricted: boolean;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     admin_drivers_pending: {
         parameters: {
             query?: never;
@@ -2603,6 +2805,53 @@ export interface operations {
                             /** Format: date-time */
                             applied_at: string;
                         }[];
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_driver_transition: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                driver_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "SUSPEND" | "REACTIVATE";
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Driver status changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        driver_id: string;
+                        /** @enum {string} */
+                        status: "ACTIVE" | "SUSPENDED";
+                        version: number;
                     };
                 };
             };
@@ -3982,6 +4231,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Operation"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_drivers_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded driver page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            driver_id: string;
+                            user_id: string;
+                            name: string;
+                            status: string;
+                            engagement_type: string;
+                            /** Format: date-time */
+                            applied_at: string;
+                            version: number;
+                            active_run_count: number;
+                        }[];
+                        next_cursor: string | null;
+                    };
                 };
             };
             /** @description Structured error */

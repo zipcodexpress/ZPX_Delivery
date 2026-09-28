@@ -4,9 +4,9 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Branch: `codex/admin-foundation`, commit `f34eb71`, PR #31 open against `main` (based on `e5658f8`).
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-customer-driver`, based on `codex/admin-foundation` (`e4a8617`); PR #31 is open against `main`.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
-- This branch is the bounded ADM-01/ADM-02 foundation; the full ADM-03–ADM-18 backlog remains. No schema migration is needed for these two tasks. Add partner/site tables only in their owning tasks after verifying relationships.
+- PR #31 contains ADM-01/02. This branch implements the first ADM-03 customer/driver slice. Customer/driver detail and activity screens remain; ADM-04–ADM-18 remain. Add partner/site tables only in their owning tasks after verifying relationships.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
 ## Implemented on this branch
@@ -16,18 +16,21 @@
 - Browser session cookie changes from API-only path to root so `/admin` can share identity; legacy path is explicitly expired on sign-in/logout. Admin login has pre-login CSRF cookie, Origin check and existing identity rate limiting. Existing JSON login/logout behavior is retained.
 - `topthink/think-view` is locked in Composer. API Docker image includes sibling `apps/admin` while keeping one application/database.
 - No new database migration was needed for ADM-01/02. The local development database had four pending existing migrations, including `021_pickup_routing.sql`; the migration image was rebuilt and they were applied. PostgreSQL remains exposed only on `127.0.0.1:5432` for DBeaver.
+- ADM-03 first slice: migration 022 adds audited customer SHIPPING restrictions and driver optimistic version. Admin pages and JSON endpoints list scoped customers/drivers and apply reasoned restriction/revocation or suspension/reactivation. Shipping checks restrictions only for new shipments. Suspension cancels open offers and takes driver offline; assigned runs and parcel custody remain. Offer actions recheck active driver status under lock. Reactivation does not restore availability.
 
 ## Validation
 
 - `npm run check` passed (95 validated OpenAPI operations, TypeScript, 9 Node tests). `npm run build` passed both React apps. Composer validation, PHP syntax checks and template escaping/rendering passed.
 - Disposable `npm run test-db` passed, including network/location/no-admin scopes, anonymous redirect, denial, missing-CSRF refusal and preexisting driver/workflow regressions. No physical hardware was tested.
 - Live local admin sign-in with the synthetic seed account, all four page families, `/admin/access`, stylesheet and sign-out passed. Browser route assignment changed one synthetic origin to the seeded hub and displayed the result. Existing operations portal remained authenticated after root cookie migration.
+- ADM-03 `npm run check` passed (100 OpenAPI operations, TypeScript, 9 Node tests); `npm run build` passed both React apps; PHP syntax checks passed. Disposable `npm run test-db` passed with customer/driver scope, restriction, idempotency, stale version, suspended offers and active-run preservation.
+- Local development migration 022 applied. With the synthetic admin, `/admin/customers` rendered masked contacts and restriction/restore forms completed; `/admin/drivers` rendered statuses and active-run counts. PostgreSQL stayed available to DBeaver at `127.0.0.1:5432` and API/admin at `127.0.0.1:8000`.
 
 ## Next exact actions
 
-1. Review and merge PR #31. ADM-01/02 are a bounded foundation, not full admin production readiness.
-2. ADM-03 customer/driver administration can be developed on a separate follow-up branch while PR #31 is reviewed, then rebased or retargeted after merge. It needs scoped lists, restrictions and eligibility checks; existing role/service fences must stay intact.
-3. ADM-04 partner entities/grants and ADM-05 sites require guarded, additive PostgreSQL migrations, backfills and synthetic fixtures; do not fabricate legal partner ownership. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`.
+1. Review final diff, commit and create a stacked PR against `codex/admin-foundation` while PR #31 is open.
+2. Complete ADM-03 customer/driver detail and activity views in a later bounded increment, then ADM-04 partner entities/grants and ADM-05 sites with guarded additive migrations and synthetic fixtures; do not fabricate legal ownership.
+3. Continue ADM-06–ADM-18 according to `docs/admin/BACKLOG.md`, respecting physical/payout evidence gates.
 
 ## Delivery baseline and gates
 

@@ -50,7 +50,8 @@ final class PickupOffers
         }
         $driver=$this->driver($user);
         return (new Transaction($this->db))->run(function () use ($user,$driver,$input,$latitude,$longitude,$key) {
-            $this->q('SELECT id FROM drivers WHERE id=? FOR UPDATE',[$driver['id']]);
+            $currentDriver=$this->q('SELECT status FROM drivers WHERE id=? FOR UPDATE',[$driver['id']])->fetchColumn();
+            if ($currentDriver!=='ACTIVE') { throw new Failure(403,'DRIVER_UNAVAILABLE','An approved active driver is required.'); }
             $scope='pickup-availability:'.$this->org().':'.$user;
             $hash=$this->crypto->digest('pickup-availability',json_encode([$input['status'],$latitude,$longitude],JSON_THROW_ON_ERROR));
             if ($key!=='') {
@@ -98,7 +99,8 @@ final class PickupOffers
     public function refresh(string $user,string $key=''): array {
         $driver=$this->driver($user);
         return (new Transaction($this->db))->run(function () use ($driver,$user,$key) {
-            $this->q('SELECT id FROM drivers WHERE id=? FOR UPDATE',[$driver['id']]);
+            $currentDriver=$this->q('SELECT status FROM drivers WHERE id=? FOR UPDATE',[$driver['id']])->fetchColumn();
+            if ($currentDriver!=='ACTIVE') { throw new Failure(403,'DRIVER_UNAVAILABLE','An approved active driver is required.'); }
             $scope='pickup-refresh:'.$this->org().':'.$user;
             $hash=$this->crypto->digest('pickup-refresh','current');
             if ($key!=='') {
@@ -181,7 +183,8 @@ final class PickupOffers
                 if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was used for another offer.'); }
                 return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR);
             }
-            $this->q('SELECT id FROM drivers WHERE id=? FOR UPDATE',[$driver['id']]);
+            $currentDriver=$this->q('SELECT status FROM drivers WHERE id=? FOR UPDATE',[$driver['id']])->fetchColumn();
+            if ($currentDriver!=='ACTIVE') { throw new Failure(403,'DRIVER_UNAVAILABLE','An approved active driver is required.'); }
             $offer=$this->q("SELECT o.*,l.latitude,l.longitude FROM driver_offers o JOIN locations l ON l.id=o.origin_location_id
                 JOIN hubs h ON h.id=o.hub_id JOIN locations hl ON hl.id=h.location_id
                 WHERE o.id=? AND o.driver_id=? AND l.organization_id=? AND hl.organization_id=? FOR UPDATE OF o",
