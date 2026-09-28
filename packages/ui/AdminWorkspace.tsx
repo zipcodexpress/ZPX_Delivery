@@ -10,7 +10,8 @@ type PickupRoutes = {
   origins: { origin_location_id: string; code: string; name: string; status: string; hub_id: string | null; hub_name: string | null; latitude: number | null; longitude: number | null; version: number }[];
   hubs: { hub_id: string; code: string; name: string }[];
 };
-type RecoveryRun = { run_id: string; state: string; revision: number; driver: string; planned_end: string; package_count: number; can_release: boolean };
+type RecoveryParcel = { package_id: string; reference: string; si: string | null; state: string; can_release: boolean };
+type RecoveryRun = { run_id: string; state: string; revision: number; driver: string; planned_end: string; package_count: number; collected_count: number; released_count: number; can_release: boolean; parcels: RecoveryParcel[] };
 
 export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogout: () => void }) {
   const [page, setPage] = useState<'shipments' | 'drivers' | 'routes' | 'recovery'>('shipments');
@@ -20,6 +21,7 @@ export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogo
   const [routeEdits, setRouteEdits] = useState<Record<string, { hub_id: string; latitude: string; longitude: string }>>({});
   const [recoveryRuns, setRecoveryRuns] = useState<RecoveryRun[]>([]);
   const [recoveryReasons, setRecoveryReasons] = useState<Record<string, string>>({});
+  const [parcelRecovery, setParcelRecovery] = useState<Record<string, { reason: string; evidence_kind: string; evidence_reference: string }>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -58,6 +60,20 @@ export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogo
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to release pickup run.'); }
     finally { setBusy(false); }
   }
+  async function releaseParcel(run: RecoveryRun, parcel: RecoveryParcel) {
+    const edit = parcelRecovery[parcel.package_id];
+    if (!edit?.reason.trim() || !edit.evidence_reference.trim() || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api(`/admin/pickup-recovery/${run.run_id}/parcels/${parcel.package_id}/release`, {
+        reason: edit.reason.trim(), evidence_kind: edit.evidence_kind || 'SITE_INSPECTION',
+        evidence_reference: edit.evidence_reference.trim(), expected_revision: run.revision,
+      }, { 'Idempotency-Key': crypto.randomUUID(), 'X-CSRF-Token': profile.csrf_token || '' });
+      await loadRecovery();
+      setNotice(`${parcel.reference} released for a new pickup offer. Collected parcels remain with the original driver.`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to release parcel.'); }
+    finally { setBusy(false); }
+  }
   async function saveRoute(origin: PickupRoutes['origins'][number]) {
     const edit = routeEdits[origin.origin_location_id];
     if (!edit?.hub_id || busy) return;
@@ -89,12 +105,22 @@ export function AdminWorkspace({ profile, onLogout }: { profile: Profile; onLogo
     <nav className="hub-tabs" aria-label="Admin operations"><button aria-pressed={page === 'shipments'} onClick={() => setPage('shipments')}>Shipments</button><button aria-pressed={page === 'drivers'} onClick={() => setPage('drivers')}>Driver approvals</button><button aria-pressed={page === 'routes'} onClick={() => setPage('routes')}>Pickup routes</button><button aria-pressed={page === 'recovery'} onClick={() => setPage('recovery')}>Pickup recovery</button></nav>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     {page === 'shipments' ? <Shipping profile={profile} audience="operations" embedded onAccount={() => {}} onLogout={onLogout} /> : page === 'recovery' ? <section className="hub-page hub-card">
-      <h1>Pickup recovery</h1><p>Release a run only after confirming that no parcel was collected. The parcels stay recorded at the origin locker; a driver must request a new offer.</p>
+      <h1>Pickup recovery</h1><p>Release a wholly uncollected run, or verify an individual parcel still at its origin locker before removing it from a partly collected run. A driver must request a new offer.</p>
       <button type="button" disabled={busy} onClick={() => void loadRecovery().catch(e => setError(e instanceof Error ? e.message : 'Unable to load pickup runs.'))}>Refresh runs</button>
       {recoveryRuns.length === 0 ? <p>No active pickup runs.</p> : <ul>{recoveryRuns.map(run => <li key={run.run_id}>
-        <strong>Run {run.run_id}</strong> · {run.driver} · {run.state} · {run.package_count} parcel{run.package_count === 1 ? '' : 's'} · Due {new Date(run.planned_end).toLocaleString()}
+        <strong>Run {run.run_id}</strong> · {run.driver} · {run.state} · {run.collected_count} collected / {run.package_count - run.released_count} assigned · Due {new Date(run.planned_end).toLocaleString()}
         {run.can_release ? <><label>Reason for reassignment <input aria-label={`Run ${run.run_id} recovery reason`} value={recoveryReasons[run.run_id] || ''} maxLength={500} onChange={e => setRecoveryReasons(current => ({ ...current, [run.run_id]: e.target.value }))} /></label>
-          <button type="button" disabled={busy || (recoveryReasons[run.run_id]?.trim().length || 0) < 3} onClick={() => void releaseRun(run)}>Release for new offer</button></> : <p>Custody or assignment needs reconciliation before this run can be released.</p>}
+          <button type="button" disabled={busy || (recoveryReasons[run.run_id]?.trim().length || 0) < 3} onClick={() => void releaseRun(run)}>Release for new offer</button></> : run.parcels.length ? <ul>{run.parcels.map(parcel => {
+            const edit = parcelRecovery[parcel.package_id] || { reason: '', evidence_kind: 'SITE_INSPECTION', evidence_reference: '' };
+            const setEdit = (patch: Partial<typeof edit>) => setParcelRecovery(current => ({ ...current, [parcel.package_id]: { ...edit, ...patch } }));
+            return <li key={parcel.package_id}><strong>{parcel.reference}</strong> · {parcel.si || 'No SI'} · {parcel.state}
+              {parcel.can_release && <><p>Record a site inspection or locker inventory reference. This is an operator assertion, not device proof.</p>
+                <label>Reason <input aria-label={`${parcel.reference} recovery reason`} value={edit.reason} maxLength={500} onChange={e => setEdit({ reason: e.target.value })} /></label>
+                <label>Verification method <select aria-label={`${parcel.reference} verification method`} value={edit.evidence_kind} onChange={e => setEdit({ evidence_kind: e.target.value })}><option value="SITE_INSPECTION">Site inspection</option><option value="LOCKER_INVENTORY">Locker inventory</option></select></label>
+                <label>Evidence reference <input aria-label={`${parcel.reference} evidence reference`} value={edit.evidence_reference} maxLength={200} onChange={e => setEdit({ evidence_reference: e.target.value })} /></label>
+                <button type="button" disabled={busy || edit.reason.trim().length < 3 || edit.evidence_reference.trim().length < 3} onClick={() => void releaseParcel(run, parcel)}>Release this parcel</button></>}
+            </li>;
+          })}</ul> : <p>Custody or assignment needs reconciliation before this run can be released.</p>}
       </li>)}</ul>}
     </section> : page === 'routes' ? <section className="hub-page hub-card">
       <h1>Origin pickup routes</h1><p>Choose the hub that receives pickups from each origin. Confirm the locker coordinates before enabling nearby driver offers.</p>

@@ -97,7 +97,7 @@ final class Service
 
             // Verify run exists and is inbound to this hub
             $run = $this->q(
-                "SELECT id, kind, state, hub_id FROM route_runs WHERE id=? AND hub_id=? AND kind='INBOUND'",
+                "SELECT id, kind, state, hub_id FROM route_runs WHERE id=? AND hub_id=? AND kind='INBOUND' FOR UPDATE",
                 [$runId, $hubId]
             )->fetch(PDO::FETCH_ASSOC);
 
@@ -120,7 +120,7 @@ final class Service
 
             // Count expected packages from manifest
             $expectedCount = (int)$this->q(
-                "SELECT COUNT(*) FROM manifest_items WHERE run_id=?",
+                "SELECT COUNT(*) FROM manifest_items WHERE run_id=? AND state<>'RELEASED'",
                 [$runId]
             )->fetchColumn();
 
@@ -220,7 +220,7 @@ final class Service
 
             // A parcel must belong to this run, not merely be in inbound custody somewhere.
             $onManifest = $this->q(
-                "SELECT id FROM manifest_items WHERE run_id=? AND package_id=?",
+                "SELECT id FROM manifest_items WHERE run_id=? AND package_id=? AND state IN ('EXPECTED','LOADED')",
                 [$runId, $packageId]
             )->fetchColumn();
 
@@ -236,7 +236,7 @@ final class Service
                 );
                 return ['package_id' => $packageId, 'package_version' => (int)$label['package_version'], 'state' => $label['package_state'], 'result_code' => 'EXTRA_RECORDED', 'disposition' => 'EXTRA', 'exception_id' => $exceptionId,
                     'received_count' => (int)$this->q("SELECT COUNT(*) FROM receiving_items WHERE session_id=? AND disposition IN ('RECEIVED','DAMAGED')", [$sessionId])->fetchColumn(),
-                    'expected_count' => (int)$this->q("SELECT COUNT(*) FROM manifest_items WHERE run_id=?", [$runId])->fetchColumn()];
+                    'expected_count' => (int)$this->q("SELECT COUNT(*) FROM manifest_items WHERE run_id=? AND state<>'RELEASED'", [$runId])->fetchColumn()];
             }
 
             // Lock package and check state
@@ -324,7 +324,7 @@ final class Service
                 [$sessionId]
             )->fetchColumn();
             $expectedCount = (int)$this->q(
-                "SELECT COUNT(*) FROM manifest_items WHERE run_id=?",
+                "SELECT COUNT(*) FROM manifest_items WHERE run_id=? AND state<>'RELEASED'",
                 [$runId]
             )->fetchColumn();
 
@@ -367,7 +367,7 @@ final class Service
 
             $missing = $this->q(
                 "SELECT mi.package_id, r.driver_id FROM manifest_items mi JOIN route_runs r ON r.id=mi.run_id
-                 WHERE mi.run_id=? AND mi.state='EXPECTED' AND mi.package_id NOT IN (SELECT package_id FROM receiving_items WHERE session_id=?) FOR UPDATE OF mi",
+                 WHERE mi.run_id=? AND mi.state IN ('EXPECTED','LOADED') AND mi.package_id NOT IN (SELECT package_id FROM receiving_items WHERE session_id=?) FOR UPDATE OF mi",
                 [$runId, $sessionId]
             )->fetchAll(PDO::FETCH_ASSOC);
             foreach ($missing as $row) {
@@ -379,7 +379,7 @@ final class Service
             // Close session
             $this->q("UPDATE receiving_sessions SET status='CLOSED' WHERE id=?", [$sessionId]);
             $this->q("UPDATE route_runs SET state='COMPLETED' WHERE id=?", [$runId]);
-            $this->q("UPDATE route_run_stops SET state='COMPLETED' WHERE run_id=?", [$runId]);
+            $this->q("UPDATE route_run_stops SET state='COMPLETED' WHERE run_id=? AND state<>'CANCELLED'", [$runId]);
 
             // Count results
             $receivedCount = (int)$this->q(
@@ -387,7 +387,7 @@ final class Service
                 [$sessionId]
             )->fetchColumn();
             $expectedCount = (int)$this->q(
-                "SELECT COUNT(*) FROM manifest_items WHERE run_id=?",
+                "SELECT COUNT(*) FROM manifest_items WHERE run_id=? AND state<>'RELEASED'",
                 [$runId]
             )->fetchColumn();
             $shortCount = count($missing);
@@ -417,7 +417,7 @@ final class Service
         $hubId = $this->hubId($user);
         $rows = $this->q(
             "SELECT r.id AS run_id,rs.id AS session_id,rs.status,
-                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id) AS expected_count,
+                    (SELECT COUNT(*) FROM manifest_items mi WHERE mi.run_id=r.id AND mi.state<>'RELEASED') AS expected_count,
                     (SELECT COUNT(*) FROM receiving_items ri WHERE ri.session_id=rs.id AND ri.disposition IN ('RECEIVED','DAMAGED')) AS received_count
              FROM route_runs r LEFT JOIN receiving_sessions rs ON rs.inbound_run_id=r.id AND rs.hub_id=r.hub_id
              WHERE r.hub_id=? AND r.organization_id=? AND r.kind='INBOUND'
@@ -454,7 +454,7 @@ final class Service
             [$sessionId]
         )->fetchColumn();
         $expectedCount = (int)$this->q(
-            "SELECT COUNT(*) FROM manifest_items WHERE run_id=?",
+            "SELECT COUNT(*) FROM manifest_items WHERE run_id=? AND state<>'RELEASED'",
             [$session['inbound_run_id']]
         )->fetchColumn();
 
