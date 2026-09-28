@@ -4,7 +4,7 @@
 
 ## Objective and baseline
 
-- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-sites-inventory`, implementation commit `d644e91`, based on `codex/admin-partner-registry` (`7e33369`). PR #35 targets PR #34's branch; PRs #31–#34 remain stacked.
+- Date: 2026-09-28. Agent: Codex. Current branch: `codex/admin-sites-inventory`, latest implementation commit `9060270` (after `d644e91`), based on `codex/admin-partner-registry` (`7e33369`). PR #35 targets PR #34's branch; PRs #31–#34 remain stacked.
 - Implement the admin backlog in `docs/admin/BACKLOG.md`, using `zpxadmin-tp8` as a visual/structural reference. Richard explicitly requires the new site under `apps/admin`; it remains mounted by the existing ThinkPHP API and uses the same PostgreSQL and identity.
 - PR #31 contains ADM-01/02; PR #32 contains ADM-03 restriction/status controls; PR #33 contains ADM-03 read-only details; PR #34 contains the first ADM-04 partner registry/draft creation. This branch implements an ADM-05/06 and people-address partial slice. Search/filtering, support, fleet/commercial, delegated partner grants and resource relationships remain.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -33,7 +33,7 @@
 ## Next exact actions
 
 1. Migration 024 adds draft installation sites and backfills existing locations without changing IDs; body/box modules and address-book metadata. Admin pages create/edit draft sites, create inactive locker locations, inspect and group all boxes, add frozen draft boxes, edit site/location overdue draft amounts, deactivate/reactivate previously active locations, and edit customer names/multiple encrypted addresses. Browser verified synthetic site, location, body, module and frozen box creation on local dev. New site or hardware activation remains gated.
-2. Validation: disposable `npm run test-db` passed with new admin-site/inventory/address tests; `npm run check`, `npm run build`, PHP lint and `git diff --check` passed. Local migration 024 applied and admin API rebuilt; DBeaver PostgreSQL mapping remains `127.0.0.1:5432`. PR #35 is open; check CI and merge stacked PRs in order. Preserve the two untracked human notes.
+2. Validation: disposable `npm run test-db` passed after guarded reactivation with new admin-site/inventory/address tests; `npm run check`, `npm run build`, PHP lint and `git diff --check` passed. Local migration 024 applied and admin API rebuilt; DBeaver PostgreSQL mapping remains `127.0.0.1:5432`. PR #35 is open; CI checks and browser/local-stack jobs are running. Merge stacked PRs in order. Preserve the two untracked human notes.
 3. Remaining: active site/location commissioning and reactivation, versioned hardware catalog and real device mapping/evidence, contact/admin APIs, delegated partner grants, calendar/access policy and the broader ADM backlog. Overdue amounts are draft configuration only; no real charge is collected.
 
 ## Delivery baseline and gates
