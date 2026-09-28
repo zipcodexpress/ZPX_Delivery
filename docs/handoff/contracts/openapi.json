@@ -6095,19 +6095,12 @@
     "/devices/me/events": {
       "post": {
         "operationId": "delivery_36__devices_me_events",
-        "summary": "Terminal submits durable correlated device observation; replay-safe.",
-        "description": "Terminal submits durable correlated device observation; replay-safe.",
+        "summary": "Enrolled terminal submits immutable correlated telemetry without claiming custody transfer.",
+        "description": "Ed25519 signature covers POST, exact path, timestamp, nonce and SHA-256 of raw JSON body. Door open/close observations require a 64-character SHA-256 frame_hash. An event ID plus identical content replays as DUPLICATE; boot sequence reuse with different content fails.",
         "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 16,
-              "maxLength": 100
-            }
-          }
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
         "responses": {
           "200": {
@@ -9373,12 +9366,17 @@
           },
           "session_status": {
             "type": "string"
+          },
+          "custody_transferred": {
+            "type": "boolean",
+            "enum": [false]
           }
         },
         "required": [
           "event_id",
           "result",
-          "session_status"
+          "session_status",
+          "custody_transferred"
         ]
       },
       "ExceptionRequest": {
