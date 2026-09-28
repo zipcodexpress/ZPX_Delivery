@@ -41,7 +41,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List active offer-created inbound runs and whether all parcels still have recorded origin-locker custody. */
+        /** List active offer-created inbound runs and per-parcel pickup recovery eligibility. */
         get: operations["admin_pickup_recovery"];
         put?: never;
         post?: never;
@@ -62,6 +62,23 @@ export interface paths {
         put?: never;
         /** Cancel a wholly uncollected offer run and reopen its demands without changing package custody. */
         post: operations["admin_pickup_recovery_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/pickup-recovery/{run_id}/parcels/{package_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release one manually verified uncollected parcel from a partly collected run, preserving other parcels' custody. */
+        post: operations["admin_pickup_recovery_release_parcel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1648,6 +1665,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PickupRecoveryList: {
+            items: {
+                run_id: string;
+                state: string;
+                revision: number;
+                driver: string;
+                /** Format: date-time */
+                planned_end: string;
+                package_count: number;
+                collected_count: number;
+                released_count: number;
+                can_release: boolean;
+                parcels: {
+                    package_id: string;
+                    reference: string;
+                    si: string | null;
+                    state: string;
+                    can_release: boolean;
+                }[];
+            }[];
+        };
         PickupRouteList: {
             origins: {
                 origin_location_id: string;
@@ -2534,24 +2572,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Pickup runs */
+            /** @description Pickup runs and parcel release eligibility */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: {
-                            run_id: string;
-                            state: string;
-                            revision: number;
-                            driver: string;
-                            /** Format: date-time */
-                            planned_end: string;
-                            package_count: number;
-                            can_release: boolean;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["PickupRecoveryList"];
                 };
             };
             /** @description Structured error */
@@ -2596,6 +2623,56 @@ export interface operations {
                         state: string;
                         revision: number;
                         released_count: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    admin_pickup_recovery_release_parcel: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                run_id: string;
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    /** @enum {string} */
+                    evidence_kind: "SITE_INSPECTION" | "LOCKER_INVENTORY";
+                    evidence_reference: string;
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Parcel released without a custody transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        run_id: string;
+                        package_id: string;
+                        /** @enum {string} */
+                        state: "RELEASED";
+                        revision: number;
                     };
                 };
             };
