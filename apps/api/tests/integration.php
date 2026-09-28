@@ -174,6 +174,7 @@ require __DIR__ . '/pickup-routing.php';
 require __DIR__ . '/pickup-recovery.php';
 require __DIR__ . '/hub-receiving.php';
 require __DIR__ . '/hub-dispatch.php';
+require __DIR__ . '/final-deposit.php';
 require __DIR__ . '/driver-management.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 
