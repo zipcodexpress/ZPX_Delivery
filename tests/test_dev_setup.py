@@ -29,13 +29,15 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(dev.json.loads(path.read_text()), [{'code': '123456'}])
             self.assertNotIn('123456', str(output.call_args))
     def test_database_failure_cleans_only_unique_test_project(self):
-        with patch.object(dev.secrets, 'token_hex', return_value='test123'), patch.object(dev, 'compose', side_effect=[None, RuntimeError('test failed'), None]) as compose:
+        with patch.object(dev.secrets, 'token_hex', return_value='test123'), patch.object(dev, 'compose', side_effect=[None, None, RuntimeError('test failed'), None]) as compose, patch.dict(dev.os.environ, {'DB_HOST':'host.docker.internal'}):
             with self.assertRaisesRegex(RuntimeError, 'test failed'):
                 dev.test_db()
+            self.assertEqual(dev.os.environ['DB_HOST'], 'host.docker.internal')
         self.assertEqual(compose.call_args_list, [
             call('-p', 'zpx-delivery-tests-test123', 'build', 'migrate', 'db-tests'),
+            call('-p', 'zpx-delivery-tests-test123', 'up', '-d', '--wait', 'postgres'),
             call('-p', 'zpx-delivery-tests-test123', 'run', '--rm', 'db-tests'),
-            call('-p', 'zpx-delivery-tests-test123', 'down', '--volumes', '--remove-orphans'),
+            call('-p', 'zpx-delivery-tests-test123', '--profile', 'container-db', 'down', '--volumes', '--remove-orphans'),
         ])
     def test_smoke_retries_connection_closed_during_startup(self):
         response = MagicMock()

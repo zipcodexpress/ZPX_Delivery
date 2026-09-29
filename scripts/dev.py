@@ -44,6 +44,14 @@ def env_path():
     # Explicit development file wins; never auto-load production configuration.
     return ROOT / ('.env.dev' if (ROOT / '.env.dev').is_file() else '.env')
 
+def database_host():
+    if 'DB_HOST' in os.environ:
+        return os.environ['DB_HOST']
+    for line in env_path().read_text().splitlines():
+        if line.startswith('DB_HOST='):
+            return line.partition('=')[2].strip()
+    return 'postgres'
+
 def init_env():
     check_storage()
     path = env_path()
@@ -116,11 +124,17 @@ def smoke(timeout=180):
 def test_db():
     # Fresh, uniquely named test stack; never remove the developer's data volumes.
     project = 'zpx-delivery-tests-' + secrets.token_hex(6)
+    previous_host = os.environ.get('DB_HOST')
+    os.environ['DB_HOST'] = 'postgres'
     try:
         compose('-p', project, 'build', 'migrate', 'db-tests')
+        compose('-p', project, 'up', '-d', '--wait', 'postgres')
         compose('-p', project, 'run', '--rm', 'db-tests')
     finally:
-        compose('-p', project, 'down', '--volumes', '--remove-orphans')
+        try: compose('-p', project, '--profile', 'container-db', 'down', '--volumes', '--remove-orphans')
+        finally:
+            if previous_host is None: os.environ.pop('DB_HOST', None)
+            else: os.environ['DB_HOST'] = previous_host
 
 def test_browser():
     # An isolated seeded stack avoids consuming or resetting the developer's parcel workflow.
@@ -133,16 +147,17 @@ def test_browser():
     if len(set(ports)) != 4:
         raise RuntimeError('Could not reserve distinct browser-test ports; retry.')
     names = ('ZPX_API_PORT', 'ZPX_CUSTOMER_PORT', 'ZPX_OPERATIONS_PORT', 'ZPX_SIMULATOR_PORT')
-    previous = {name: os.environ.get(name) for name in (*names, 'ZPX_AUTH_ALLOWED_ORIGINS', 'ZPX_ORGANIZATION_ID', 'PAYMENT_PROVIDER')}
+    previous = {name: os.environ.get(name) for name in (*names, 'DB_HOST', 'ZPX_AUTH_ALLOWED_ORIGINS', 'ZPX_ORGANIZATION_ID', 'PAYMENT_PROVIDER')}
     try:
+        os.environ['DB_HOST'] = 'postgres'
         for name, port in zip(names, ports): os.environ[name] = str(port)
         os.environ['ZPX_ORGANIZATION_ID'] = '1'
         os.environ['PAYMENT_PROVIDER'] = 'LOCAL_TEST'
         os.environ['ZPX_AUTH_ALLOWED_ORIGINS'] = ','.join(f'http://{host}:{port}' for port in ports[1:3] for host in ('localhost', '127.0.0.1'))
         compose('-p', project, 'build')
-        compose('-p', project, 'up', '-d', 'postgres')
+        compose('-p', project, 'up', '-d', '--wait', 'postgres')
         compose('-p', project, 'run', '--rm', 'migrate')
-        compose('-p', project, 'up', '-d')
+        compose('-p', project, 'up', '-d', 'api', 'customer-web', 'operations-web', 'simulator')
         deadline = time.monotonic() + 180
         for port in (ports[1], ports[2]):
             while True:
@@ -173,10 +188,11 @@ def test_browser():
         env['ZPX_E2E_CUSTOMER_URL'] = f'http://127.0.0.1:{ports[1]}'
         subprocess.run(['npx', 'playwright', 'test', 'tests/browser/operations.spec.mjs'], cwd=ROOT, env=env, check=True)
     finally:
-        compose('-p', project, 'down', '--volumes', '--remove-orphans')
-        for name, value in previous.items():
-            if value is None: os.environ.pop(name, None)
-            else: os.environ[name] = value
+        try: compose('-p', project, '--profile', 'container-db', '--profile', 'mail', 'down', '--volumes', '--remove-orphans')
+        finally:
+            for name, value in previous.items():
+                if value is None: os.environ.pop(name, None)
+                else: os.environ[name] = value
 
 def inbox():
     result = compose('exec', '-T', 'api', 'php', 'bin/messages.php', capture=True)
@@ -204,10 +220,14 @@ def main():
     if args.command == 'doctor':
         print('Docker available. Named volumes use the active container engine disk storage, not automatically the repo SSD.'); return
     if args.command == 'up':
-        init_env(); compose('build'); compose('up', '-d', 'postgres'); compose('run', '--rm', 'migrate'); compose('up', '-d'); smoke(); return
+        init_env(); compose('build')
+        if database_host() == 'postgres': compose('up', '-d', '--wait', 'postgres')
+        compose('run', '--rm', 'migrate'); compose('up', '-d'); smoke(); return
     if args.command == 'test-browser': return test_browser()
     if not env_path().exists(): raise RuntimeError('Run python3 scripts/dev.py init first.')
-    if args.command == 'down': compose('down'); print('Stopped. Database and simulator volumes retained.')
+    if args.command == 'down':
+        compose(*(['--profile', 'container-db'] if database_host() == 'postgres' else []), 'down')
+        print('Stopped. Database and simulator volumes retained.')
     elif args.command == 'logs': compose('logs', '--tail', '100')
     elif args.command == 'config': compose('config', '--quiet')
     elif args.command == 'test-db': test_db()
