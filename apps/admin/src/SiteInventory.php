@@ -363,12 +363,14 @@ final class SiteInventory
             LEFT JOIN installation_sites s ON s.id=l.site_id WHERE k.id=? AND l.organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
         if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
         $boxes=$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,c.box_model_id,
+                bm.size_class,
                 m.code AS module_code,body.code AS body_code,
                 b.board_address,c.door_address,c.display_row,c.display_column,o.owner AS partition,
                 cc.state AS claim_state,cc.expires_at AS claim_expires_at,p.id AS package_id,p.state AS package_state,
                 p.custodian_type,p.custodian_ref,p.current_location_id,si.si,sh.id AS shipment_id,sh.public_reference,
                 sh.development_only,ls.status AS session_status
-                FROM compartments c LEFT JOIN locker_box_modules m ON m.id=c.box_module_id
+                FROM compartments c LEFT JOIN locker_box_models bm ON bm.id=c.box_model_id
+                LEFT JOIN locker_box_modules m ON m.id=c.box_module_id
                 LEFT JOIN locker_body_modules body ON body.id=m.body_module_id
                 LEFT JOIN controller_boards b ON b.id=c.controller_board_id
                 LEFT JOIN compartment_ownership o ON o.compartment_id=c.id
@@ -435,12 +437,17 @@ final class SiteInventory
                     ? 'Locker custody; no box claim' : 'Route association only');
         }
         unset($package);
+        $bodies=$this->q('SELECT body.id,body.code,body.display_sequence,body.status,body.body_model_id,
+                model.code AS model_code,model.version AS model_version,model.name AS model_name
+                FROM locker_body_modules body LEFT JOIN locker_body_models model ON model.id=body.body_model_id
+                WHERE body.locker_id=? ORDER BY body.display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC);
+        $nextBodyPosition=$bodies ? 1+max(array_map(static fn(array $body): int => (int)$body['display_sequence'],$bodies)) : 1;
         return ['locker'=>$locker,'occupancy'=>$occupancy,'unclaimed_custody'=>$unclaimedCustody,'packages'=>$packages,
             'next_package_cursor'=>$more?(string)end($packages)['id']:null,
             'devices'=>$this->q('SELECT id,external_device_id,status,created_at FROM locker_devices WHERE locker_id=? ORDER BY id',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boards'=>$this->q('SELECT id,board_address,protocol_profile,display_sequence FROM controller_boards WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'ownership'=>$this->q('SELECT generation,state,activated_at,created_at FROM ownership_manifests WHERE locker_id=? ORDER BY generation DESC LIMIT 10',[$id])->fetchAll(PDO::FETCH_ASSOC),
-            'bodies'=>$this->q('SELECT id,code,display_sequence,status,body_model_id FROM locker_body_modules WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
+            'bodies'=>$bodies,'next_body_position'=>$nextBodyPosition,
             'modules'=>$this->q('SELECT m.id,m.code,m.body_module_id,m.display_sequence,m.status FROM locker_box_modules m WHERE m.locker_id=? ORDER BY m.body_module_id,m.display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boxes'=>$boxes];
     }
