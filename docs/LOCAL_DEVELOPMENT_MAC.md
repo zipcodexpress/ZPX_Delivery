@@ -1,16 +1,17 @@
 # Local development on an M4 Mac and external SSD
 
 Purpose: run the first development increment locally.
-Audience: Richard and ZPX developers. Status: implemented setup; first physical M4/Docker run pending.
-Owner: unassigned. Last reviewed: 2026-09-18.
+Audience: Richard and ZPX developers. Status: local M4 setup verified.
+Owner: unassigned. Last reviewed: 2026-09-29.
 
-## Verified SSD setup (2026-09-19)
+## Verified SSD and host database setup (2026-09-29)
 
-The checkout is `/Volumes/Document/Workspace/projects/Development/ZPX_Delivery`,
-on branch `feature/P1.1-postgresql-foundation`. The Document volume is external,
-writable APFS. Colima is the local Docker engine; its existing storage is under
-`/Volumes/Document/Workspace/containers/colima`. Node 24.19.0 is installed through
-the existing SSD-based nvm installation. Existing files and credentials are preserved.
+The checkout is `/Volumes/Document/Workspace/projects/Development/ZPX_Delivery`.
+The Document volume is external, writable APFS. Colima runs the web/API containers;
+its storage is under `/Volumes/Document/Workspace/containers/colima`. PostgreSQL 17
+now runs as a Homebrew macOS service with data in `/opt/homebrew/var/postgresql@17`,
+independent of Colima. Existing credentials and the former Docker database volume
+are preserved.
 
 In a new terminal:
 
@@ -25,8 +26,24 @@ python3 scripts/dev.py up
 
 Use `python3 scripts/dev.py test-db` for PostgreSQL integration tests and
 `python3 scripts/dev.py smoke` for HTTP readiness. Stop this project's services
-with `python3 scripts/dev.py down`; this retains database volumes. PostgreSQL
-is internal to the Compose network, with no host database port.
+with `python3 scripts/dev.py down`; the host database keeps running. The local
+`.env.dev` sets `DB_HOST=host.docker.internal` so containers use the host database.
+The test commands explicitly start disposable Docker PostgreSQL instances and
+never run their destructive integration suite against the host database.
+
+For DBeaver, use PostgreSQL at `127.0.0.1:5432`, database `zpx_delivery_dev`,
+username `zpx_runtime`, and the existing `DB_PASSWORD` value in the private
+`.env.dev` file. The host service starts at macOS login; check or restart it with
+`brew services list` or `brew services start postgresql@17`. A localhost TCP
+login was verified with Colima stopped; the web/API containers still require Colima. PostgreSQL
+accepts authenticated TCP connections on localhost only. If this checkout is
+used on another machine, install PostgreSQL 17 and restore or initialize its
+database before setting `DB_HOST=host.docker.internal`.
+
+The 2026-09-28 cutover used a private custom-format backup and role export under
+`.local/postgres-backups/`. The original `zpx-delivery-dev_postgres_data` Docker
+volume is retained but is now stale; do not start the app against it or delete
+it until the host database's backup strategy is established.
 
 The setup runner resolves the actual filesystem mount before calling `diskutil`;
 passing the nested checkout directory directly fails on this Mac.

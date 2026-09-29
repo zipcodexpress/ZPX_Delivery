@@ -65,7 +65,7 @@ Current partial slice: draft site catalog/editing, additive backfill of existing
 
 Requirements: F05. Dependencies: ADM-04, ADM-05.
 
-Current partial slice: locker detail lists body/module/box placement, controller positions, claim-backed occupancy and linked package lifecycle. Admins can create manual frozen drafts at inactive locations. Network-scoped versioned box/body models and layout positions now support draft correction, immutable ready publication, and frozen structure instantiation at inactive lockers. Physical commissioning, owner/operator installation periods, transfers, and device control remain outstanding.
+Current partial slice: locker detail lists body/module/box placement, controller positions, claim-backed occupancy and linked package lifecycle. Admins can create manual frozen drafts at inactive locations. Network-scoped versioned box/body models and layout positions support explicit box size classes, draft correction, immutable ready publication, and atomic ordered body-set assembly with generated frozen boxes at site-bound inactive lockers. Physical commissioning, owner/operator installation periods, transfers, and device control remain outstanding.
 
 - Translate concepts from apartment `CabinetModelService`, `LockerService` and `ApartmentCabinetService` into delivery entities; do not copy their DB calls or status manipulation.
 - Add versioned model/layout and cabinet modules; instantiate physical compartments while preserving existing board/door uniqueness.

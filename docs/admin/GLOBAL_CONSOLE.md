@@ -157,6 +157,8 @@ PII rules: store only necessary business contacts; access/security instructions 
 | Compartment | Dimensions/code, Controller mapping, LEGACY/DELIVERY/FROZEN partition, Current claim/occupancy, Session/evidence, Fault/history |
 | Device | Enrollment/status, Last-seen freshness, Configuration version/acknowledgment, Events/commands, Credential rotation metadata, Work orders |
 
+Locker configuration follows the TP8 construction order: define versioned Small, Mid, Large and X-large box models with dimensions; place box models at row/column positions in a versioned body model; publish a ready body layout; then select ready body models in physical order for a locker bound to an installation site. The set creates its bodies and boxes atomically from those layouts. Generated boxes remain frozen until separately mapped, commissioned and approved; selecting a model never proves a door exists or changes package custody. Existing box models without an explicit class remain unclassified until a new version is defined.
+
 Operational state, commercial ownership and physical evidence remain separate. A compartment UI must not offer arbitrary editing of occupancy or package state. A read view can show last confirmed evidence and an unresolved session together. Device credentials display key ID/expiry/revocation only, never secret material. Command replays require an implemented recovery protocol and must not be exposed as a generic Retry button.
 
 The global compartment list allows the operator to answer 'where is capacity?', 'which door holds this package?' and 'which disabled compartments have unresolved parcels?' without opening every locker. Display location timezone, event timestamp and last synchronization to avoid implying that cached data is live.
