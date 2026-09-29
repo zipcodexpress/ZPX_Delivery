@@ -1,0 +1,113 @@
+{
+  "fixture_name": "synthetic-six-door-address-independence",
+  "synthetic": true,
+  "notice": "Configuration projection test only. Not a captured legacy HTTP response, real cabinet identity or commissioned controller profile.",
+  "units": "mm (explicitly chosen for synthetic data only; legacy production units remain unverified)",
+  "box_models": [
+    {
+      "key": "SMALL",
+      "size_cat": "small",
+      "width_mm": 300,
+      "height_mm": 150,
+      "depth_mm": 400,
+      "is_allocable": true
+    },
+    {
+      "key": "MEDIUM",
+      "size_cat": "middle",
+      "width_mm": 300,
+      "height_mm": 300,
+      "depth_mm": 400,
+      "is_allocable": true
+    }
+  ],
+  "body_model": {
+    "key": "THREE-SLOT",
+    "version": 1,
+    "slots": [
+      {
+        "slot_key": "S1",
+        "box_model_key": "SMALL",
+        "row": 1,
+        "column": 1,
+        "door_address": 4
+      },
+      {
+        "slot_key": "S2",
+        "box_model_key": "SMALL",
+        "row": 2,
+        "column": 1,
+        "door_address": 9
+      },
+      {
+        "slot_key": "S3",
+        "box_model_key": "MEDIUM",
+        "row": 3,
+        "column": 1,
+        "door_address": 17
+      }
+    ]
+  },
+  "cabinet_draft": {
+    "key": "SYNTHETIC-SET",
+    "bound_location": null,
+    "bodies": [
+      {
+        "key": "BODY-A",
+        "name": "Synthetic body A",
+        "body_model_key": "THREE-SLOT",
+        "sequence": "1",
+        "controller_address": 7
+      },
+      {
+        "key": "BODY-B",
+        "name": "Synthetic body B",
+        "body_model_key": "THREE-SLOT",
+        "sequence": "2",
+        "controller_address": 3
+      }
+    ]
+  },
+  "expected_address_projection": [
+    {
+      "body_key": "BODY-A",
+      "slot_key": "S1",
+      "lockAddr": 7,
+      "boxAddr": 4
+    },
+    {
+      "body_key": "BODY-A",
+      "slot_key": "S2",
+      "lockAddr": 7,
+      "boxAddr": 9
+    },
+    {
+      "body_key": "BODY-A",
+      "slot_key": "S3",
+      "lockAddr": 7,
+      "boxAddr": 17
+    },
+    {
+      "body_key": "BODY-B",
+      "slot_key": "S1",
+      "lockAddr": 3,
+      "boxAddr": 4
+    },
+    {
+      "body_key": "BODY-B",
+      "slot_key": "S2",
+      "lockAddr": 3,
+      "boxAddr": 9
+    },
+    {
+      "body_key": "BODY-B",
+      "slot_key": "S3",
+      "lockAddr": 3,
+      "boxAddr": 17
+    }
+  ],
+  "expected_box_count": 6,
+  "post_binding_gate": "INACTIVE location; FROZEN new compartments; no physical command",
+  "direction_note": "Intentionally omitted. Do not infer a deployed direction encoding from a synthetic fixture.",
+  "reorder_invariant": "Swapping display sequence does not change expected board/door address pairs or installed identities."
+}

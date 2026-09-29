@@ -1,0 +1,218 @@
+{
+  "review_date": "2026-09-29",
+  "review_type": "read-only GitHub source review; local checkout unavailable",
+  "unresolved_repository": [
+    "zipcodexpress/zpx-patform: requested URL returned 404",
+    "zipcodexpress/zpx-platform: alternate spelling also returned 404"
+  ],
+  "source_reference_notice": "Each sha below is a FILE BLOB SHA, not a branch HEAD or commit SHA. Files were read on the default branch; they do not establish the state of unpushed local work.",
+  "sources": [
+    {
+      "id": "S01",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "AGENTS.md",
+      "blob_sha": "67375c45596e8abe42158e44b869d4393485985f",
+      "coverage": "full",
+      "evidence": "Local-first development, source hierarchy, preservation of local work and status checkpoints.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S02",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "docs/CURRENT_STATUS.md",
+      "blob_sha": "591414f17104b0ef543d0fb64da29e14050b2c33",
+      "coverage": "full",
+      "evidence": "September 28 handoff: existing locker administration; physical verification outstanding. Prior test results are reported, not rerun.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S03",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "apps/admin/src/LockerModels.php",
+      "blob_sha": "099748ec79dde866c72ff7fb9203cfbb865458c3",
+      "coverage": "full",
+      "evidence": "Model fields, slot creation/publication, frozen instantiation, automatically generated box-module grouping.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S04",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "apps/admin/src/SiteInventory.php",
+      "blob_sha": "39e357b48f1736f6abe89f3b65c9e26fb59e56aa",
+      "coverage": "250-650; earlier excerpt partially truncated",
+      "evidence": "Site-first provisioning, hardware read projection, occupancy and manual inventory operations.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S05",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "apps/admin/routes.php",
+      "blob_sha": "666bb4038cec64ee7ad467f323ffb2edf8f02e06",
+      "coverage": "full",
+      "evidence": "Existing admin routes and action names.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S06",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "apps/admin/view/locker_models.html",
+      "blob_sha": "dd740080ec3b8cd36d8e0abbdb8429f22c25fb01",
+      "coverage": "full",
+      "evidence": "Current model/layout forms explicitly create inventory without controller addresses or ownership.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S07",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "apps/api/database/migrations/002_application_and_coexistence.sql",
+      "blob_sha": "8b16fa06e4a137be27a57c54d219e9cd69837a71",
+      "coverage": "1-180",
+      "evidence": "Existing controller boards, legacy links, device credentials, ownership manifests and acknowledgments.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S08",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "docs/decisions/0002-new-terminal-platform.md",
+      "blob_sha": "5358cdf0cedd7bc2d5a8a7f271dcb3dde7635dda",
+      "coverage": "full",
+      "evidence": "Old reference-only Windows decision conflicts with September 29 owner instruction; coexistence safeguards remain relevant.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S09",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "README.md",
+      "blob_sha": "c1de1ff140bc115dd8869ecd2ff68fb3a2480a0b",
+      "coverage": "1-135",
+      "evidence": "PostgreSQL 17, canonical migrations/contracts, commands and stale reference-only terminal statement.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S10",
+      "repository": "zipcodexpress/zpxadmin-php8x",
+      "path": "backend/controllers/CabinetbodyController.php",
+      "blob_sha": "6dbb9658ffa66163b281572143d15680a5033df2",
+      "coverage": "full",
+      "evidence": "Body creation transaction copies template row, column and address into installed boxes.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S11",
+      "repository": "zipcodexpress/zpxadmin-php8x",
+      "path": "backend/views/cabinetbody/_form.php",
+      "blob_sha": "c586e90818bd915df52bc679533882f43a7b757d",
+      "coverage": "full",
+      "evidence": "Cabinet ID, body name/model, sequence and controller address; model disabled when editing installed body.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S12",
+      "repository": "zipcodexpress/zpxadmin-php8x",
+      "path": "backend/views/cabinetbodybox/_form.php",
+      "blob_sha": "5ed71d43ea93b631fba5ce132f7e37709ac20f36",
+      "coverage": "full",
+      "evidence": "Body-model/box-model mapping, row, column and address fields.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S13",
+      "repository": "zipcodexpress/zpxadmin-php8x",
+      "path": "backend/controllers/ApartmentcabinetController.php",
+      "blob_sha": "c84424227476e5539d319ad3dd0b0ee800582653",
+      "coverage": "1-165",
+      "evidence": "Binding requires an existing cabinet and creation rejects a cabinet already bound elsewhere.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S14",
+      "repository": "zipcodexpress/zpxapi_tp8",
+      "path": "app/cabinet/controller/Base.php",
+      "blob_sha": "88c9fc3a22df3ce007143e5b1b90981836376873",
+      "coverage": "1-230 and 400-670",
+      "evidence": "Token guard, runtime availability, base getBoxConfig and preAuthForBox implementations.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S15",
+      "repository": "zipcodexpress/zpxapi_tp8",
+      "path": "app/common/model/CabinetBoxModelModel.php",
+      "blob_sha": "0047d724b0c278fbc7c08a7b6534b3a2620393b5",
+      "coverage": "full",
+      "evidence": "Legacy size/category/price/dimension/image/count serialization.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S16",
+      "repository": "zipcodexpress/zpxapi_tp8",
+      "path": "app/common/model/CabinetBoxModel.php",
+      "blob_sha": "f5ad55e70babb06a005409cc9e19fa026588f84b",
+      "coverage": "1-230",
+      "evidence": "Legacy allocation predicates, getBodyBox address join, 0/1 and 3/4 occupancy transitions.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S17",
+      "repository": "zipcodexpress/zpxapi_tp8",
+      "path": "app/cabinet/controller/Zippora.php",
+      "blob_sha": "dc9fa2a1919c38943c6738cb566e6a99edaa5b1e",
+      "coverage": "1-110 only",
+      "evidence": "Class extends Base and documents configuration endpoints; complete override inventory was NOT reviewed.",
+      "default_branch": "main"
+    },
+    {
+      "id": "S18",
+      "repository": "zipcodexpress/terminal_452",
+      "path": "Zippora/Service/ExpressBoxService.cs",
+      "blob_sha": "12d25f9ec258b595950e3077f6a32adc365eb08e",
+      "coverage": "1-210",
+      "evidence": "Form encoding, token acquisition, signature input versus kts request parameter.",
+      "default_branch": "master"
+    },
+    {
+      "id": "S19",
+      "repository": "zipcodexpress/terminal_452",
+      "path": "Zippora/Model/APIDataModel.cs",
+      "blob_sha": "156aafeb4575e2d38975d5349891189de844f282",
+      "coverage": "1-210",
+      "evidence": "Existing C# ret/msg/data envelopes and board/door/box ID types.",
+      "default_branch": "master"
+    },
+    {
+      "id": "S20",
+      "repository": "zipcodexpress/terminal_452",
+      "path": "Zippora/ControllerNew/ExpressBoxActionControllerFactory.cs",
+      "blob_sha": "71f208575041d4c9b401fd70faceb9ba118a045e",
+      "coverage": "full",
+      "evidence": "Existing v1/v2/test controller selection.",
+      "default_branch": "master"
+    },
+    {
+      "id": "S21",
+      "repository": "zipcodexpress/terminal_452",
+      "path": "Zippora/ControllerNew/ExpressBoxActionControllerV1.cs",
+      "blob_sha": "eea73b47a295c46725acd8c67984c47f50bc179f",
+      "coverage": "1-190",
+      "evidence": "Byte-addressed serial opening/status code; OpenLocker returns void, not physical evidence.",
+      "default_branch": "master"
+    },
+    {
+      "id": "S22",
+      "repository": "zipcodexpress/terminal_452",
+      "path": "Zippora/api_summary.md",
+      "blob_sha": "08ce70632064d6efa62f01a4779190d5aae6f280",
+      "coverage": "1-180",
+      "evidence": "Historical April 6 endpoint inventory; not current health verification. Sample credentials intentionally excluded.",
+      "default_branch": "master"
+    },
+    {
+      "id": "S23",
+      "repository": "zipcodexpress/ZPX_Delivery",
+      "path": "apps/admin/README.md",
+      "blob_sha": "2ea7206669b0fc99cafb4df8820e64a5eeedbdb6",
+      "coverage": "full",
+      "evidence": "ThinkPHP presentation, shared PostgreSQL/identity and network-admin access.",
+      "default_branch": "main"
+    }
+  ]
+}
