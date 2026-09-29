@@ -52,7 +52,7 @@ final class LockerModels
         return [
             'bodies'=>$bodies,
             'draft_bodies'=>array_values(array_filter($bodies,static fn(array $row): bool => $row['status']==='DRAFT')),
-            'boxes'=>$this->q('SELECT id,code,version,name,width_mm,height_mm,depth_mm,max_weight_g
+            'boxes'=>$this->q('SELECT id,code,version,name,size_class,width_mm,height_mm,depth_mm,max_weight_g
                 FROM locker_box_models WHERE organization_id=? ORDER BY id DESC LIMIT 100',[$this->org()])->fetchAll(PDO::FETCH_ASSOC),
             'slots'=>$this->q('SELECT s.id,s.body_model_id,b.status AS body_status,s.display_row,s.display_column,
                 x.code AS box_code,x.version AS box_version,x.name AS box_name
@@ -65,25 +65,31 @@ final class LockerModels
     public function readyBodies(string $actor): array
     {
         $this->authorize($actor);
-        return $this->q("SELECT id,code,version,name FROM locker_body_models WHERE organization_id=? AND status='READY'
+        return $this->q("SELECT id,code,version,name,
+            (SELECT count(*) FROM locker_body_model_slots s WHERE s.body_model_id=locker_body_models.id) AS slot_count
+            FROM locker_body_models WHERE organization_id=? AND status='READY'
             ORDER BY code,version DESC LIMIT 100",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function addBoxModel(string $actor,array $input): void
     {
         $this->authorize($actor);
-        Input::fields($input,['code','version','name','width_mm','height_mm','depth_mm','max_weight_g','reason']);
+        Input::fields($input,['code','version','name','size_class','width_mm','height_mm','depth_mm','max_weight_g','reason']);
         $code=self::code($input['code']); $version=self::number($input['version'],10000);
         $name=trim(Input::text($input['name'],1,120)); $reason=self::reason($input['reason']);
+        $size=Input::text($input['size_class'],1,16);
+        if (!in_array($size,['SMALL','MEDIUM','LARGE','XLARGE'],true)) {
+            throw new Failure(422,'INVALID_SIZE_CLASS','Choose Small, Mid, Large or X-large.');
+        }
         $measure=[];
         foreach (['width_mm','height_mm','depth_mm','max_weight_g'] as $field) { $measure[]=self::number($input[$field],100000); }
-        (new Transaction($this->db))->run(function() use($actor,$code,$version,$name,$measure,$reason) {
+        (new Transaction($this->db))->run(function() use($actor,$code,$version,$name,$size,$measure,$reason) {
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))',['box-model:'.$this->org().':'.$code.':'.$version]);
             if ($this->q('SELECT 1 FROM locker_box_models WHERE organization_id=? AND code=? AND version=?',[$this->org(),$code,$version])->fetchColumn()) {
                 throw new Failure(409,'MODEL_EXISTS','Box model version already exists.');
             }
-            $id=(string)$this->q('INSERT INTO locker_box_models(organization_id,code,version,name,width_mm,height_mm,depth_mm,max_weight_g)
-                VALUES (?,?,?,?,?,?,?,?) RETURNING id',[$this->org(),$code,$version,$name,...$measure])->fetchColumn();
+            $id=(string)$this->q('INSERT INTO locker_box_models(organization_id,code,version,name,size_class,width_mm,height_mm,depth_mm,max_weight_g)
+                VALUES (?,?,?,?,?,?,?,?,?) RETURNING id',[$this->org(),$code,$version,$name,$size,...$measure])->fetchColumn();
             $this->audit($actor,'LOCKER_BOX_MODEL_CREATED','locker_box_model',$id,$reason);
         });
     }
@@ -170,41 +176,76 @@ final class LockerModels
         $position=self::number($input['position'],1000);
         $reason=self::reason($input['reason']);
         (new Transaction($this->db))->run(function() use($actor,$lockerId,$modelId,$bodyCode,$position,$reason) {
-            $locker=$this->q('SELECT l.status FROM lockers k JOIN locations l ON l.id=k.location_id
-                WHERE k.id=? AND l.organization_id=? FOR UPDATE OF k',[$lockerId,$this->org()])->fetch(PDO::FETCH_ASSOC);
-            if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
-            if ($locker['status']!=='INACTIVE') { throw new Failure(409,'LOCKER_LOCATION_ACTIVE','Only an inactive locker location accepts a model draft.'); }
-            $model=$this->q('SELECT status FROM locker_body_models WHERE id=? AND organization_id=? FOR SHARE',[$modelId,$this->org()])->fetch(PDO::FETCH_ASSOC);
-            if (!$model) { throw new Failure(404,'MODEL_NOT_FOUND','Body model not found in this network.'); }
-            if ($model['status']!=='READY') { throw new Failure(409,'MODEL_NOT_READY','Finish the body layout before using it.'); }
-            $slots=$this->q('SELECT s.display_row,s.display_column,s.box_model_id,x.width_mm,x.height_mm,x.depth_mm,x.max_weight_g
-                FROM locker_body_model_slots s JOIN locker_box_models x ON x.id=s.box_model_id
-                WHERE s.body_model_id=? AND s.organization_id=? ORDER BY s.display_row,s.display_column',[$modelId,$this->org()])->fetchAll(PDO::FETCH_ASSOC);
-            if (!$slots) { throw new Failure(409,'MODEL_EMPTY','Body model has no box positions.'); }
-            if ($this->q('SELECT 1 FROM locker_body_modules WHERE locker_id=? AND (code=? OR display_sequence=?)',[$lockerId,$bodyCode,$position])->fetchColumn()) {
-                throw new Failure(409,'BODY_EXISTS','Body code or position already exists at this locker.');
-            }
-            $moduleCode=$bodyCode.'-BOX';
-            if ($this->q('SELECT 1 FROM locker_box_modules WHERE locker_id=? AND code=?',[$lockerId,$moduleCode])->fetchColumn()) {
-                throw new Failure(409,'MODULE_EXISTS','Generated box module code already exists.');
-            }
-            foreach ($slots as $slot) {
-                $boxCode=$bodyCode.'-'.$slot['display_row'].'-'.$slot['display_column'];
-                if ($this->q('SELECT 1 FROM compartments WHERE locker_id=? AND code=?',[$lockerId,$boxCode])->fetchColumn()) {
-                    throw new Failure(409,'BOX_CODE_EXISTS','Generated box code already exists.');
-                }
-            }
-            $body=(string)$this->q('INSERT INTO locker_body_modules(locker_id,code,display_sequence,body_model_id)
-                VALUES (?,?,?,?) RETURNING id',[$lockerId,$bodyCode,$position,$modelId])->fetchColumn();
-            $module=(string)$this->q('INSERT INTO locker_box_modules(locker_id,body_module_id,code,display_sequence)
-                VALUES (?,?,?,1) RETURNING id',[$lockerId,$body,$moduleCode])->fetchColumn();
-            foreach ($slots as $slot) {
-                $this->q("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status,box_module_id,
-                    box_model_id,display_row,display_column) VALUES (?,?,?,?,?,?,'FROZEN',?,?,?,?)",
-                    [$lockerId,$bodyCode.'-'.$slot['display_row'].'-'.$slot['display_column'],$slot['width_mm'],$slot['height_mm'],
-                        $slot['depth_mm'],$slot['max_weight_g'],$module,$slot['box_model_id'],$slot['display_row'],$slot['display_column']]);
-            }
-            $this->audit($actor,'LOCKER_BODY_MODEL_INSTANTIATED','locker',$lockerId,$reason.' [body '.$body.', model '.$modelId.']');
+            $this->requireInactiveLocker($lockerId);
+            $this->insertBody($actor,$lockerId,$modelId,$bodyCode,$position,$reason);
         });
+    }
+
+    /** Append selected ready body models in form order; all generated boxes commit together. */
+    public function assemble(string $actor,string $lockerId,array $input): void
+    {
+        $this->authorize($actor); $lockerId=self::id($lockerId);
+        Input::fields($input,['body_model_ids','expected_position','reason']);
+        $ids=$input['body_model_ids'];
+        if (!is_array($ids) || count($ids)>20) { throw new Failure(422,'INVALID_MODELS','Choose up to 20 body models.'); }
+        $ids=array_values(array_filter($ids,static fn(mixed $id): bool => $id!=='' && $id!==null));
+        if (!$ids) { throw new Failure(422,'INVALID_MODELS','Choose at least one body model.'); }
+        $ids=array_map(self::id(...),$ids);
+        $expected=self::number($input['expected_position'],1000);
+        $reason=self::reason($input['reason']);
+        (new Transaction($this->db))->run(function() use($actor,$lockerId,$ids,$expected,$reason) {
+            $this->requireInactiveLocker($lockerId,true);
+            $position=1+(int)$this->q('SELECT COALESCE(max(display_sequence),0) FROM locker_body_modules WHERE locker_id=?',[$lockerId])->fetchColumn();
+            if ($position!==$expected) { throw new Failure(409,'STRUCTURE_CHANGED','Locker structure changed; reload before assembling.'); }
+            foreach ($ids as $modelId) {
+                if ($position>1000) { throw new Failure(409,'LOCKER_FULL','Body position limit reached.'); }
+                $this->insertBody($actor,$lockerId,$modelId,'BODY-'.$position,$position,$reason);
+                $position++;
+            }
+        });
+    }
+
+    private function requireInactiveLocker(string $lockerId,bool $requireSite=false): void
+    {
+        $locker=$this->q('SELECT l.status,l.site_id FROM lockers k JOIN locations l ON l.id=k.location_id
+            WHERE k.id=? AND l.organization_id=? FOR UPDATE OF k',[$lockerId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
+        if ($locker['status']!=='INACTIVE') { throw new Failure(409,'LOCKER_LOCATION_ACTIVE','Only an inactive locker location accepts a model draft.'); }
+        if ($requireSite && $locker['site_id']===null) { throw new Failure(409,'SITE_REQUIRED','Bind the locker location to an installation site first.'); }
+    }
+
+    private function insertBody(string $actor,string $lockerId,string $modelId,string $bodyCode,int $position,string $reason): void
+    {
+        $model=$this->q('SELECT status FROM locker_body_models WHERE id=? AND organization_id=? FOR SHARE',[$modelId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$model) { throw new Failure(404,'MODEL_NOT_FOUND','Body model not found in this network.'); }
+        if ($model['status']!=='READY') { throw new Failure(409,'MODEL_NOT_READY','Finish the body layout before using it.'); }
+        $slots=$this->q('SELECT s.display_row,s.display_column,s.box_model_id,x.width_mm,x.height_mm,x.depth_mm,x.max_weight_g
+            FROM locker_body_model_slots s JOIN locker_box_models x ON x.id=s.box_model_id
+            WHERE s.body_model_id=? AND s.organization_id=? ORDER BY s.display_row,s.display_column',[$modelId,$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        if (!$slots) { throw new Failure(409,'MODEL_EMPTY','Body model has no box positions.'); }
+        if ($this->q('SELECT 1 FROM locker_body_modules WHERE locker_id=? AND (code=? OR display_sequence=?)',[$lockerId,$bodyCode,$position])->fetchColumn()) {
+            throw new Failure(409,'BODY_EXISTS','Body code or position already exists at this locker.');
+        }
+        $moduleCode=$bodyCode.'-BOX';
+        if ($this->q('SELECT 1 FROM locker_box_modules WHERE locker_id=? AND code=?',[$lockerId,$moduleCode])->fetchColumn()) {
+            throw new Failure(409,'MODULE_EXISTS','Generated box module code already exists.');
+        }
+        foreach ($slots as $slot) {
+            $boxCode=$bodyCode.'-'.$slot['display_row'].'-'.$slot['display_column'];
+            if ($this->q('SELECT 1 FROM compartments WHERE locker_id=? AND code=?',[$lockerId,$boxCode])->fetchColumn()) {
+                throw new Failure(409,'BOX_CODE_EXISTS','Generated box code already exists.');
+            }
+        }
+        $body=(string)$this->q('INSERT INTO locker_body_modules(locker_id,code,display_sequence,body_model_id)
+            VALUES (?,?,?,?) RETURNING id',[$lockerId,$bodyCode,$position,$modelId])->fetchColumn();
+        $module=(string)$this->q('INSERT INTO locker_box_modules(locker_id,body_module_id,code,display_sequence)
+            VALUES (?,?,?,1) RETURNING id',[$lockerId,$body,$moduleCode])->fetchColumn();
+        foreach ($slots as $slot) {
+            $this->q("INSERT INTO compartments(locker_id,code,width_mm,height_mm,depth_mm,max_weight_g,status,box_module_id,
+                box_model_id,display_row,display_column) VALUES (?,?,?,?,?,?,'FROZEN',?,?,?,?)",
+                [$lockerId,$bodyCode.'-'.$slot['display_row'].'-'.$slot['display_column'],$slot['width_mm'],$slot['height_mm'],
+                    $slot['depth_mm'],$slot['max_weight_g'],$module,$slot['box_model_id'],$slot['display_row'],$slot['display_column']]);
+        }
+        $this->audit($actor,'LOCKER_BODY_MODEL_INSTANTIATED','locker',$lockerId,$reason.' [body '.$body.', model '.$modelId.']');
     }
 }
