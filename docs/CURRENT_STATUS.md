@@ -5,9 +5,9 @@
 ## Objective and baseline
 
 - Date: 2026-09-28. Agent: Codex. Branch: `codex/admin-console-locker-assembly`, based on `cfbe29c`. Local Git is the source of truth.
-- Current objective: align implemented navigation with `docs/admin/GLOBAL_CONSOLE.md` and implement TP8-style box size models → body layouts → ordered locker assembly. Implementation complete on this branch; PR review is next.
+- Current objective: align implemented navigation with `docs/admin/GLOBAL_CONSOLE.md` and implement TP8-style box size models → body layouts → ordered locker assembly. Implementation is in PR #40 for review.
 - Continue the admin backlog in `docs/admin/BACKLOG.md` using `zpxadmin-tp8` as the UI reference. The admin site lives in `apps/admin`, mounted by the ThinkPHP API with the same PostgreSQL database and identity.
-- PR #26 and the admin stack #31–#38 are merged into `main`. The admin PRs were retargeted and merged in dependency order after CI passed. No GitHub PR remains open as of this checkpoint.
+- PR #26 and the admin stack #31–#38 are merged into `main`. PR #40 contains this branch and awaits review/CI.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
 
 ## Implemented baseline
@@ -28,7 +28,7 @@
 
 ## Exact continuation point
 
-1. Review and merge this branch after CI. Then start from updated `main` and read `docs/admin/GLOBAL_CONSOLE.md` and `docs/admin/BACKLOG.md`; the global menu catalog is broader than the implemented routes. Next bounded slice: safe draft edit/deactivate controls, hardware commissioning and telemetry reconciliation without allowing admin occupancy edits to bypass custody.
+1. Review and merge PR #40 after CI. Then start from updated `main` and read `docs/admin/GLOBAL_CONSOLE.md` and `docs/admin/BACKLOG.md`; the global menu catalog is broader than the implemented routes. Next bounded slice: safe draft edit/deactivate controls, hardware commissioning and telemetry reconciliation without allowing admin occupancy edits to bypass custody.
 2. Remaining admin work includes cross-entity search, shared contact directory and coverage, contract documents/effective periods, locker owner/operator relationships, commercial terms, finance reconciliation and payouts, delegated partner grants, and calendar/access policy. Overdue amounts remain draft configuration.
 3. Physical locker commissioning, authenticated door evidence, recipient pickup and payout activation require their own verification gates. Do not treat synthetic outcomes as physical evidence.
 
