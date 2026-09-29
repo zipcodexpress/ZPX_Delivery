@@ -2,6 +2,7 @@ name: zpx-delivery-dev
 services:
   postgres:
     image: postgres:17-bookworm
+    profiles: [container-db]
     environment:
       POSTGRES_DB: zpx_delivery_dev
       POSTGRES_USER: postgres
@@ -23,17 +24,15 @@ services:
       dockerfile: apps/api/Dockerfile
     command: ["php", "bin/migrate.php", "up"]
     environment:
-      DB_HOST: postgres
+      DB_HOST: ${DB_HOST:-postgres}
       DB_USER: zpx_migrator
       DB_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
-    depends_on:
-      postgres: {condition: service_healthy}
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DB_HOST: postgres
+      DB_HOST: ${DB_HOST:-postgres}
       DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
       APP_ENV: development
@@ -61,7 +60,7 @@ services:
       dockerfile: apps/api/Dockerfile
     command: ["php", "bin/mail-worker.php"]
     environment:
-      DB_HOST: postgres
+      DB_HOST: ${DB_HOST:-postgres}
       DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
       APP_ENV: development
@@ -89,7 +88,7 @@ services:
       dockerfile: apps/api/Dockerfile
     command: ["sh", "-c", "php tests/http.php && php tests/integration.php"]
     environment:
-      DB_HOST: postgres
+      DB_HOST: ${DB_HOST:-postgres}
       DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
       TEST_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?Run init}
@@ -105,7 +104,7 @@ services:
       dockerfile: apps/api/Dockerfile
     command: ["php", "bin/seed.php"]
     environment:
-      DB_HOST: postgres
+      DB_HOST: ${DB_HOST:-postgres}
       DB_USER: zpx_runtime
       DB_PASSWORD: ${DB_PASSWORD:?Run init}
       APP_ENV: development
