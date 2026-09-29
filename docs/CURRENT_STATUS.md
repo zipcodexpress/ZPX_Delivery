@@ -5,7 +5,7 @@
 ## Objective and baseline
 
 - Date: 2026-09-29. Agent: Codex. Branch: `codex/host-postgres`, based on PR #40 branch. Local Git is the source of truth.
-- Current objective: move the local development PostgreSQL database from Docker-only storage to a host-managed PostgreSQL 17 service, preserving data and allowing DBeaver access without Docker.
+- Current objective: move the local development PostgreSQL database from Docker-only storage to a host-managed PostgreSQL 17 service, preserving data and allowing DBeaver access without Docker. Implementation is in stacked PR #41, based on PR #40.
 - Continue the admin backlog in `docs/admin/BACKLOG.md` using `zpxadmin-tp8` as the UI reference. The admin site lives in `apps/admin`, mounted by the ThinkPHP API with the same PostgreSQL database and identity.
 - PR #26 and the admin stack #31–#38 are merged into `main`. PR #40 contains this branch; `checks`, `local-stack` and `browser` GitHub jobs passed. It awaits review/merge.
 - Preserve the untracked human notes `docs/PACKAGE_TRACKING_CUSTODY_PLAN.md` and `docs/ZPX_DELIVERY_NEXT_DEVELOPMENT_HANDOFF_09_22.md`; do not stage them.
@@ -28,10 +28,11 @@
 - This branch passed `npm run check`, `npm run build`, PHP lint and disposable `npm run test-db` with size validation, ordered generation, atomic rollback, stale submission, site/active guards, form route and HTML rendering. The local dev server was rebuilt and migration 029 applied; the `/admin/lockers/21` UI and grouped sidebar were visually checked. No physical locker was used.
 - PR #40 passed both GitHub runs of `checks`, `local-stack` and `browser` after the implementation and handoff commits.
 - Host DB cutover: host TCP runtime login, container-to-host login, migration no-op, full local smoke, and localhost login with Colima stopped passed. The disposable `npm run test-db` suite and 5 browser tests passed. Initial test-db startup raced PostgreSQL health; the wait was fixed and the failed disposable stack removed. Browser cleanup was verified after narrowing test services. Host data was never used by tests.
+- PR #41's first `checks` run failed only because `tests/test_dev_setup.py` still expected the old Compose call sequence. The assertion now covers the readiness wait, profile-aware cleanup and restoration of `DB_HOST`; all 10 local Python unit tests pass. GitHub rerun is pending.
 
 ## Exact continuation point
 
-1. Review and publish the host DB configuration branch as a separate PR based on PR #40 (retarget to `main` once #40 merges). Check CI. Keep the old Docker volume until a routine host backup policy is in place. DBeaver itself has not been tested; the equivalent TCP login succeeded from macOS while Colima was stopped.
+1. Verify PR #41 CI, then review/merge it after PR #40. Retarget #41 to `main` once #40 merges. Keep the old Docker volume until a routine host backup policy is in place. DBeaver itself has not been tested; the equivalent TCP login succeeded from macOS while Colima was stopped.
 2. Review and merge PR #40. Then start from updated `main` and read `docs/admin/GLOBAL_CONSOLE.md` and `docs/admin/BACKLOG.md`; the global menu catalog is broader than the implemented routes. Next bounded slice: safe draft edit/deactivate controls, hardware commissioning and telemetry reconciliation without allowing admin occupancy edits to bypass custody.
 3. Remaining admin work includes cross-entity search, shared contact directory and coverage, contract documents/effective periods, locker owner/operator relationships, commercial terms, finance reconciliation and payouts, delegated partner grants, and calendar/access policy. Overdue amounts remain draft configuration.
 4. Physical locker commissioning, authenticated door evidence, recipient pickup and payout activation require their own verification gates. Do not treat synthetic outcomes as physical evidence.
