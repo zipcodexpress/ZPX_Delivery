@@ -272,10 +272,13 @@ try {
                ($correctionId,$referenceBody,$historicalBox,2,1,1,980003)");
     $runtime->prepare("UPDATE cabinet SET status='REFERENCE',legacy_cabinet_id=? WHERE cabinet_id=?")
         ->execute([90000000+(int)$correctionId,$correctionId]);
-    $review=$setups->detail($customerAdmin,$correctionId)['reference_review'];
+    $referenceDetail=$setups->detail($customerAdmin,$correctionId);
+    $review=$referenceDetail['reference_review'];
     check((int)$review['body']['total']===1 && (int)$review['box']['total']===2
         && (int)$review['box']['template_differences']===1
         && (int)$review['box']['unverified_dimensions']===2
+        && (int)$referenceDetail['boxes'][0]['template_difference']===0
+        && (int)$referenceDetail['boxes'][1]['template_difference']===1
         && $review['location_links']===[],
         'historical review reports raw identities, template drift, and unverified dimensions without binding');
     $runtime->prepare('INSERT INTO legacy_location_links(location_id,source_system,legacy_cabinet_id,source_revision)
@@ -304,6 +307,8 @@ try {
     $referenceResponse=$referenceApp->http->run($referencePage);
     check($referenceResponse->getCode()===200
         && str_contains($referenceResponse->getContent(),'Historical reconciliation review')
+        && str_contains($referenceResponse->getContent(),'Template check')
+        && str_contains($referenceResponse->getContent(),'No matching slot')
         && str_contains($referenceResponse->getContent(),'synthetic-link-revision')
         && !str_contains($referenceResponse->getContent(),'name="location_id"'),
         'historical cabinet page shows review evidence without a bind control');

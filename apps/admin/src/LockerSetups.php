@@ -75,19 +75,26 @@ final class LockerSetups
             WHERE b.cabinet_id=? ORDER BY b.display_sequence',[$cabinetId])->fetchAll(PDO::FETCH_ASSOC);
         $boxes=$this->q('SELECT x.box_id,x.legacy_box_id,x.body_id,b.display_sequence,b.addr AS controller_address,b.protocol_profile,
             x."row" AS display_row,x."column" AS display_column,x.addr AS door_address,x.compartment_id,
-            m.model_id AS box_model_id,m.model_name AS box_model_name,m.size_class,m.is_allocable
+            m.model_id AS box_model_id,m.model_name AS box_model_name,m.size_class,m.is_allocable,
+            expected.model_name AS template_box_name,slot.addr AS template_door_address,
+            CASE WHEN slot.body_box_id IS NULL OR slot.box_model_id<>x.box_model_id
+                OR slot.addr IS DISTINCT FROM x.addr THEN 1 ELSE 0 END AS template_difference
             FROM cabinet_box x JOIN cabinet_body b ON b.body_id=x.body_id
-            JOIN cabinet_box_model m ON m.model_id=x.box_model_id WHERE x.cabinet_id=?
+            JOIN cabinet_box_model m ON m.model_id=x.box_model_id
+            LEFT JOIN cabinet_body_box slot ON slot.body_model_id=b.body_model_id
+                AND slot."row"=x."row" AND slot."column"=x."column"
+            LEFT JOIN cabinet_box_model expected ON expected.model_id=slot.box_model_id
+            WHERE x.cabinet_id=?
             ORDER BY b.display_sequence,x."row",x."column"',[$cabinetId])->fetchAll(PDO::FETCH_ASSOC);
         foreach ($boxes as &$box) { $box['is_allocable']=in_array($box['is_allocable'],['t','true','1',true],true); }
         unset($box);
         return ['draft'=>$draft,'bodies'=>$bodies,'boxes'=>$boxes,'choices'=>$this->listing($actor),'bind_key'=>Secrets::uuid(),
             'reference_review'=>$draft['status']==='REFERENCE'
-                ? $this->referenceReview($cabinetId,(string)$draft['legacy_cabinet_id']) : null];
+                ? $this->referenceReview($cabinetId,(string)$draft['legacy_cabinet_id'],$boxes) : null];
     }
 
     /** Candidate links are displayed for reconciliation, never treated as installation or ownership proof. */
-    private function referenceReview(string $cabinetId,string $sourceId): array
+    private function referenceReview(string $cabinetId,string $sourceId,array $boxes): array
     {
         $body=$this->q("SELECT count(*) AS total,
                 count(*) FILTER (WHERE protocol_profile='UNVERIFIED') AS unverified_profiles,
@@ -95,14 +102,11 @@ final class LockerSetups
             FROM cabinet_body WHERE cabinet_id=?",[$cabinetId])->fetch(PDO::FETCH_ASSOC);
         $box=$this->q('SELECT count(*) AS total,
                 count(*) FILTER (WHERE x.legacy_box_id IS NULL) AS missing_source_ids,
-                count(*) FILTER (WHERE m.dimensions_source_unit<>\'MM\' OR m.max_weight_g IS NULL) AS unverified_dimensions,
-                count(*) FILTER (WHERE s.body_box_id IS NULL OR s.box_model_id<>x.box_model_id
-                    OR s.addr IS DISTINCT FROM x.addr) AS template_differences
-            FROM cabinet_box x JOIN cabinet_body b ON b.body_id=x.body_id
-            JOIN cabinet_box_model m ON m.model_id=x.box_model_id
-            LEFT JOIN cabinet_body_box s ON s.body_model_id=b.body_model_id
-                AND s."row"=x."row" AND s."column"=x."column"
+                count(*) FILTER (WHERE m.dimensions_source_unit<>\'MM\' OR m.max_weight_g IS NULL) AS unverified_dimensions
+            FROM cabinet_box x JOIN cabinet_box_model m ON m.model_id=x.box_model_id
             WHERE x.cabinet_id=?',[$cabinetId])->fetch(PDO::FETCH_ASSOC);
+        $box['template_differences']=count(array_filter($boxes,
+            static fn(array $row): bool => (int)$row['template_difference']===1));
         $locationLinks=$this->q('SELECT ll.source_system,ll.source_revision,ll.location_id,
                 l.name AS location_name,l.status AS location_status,k.id AS locker_id,
                 (SELECT count(*) FROM locker_devices d WHERE d.locker_id=k.id) AS device_count
