@@ -81,7 +81,41 @@ final class LockerSetups
             ORDER BY b.display_sequence,x."row",x."column"',[$cabinetId])->fetchAll(PDO::FETCH_ASSOC);
         foreach ($boxes as &$box) { $box['is_allocable']=in_array($box['is_allocable'],['t','true','1',true],true); }
         unset($box);
-        return ['draft'=>$draft,'bodies'=>$bodies,'boxes'=>$boxes,'choices'=>$this->listing($actor),'bind_key'=>Secrets::uuid()];
+        return ['draft'=>$draft,'bodies'=>$bodies,'boxes'=>$boxes,'choices'=>$this->listing($actor),'bind_key'=>Secrets::uuid(),
+            'reference_review'=>$draft['status']==='REFERENCE'
+                ? $this->referenceReview($cabinetId,(string)$draft['legacy_cabinet_id']) : null];
+    }
+
+    /** Candidate links are displayed for reconciliation, never treated as installation or ownership proof. */
+    private function referenceReview(string $cabinetId,string $sourceId): array
+    {
+        $body=$this->q("SELECT count(*) AS total,
+                count(*) FILTER (WHERE protocol_profile='UNVERIFIED') AS unverified_profiles,
+                count(*) FILTER (WHERE legacy_body_id IS NULL) AS missing_source_ids
+            FROM cabinet_body WHERE cabinet_id=?",[$cabinetId])->fetch(PDO::FETCH_ASSOC);
+        $box=$this->q('SELECT count(*) AS total,
+                count(*) FILTER (WHERE x.legacy_box_id IS NULL) AS missing_source_ids,
+                count(*) FILTER (WHERE m.dimensions_source_unit<>\'MM\' OR m.max_weight_g IS NULL) AS unverified_dimensions,
+                count(*) FILTER (WHERE s.body_box_id IS NULL OR s.box_model_id<>x.box_model_id
+                    OR s.addr IS DISTINCT FROM x.addr) AS template_differences
+            FROM cabinet_box x JOIN cabinet_body b ON b.body_id=x.body_id
+            JOIN cabinet_box_model m ON m.model_id=x.box_model_id
+            LEFT JOIN cabinet_body_box s ON s.body_model_id=b.body_model_id
+                AND s."row"=x."row" AND s."column"=x."column"
+            WHERE x.cabinet_id=?',[$cabinetId])->fetch(PDO::FETCH_ASSOC);
+        $locationLinks=$this->q('SELECT ll.source_system,ll.source_revision,ll.location_id,
+                l.name AS location_name,l.status AS location_status,k.id AS locker_id,
+                (SELECT count(*) FROM locker_devices d WHERE d.locker_id=k.id) AS device_count
+            FROM legacy_location_links ll JOIN locations l ON l.id=ll.location_id
+            LEFT JOIN lockers k ON k.location_id=l.id
+            WHERE ll.legacy_cabinet_id=? AND l.organization_id=? ORDER BY ll.id',
+            [$sourceId,$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        $boxLinks=(int)$this->q('SELECT count(*) FROM cabinet_box x
+            JOIN legacy_compartment_links ll ON ll.legacy_box_id=x.legacy_box_id::text
+            JOIN compartments cp ON cp.id=ll.compartment_id
+            JOIN lockers k ON k.id=cp.locker_id JOIN locations l ON l.id=k.location_id
+            WHERE x.cabinet_id=? AND l.organization_id=?',[$cabinetId,$this->org()])->fetchColumn();
+        return ['body'=>$body,'box'=>$box,'location_links'=>$locationLinks,'candidate_box_links'=>$boxLinks];
     }
 
     public function create(string $actor,array $input): string
