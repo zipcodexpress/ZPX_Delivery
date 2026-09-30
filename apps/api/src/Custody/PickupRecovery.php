@@ -18,8 +18,11 @@ final class PickupRecovery
     }
     private function org(): string { return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0'); }
 
-    public function list(string $user): array {
+    public function list(string $user,string $search='',string $status=''): array {
         $this->identity->requireRole($user,'ADMIN');
+        $where=''; $args=[$this->org()];
+        if ($search!=='') { $where.=' AND (u.display_name ILIKE ? OR r.id::text=?)'; array_push($args,'%'.$search.'%',$search); }
+        if (in_array($status,['PUBLISHED','ACKNOWLEDGED','IN_PROGRESS'],true)) { $where.=' AND r.state=?'; $args[]=$status; }
         $rows=$this->q("SELECT r.id,r.state,r.revision,r.planned_end,u.display_name AS driver_name,
                 COUNT(mi.id) AS package_count,
                 COUNT(mi.id) FILTER (WHERE mi.state='LOADED') AS collected_count,
@@ -36,8 +39,8 @@ final class PickupRecovery
             JOIN manifest_items mi ON mi.run_id=r.id JOIN packages p ON p.id=mi.package_id
             LEFT JOIN pickup_demands pd ON pd.package_id=p.id
             LEFT JOIN active_allocations a ON a.package_id=p.id
-            WHERE r.organization_id=? AND r.state IN ('PUBLISHED','ACKNOWLEDGED','IN_PROGRESS')
-            GROUP BY r.id,u.display_name ORDER BY r.planned_end,r.id LIMIT 50",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+            WHERE r.organization_id=? AND r.state IN ('PUBLISHED','ACKNOWLEDGED','IN_PROGRESS')".$where."
+            GROUP BY r.id,u.display_name ORDER BY r.planned_end,r.id LIMIT 50",$args)->fetchAll(PDO::FETCH_ASSOC);
         return ['items'=>array_map(function ($r) {
             $parcels=[];
             if ((int)$r['collected_count']>0) {

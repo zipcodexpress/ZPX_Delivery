@@ -71,7 +71,10 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 95, 'locker models, site contacts, inventory, partner, customer restriction and device nonce tables added without removing existing tables');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 100, 'cabinet configuration tables added without removing existing inventory tables');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery'
+ AND table_name IN ('cabinet_box_model','cabinet_body_model','cabinet_body_box') AND table_type='BASE TABLE'")->fetchColumn()===3,
+ 'legacy model and layout names are physical PostgreSQL tables');
 require __DIR__ . '/seed.php';
 require __DIR__ . '/ownership.php';
 
@@ -182,6 +185,7 @@ require __DIR__ . '/driver-administration.php';
 require __DIR__ . '/partner-registry.php';
 require __DIR__ . '/admin-sites-inventory.php';
 require __DIR__ . '/admin-locker-models.php';
+require __DIR__ . '/admin-list-search.php';
 require __DIR__ . '/admin-360-views.php';
 echo "PostgreSQL foundation integration passed. No physical hardware tested.\n";
 

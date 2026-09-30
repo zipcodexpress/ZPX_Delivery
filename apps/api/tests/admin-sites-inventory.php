@@ -28,6 +28,83 @@ try {
     $foreignSite=insertId($runtime,"INSERT INTO installation_sites(organization_id,code,name,site_type,address,timezone)
         VALUES (?,'FOREIGN-APT','Foreign apartment','APARTMENT','{}','America/Chicago')",[$foreignCustomerOrg]);
     failsIdentity(fn()=>$sites->site($customerAdmin,$foreignSite),404,'foreign site detail is hidden');
+    $newLocker=['site_id'=>$site,'code'=>'SYNTH-APT-TEMP','name'=>'Temporary locker entrance',
+        'address_text'=>'1 Example Lane, temporary entrance','reason'=>'Synthetic locker management creation'];
+    failsIdentity(fn()=>$sites->createLocker($sender,$newLocker,Secrets::uuid()),403,
+        'customer cannot create locker inventory');
+    $newLockerKey=Secrets::uuid();
+    $formApp=new think\App(dirname(__DIR__)); $formApp->debug(false);
+    $listRequest=new think\Request();
+    $listRequest->withServer(['REQUEST_METHOD'=>'GET','REQUEST_URI'=>'/admin/lockers',
+        'PATH_INFO'=>'/admin/lockers','HTTP_HOST'=>'localhost:8000']);
+    $listRequest->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $listResponse=$formApp->http->run($listRequest);
+    check($listResponse->getCode()===200 && str_contains($listResponse->getContent(),'Create inactive locker'),
+        'locker list renders the create form');
+    $formApp->http->end($listResponse);
+    $createRequest=new think\Request();
+    $createRequest->withServer(['REQUEST_METHOD'=>'POST','REQUEST_URI'=>'/admin/action/locker-create',
+        'PATH_INFO'=>'/admin/action/locker-create','HTTP_HOST'=>'localhost:8000']);
+    $createRequest->withHeader(['origin'=>'http://localhost:8000','host'=>'localhost:8000']);
+    $createRequest->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $createRequest->withPost($newLocker+['_csrf'=>(new Secrets())->digest('csrf',$adminToken),
+        'idempotency_key'=>$newLockerKey]);
+    $createResponse=$formApp->http->run($createRequest);
+    check($createResponse->getCode()===303
+        && preg_match('~^/admin/lockers/([1-9][0-9]*)$~',$createResponse->getHeader('Location'),$created),
+        'locker create form redirects to the new locker');
+    $newLockerId=$created[1];
+    $formApp->http->end($createResponse);
+    check($sites->createLocker($customerAdmin,$newLocker,$newLockerKey)===$newLockerId,
+        'locker create retry returns the same inactive locker');
+    $newLockerDetail=$sites->locker($customerAdmin,$newLockerId);
+    check($newLockerDetail['locker']['location_status']==='INACTIVE'
+        && $newLockerDetail['management']['can_update'] && $newLockerDetail['management']['can_delete'],
+        'new empty locker is editable and deletable without becoming available to shipping');
+    $detailRequest=new think\Request();
+    $detailRequest->withServer(['REQUEST_METHOD'=>'GET','REQUEST_URI'=>'/admin/lockers/'.$newLockerId,
+        'PATH_INFO'=>'/admin/lockers/'.$newLockerId,'HTTP_HOST'=>'localhost:8000']);
+    $detailRequest->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $detailResponse=$formApp->http->run($detailRequest);
+    check($detailResponse->getCode()===200 && str_contains($detailResponse->getContent(),'Save locker')
+        && str_contains($detailResponse->getContent(),'Delete empty locker'),
+        'empty locker detail renders update and delete forms');
+    $formApp->http->end($detailResponse);
+    $updateRequest=new think\Request();
+    $updateRequest->withServer(['REQUEST_METHOD'=>'POST','REQUEST_URI'=>'/admin/action/locker-update',
+        'PATH_INFO'=>'/admin/action/locker-update','HTTP_HOST'=>'localhost:8000']);
+    $updateRequest->withHeader(['origin'=>'http://localhost:8000','host'=>'localhost:8000']);
+    $updateRequest->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $updateRequest->withPost(['_csrf'=>(new Secrets())->digest('csrf',$adminToken),'id'=>$newLockerId,
+        'name'=>'Temporary entrance revised','address_text'=>'2 Example Lane, temporary entrance',
+        'external_locker_id'=>'SYNTH-LOCKER-TEMP','version'=>'1',
+        'reason'=>'Synthetic locker placement correction']);
+    $updateResponse=$formApp->http->run($updateRequest);
+    check($updateResponse->getCode()===303 && $updateResponse->getHeader('Location')==='/admin/lockers/'.$newLockerId,
+        'locker update form returns to the edited locker');
+    $formApp->http->end($updateResponse);
+    check($sites->locker($customerAdmin,$newLockerId)['locker']['location_name']==='Temporary entrance revised'
+        && $sites->locker($customerAdmin,$newLockerId)['locker']['external_locker_id']==='SYNTH-LOCKER-TEMP',
+        'admin updates inactive locker metadata');
+    failsIdentity(fn()=>$sites->updateLocker($customerAdmin,$newLockerId,['name'=>'Stale edit',
+        'address_text'=>'2 Example Lane','external_locker_id'=>'','version'=>'1',
+        'reason'=>'Synthetic stale locker update']),412,'stale locker edit is rejected');
+    failsIdentity(fn()=>$sites->deleteLocker($customerAdmin,$newLockerId,'1','Synthetic stale locker removal'),412,
+        'stale locker delete is rejected');
+    $deleteRequest=new think\Request();
+    $deleteRequest->withServer(['REQUEST_METHOD'=>'POST','REQUEST_URI'=>'/admin/action/locker-delete',
+        'PATH_INFO'=>'/admin/action/locker-delete','HTTP_HOST'=>'localhost:8000']);
+    $deleteRequest->withHeader(['origin'=>'http://localhost:8000','host'=>'localhost:8000']);
+    $deleteRequest->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $deleteRequest->withPost(['_csrf'=>(new Secrets())->digest('csrf',$adminToken),'id'=>$newLockerId,
+        'version'=>'2','reason'=>'Synthetic empty locker removal']);
+    $deleteResponse=$formApp->http->run($deleteRequest);
+    check($deleteResponse->getCode()===303 && $deleteResponse->getHeader('Location')==='/admin/lockers',
+        'locker delete form returns to the locker list');
+    $formApp->http->end($deleteResponse);
+    failsIdentity(fn()=>$sites->locker($customerAdmin,$newLockerId),404,'deleted draft locker is absent');
+    failsIdentity(fn()=>$sites->createLocker($customerAdmin,$newLocker,$newLockerKey),409,
+        'deleted locker cannot be resurrected through an old create key');
     $locationInput=['code'=>'SYNTH-APT-ENTRY','name'=>'Building entrance','address_text'=>'1 Example Lane, entrance A',
         'reason'=>'Synthetic entrance provisioning'];
     $locationKey=Secrets::uuid();
@@ -50,6 +127,8 @@ try {
     check($sites->locker($customerAdmin,$locker)['boxes'][0]['status']==='FROZEN'
         && (int)$sites->locker($customerAdmin,$locker)['boxes'][0]['display_row']===1,
         'new draft box is frozen without controller mapping');
+    failsIdentity(fn()=>$sites->deleteLocker($customerAdmin,$locker,'1','Synthetic occupied draft delete'),409,
+        'locker with frozen boxes cannot be deleted');
     failsIdentity(fn()=>$sites->addDraftBox($customerAdmin,$locker,['code'=>'DRAFT-DUP','module_id'=>$module,
         'row'=>'1','column'=>'1','width_mm'=>'250','height_mm'=>'250','depth_mm'=>'350','max_weight_g'=>'3000',
         'reason'=>'Duplicate body position test']),409,'duplicate body position is rejected');
@@ -86,6 +165,9 @@ try {
     failsIdentity(fn()=>$sites->deactivateLocation($customerAdmin,$site,$location,'Repeated safety pause test'),409,
         'duplicate location deactivation rejected');
     $sites->reactivateLocation($customerAdmin,$site,$location,'Synthetic location review cleared');
+    failsIdentity(fn()=>$sites->updateLocker($customerAdmin,$locker,['name'=>'Unsafe active edit',
+        'address_text'=>'3 Example Lane','external_locker_id'=>'','version'=>'1',
+        'reason'=>'Synthetic active locker edit']),409,'active locker placement cannot be edited');
     check(in_array($location,array_column($shipping->locations()['items'],'id'),true),
         'previously active location can be reactivated with audit reason');
     $shipment=insertId($runtime,"INSERT INTO shipments(organization_id,sender_user_id,public_reference,origin_location_id,destination_location_id,service_level,order_status,payment_status,development_only)

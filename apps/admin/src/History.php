@@ -12,7 +12,7 @@ final class History
     private function q(string $sql,array $args=[]): \PDOStatement
     { $q=$this->db->prepare($sql); $q->execute($args); return $q; }
 
-    public function page(string $actor,string $type,string $id,string $kind,string $cursor=''): array
+    public function page(string $actor,string $type,string $id,string $kind,string $cursor='',string $search=''): array
     {
         (new Access($this->db))->requireNetworkAdmin($actor);
         if (!preg_match('/^[1-9][0-9]{0,17}$/D',$id) || $cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) {
@@ -34,7 +34,6 @@ final class History
                 default=>throw new Failure(422,'INVALID_HISTORY','Invalid customer history type.'),
             };
             $args=$kind==='shipments'?[$id,$org,$id,$id]:[$id,$org];
-            $sort=$kind==='shipments'?'s.id':'p.id';
         } elseif ($type==='driver') {
             $subject=(new DriverAdministration($this->db,$this->crypto))->detail($actor,$id)['driver'];
             $name=$subject['name']; $back='/admin/drivers/'.$id;
@@ -58,12 +57,20 @@ final class History
                 default=>throw new Failure(422,'INVALID_HISTORY','Invalid driver history type.'),
             };
             $args=[$kind==='scans'?$subject['user_id']:$id,$org];
-            $sort=match($kind) {'runs'=>'r.id','offers'=>'o.id','earnings'=>'e.id','scans'=>'se.id'};
         } else { throw new Failure(422,'INVALID_HISTORY','Invalid history subject.'); }
-        if ($cursor!=='') { $sql.=' AND '.$sort.'<?'; $args[]=$cursor; }
-        $rows=$this->q($sql.' ORDER BY '.$sort.' DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
+        $sql='SELECT * FROM ('.$sql.') h WHERE TRUE';
+        $search=trim(substr($search,0,120));
+        if ($search!=='') {
+            $sql.=' AND (h.reference ILIKE ? OR h.detail ILIKE ? OR h.status ILIKE ?)';
+            array_push($args,...array_fill(0,3,'%'.$search.'%'));
+        }
+        if ($cursor!=='') { $sql.=' AND h.cursor_id<?'; $args[]=$cursor; }
+        $rows=$this->q($sql.' ORDER BY h.cursor_id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
         $more=count($rows)>25; $rows=array_slice($rows,0,25);
         return ['items'=>$rows,'next_cursor'=>$more?(string)end($rows)['cursor_id']:null,
-            'name'=>$name,'kind'=>$kind,'type'=>$type,'back'=>$back,'id'=>$id];
+            'name'=>$name,'kind'=>$kind,'type'=>$type,'back'=>$back,'id'=>$id,'search'=>$search,
+            'next_url'=>$more?$back.'/history?'.http_build_query(array_filter([
+                'kind'=>$kind,'q'=>$search,'cursor'=>(string)end($rows)['cursor_id'],
+            ],static fn($value): bool => $value!=='')):null];
     }
 }

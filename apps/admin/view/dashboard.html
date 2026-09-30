@@ -3,6 +3,7 @@
 <nav aria-label="Administration"><a href="/admin" class="nav-top" {if $page == 'overview'}aria-current="page"{/if}>Overview</a>{volist name="navigation" id="group"}<details class="nav-group" {if $group.open}open{/if}><summary class="nav-head">{$group.label}<span aria-hidden="true">⌄</span></summary><div class="nav-items">{volist name="group.items" id="item"}<a class="nav-link" href="{$item.route}" {if $item.active}aria-current="page"{/if}>{$item.label}</a>{/volist}</div></details>{/volist}</nav></aside>
 <div class="workspace"><header class="topbar"><div><strong>Management Console</strong><small>ZipcodeXpress operations · Network {$network} / {$title}</small></div><div class="user">{$name}</div><form method="post" action="/admin/logout"><input type="hidden" name="_csrf" value="{$csrf}"><button type="submit">Sign out</button></form></header>
 <main class="content"><div class="content-panel"><div class="dashboard-head"><div><h1>{$title}</h1><p>Current network operations and administration.</p></div></div>
+{if $searchable}{include file="list_filters" /}{/if}
 {switch name="page"}
 {case value="customers"}{include file="customers" /}{/case}
 {case value="customer-detail"}{include file="customer_detail" /}{/case}
@@ -16,6 +17,11 @@
 {case value="site-detail"}{include file="site_detail" /}{/case}
 {case value="locker-detail"}{include file="locker_detail" /}{/case}
 {case value="locker-models"}{include file="locker_models" /}{/case}
+{case value="box-models"}{include file="box_models" /}{/case}
+{case value="body-models"}{include file="body_models" /}{/case}
+{case value="body-box-layouts"}{include file="body_box_layouts" /}{/case}
+{case value="locker-setups"}{include file="locker_setups" /}{/case}
+{case value="locker-setup-detail"}{include file="locker_setup_detail" /}{/case}
 {case value="lockers"}{include file="lockers" /}{/case}
 {case value="pickup-routes"}{include file="pickup_routes" /}{/case}
 {case value="pickup-recovery"}{include file="pickup_recovery" /}{/case}

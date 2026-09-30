@@ -14,12 +14,14 @@ final class DriverAdministration
     private function org(): string { return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0'); }
     private function authorize(string $actor): void { (new Access($this->db))->requireNetworkAdmin($actor); }
 
-    public function list(string $actor, string $cursor=''): array
+    public function list(string $actor, string $cursor='',string $search='',string $status=''): array
     {
         $this->authorize($actor);
         if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid driver cursor.'); }
         $args=[$this->org()]; $where='';
-        if ($cursor!=='') { $where=' AND d.id<?'; $args[]=$cursor; }
+        if ($search!=='') { $where.=' AND (u.display_name ILIKE ? OR d.id::text=?)'; array_push($args,'%'.$search.'%',$search); }
+        if (in_array($status,['PENDING','ACTIVE','SUSPENDED','INACTIVE'],true)) { $where.=' AND d.status=?'; $args[]=$status; }
+        if ($cursor!=='') { $where.=' AND d.id<?'; $args[]=$cursor; }
         $rows=$this->query("SELECT d.id,d.user_id,d.status,d.engagement_type,d.applied_at,d.version,u.display_name,
             (SELECT count(*) FROM route_runs rr WHERE rr.driver_id=d.id AND rr.state IN ('PUBLISHED','ACKNOWLEDGED','IN_PROGRESS')) AS active_run_count
             FROM drivers d JOIN users u ON u.id=d.user_id WHERE u.organization_id=?".$where.' ORDER BY d.id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
