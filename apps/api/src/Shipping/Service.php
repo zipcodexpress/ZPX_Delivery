@@ -119,13 +119,20 @@ final class Service
             'package'=>array_merge(array_map('intval',array_intersect_key($r,array_flip(['width_mm','height_mm','depth_mm','weight_g']))),['size_class'=>$r['size_class']]),
             'development_only'=>(bool)$r['development_only'],'created_at'=>gmdate('c',strtotime($r['created_at']))];
     }
-    public function list(string $user,string $view,string $cursor=''): array {
+    public function list(string $user,string $view,string $cursor='',string $search='',string $status=''): array {
         if (!in_array($view,['sending','receiving','history','operations'],true)) { throw new Failure(422,'INVALID_INPUT','Invalid shipment view.'); }
         $values=[$this->org()];
         if ($view==='operations') { $where=$this->operationsWhere($user,$values); }
         elseif ($view==='history') { $values[]=$user;$values[]=$user;$where="(s.sender_user_id=? OR EXISTS (SELECT 1 FROM shipment_parties sp WHERE sp.shipment_id=s.id AND sp.party_role='RECIPIENT' AND sp.user_id=?))"; }
         elseif ($view==='sending') { $values[]=$user; $where='s.sender_user_id=?'; }
         else { $values[]=$user; $where="EXISTS (SELECT 1 FROM shipment_parties sp WHERE sp.shipment_id=s.id AND sp.party_role='RECIPIENT' AND sp.user_id=?)"; }
+        if ($view==='operations' && $search!=='') {
+            $where.=' AND (s.public_reference ILIKE ? OR si.si ILIKE ? OR s.id::text=?)';
+            array_push($values,'%'.$search.'%','%'.$search.'%',$search);
+        }
+        if ($view==='operations' && in_array($status,['DRAFT','READY','CANCELLED','COMPLETED'],true)) {
+            $where.=' AND s.order_status=?'; $values[]=$status;
+        }
         if ($cursor!=='') { self::id($cursor); $where.=' AND s.id<?'; $values[]=$cursor; }
         $rows=$this->q($this->select().' WHERE s.organization_id=? AND '.$where.' ORDER BY s.id DESC LIMIT 26',$values)->fetchAll(PDO::FETCH_ASSOC);
         $more=count($rows)>25; $rows=array_slice($rows,0,25);

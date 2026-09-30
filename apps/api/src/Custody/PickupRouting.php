@@ -37,12 +37,17 @@ final class PickupRouting
         return count($hubs)===1 ? (string)$hubs[0] : null;
     }
 
-    public function list(string $user): array {
+    public function list(string $user,string $search='',string $status=''): array {
         $this->identity->requireRole($user,'ADMIN');
+        $where=''; $args=[$this->org()];
+        if ($search!=='') { $where.=' AND (l.name ILIKE ? OR l.code ILIKE ? OR h.name ILIKE ? OR l.id::text=?)';
+            array_push($args,'%'.$search.'%','%'.$search.'%','%'.$search.'%',$search); }
+        if ($status==='ASSIGNED') { $where.=' AND r.hub_id IS NOT NULL'; }
+        if ($status==='UNASSIGNED') { $where.=' AND r.hub_id IS NULL'; }
         $origins=$this->q("SELECT l.id,l.code,l.name,l.status,l.latitude,l.longitude,r.hub_id,r.version,h.name AS hub_name
             FROM locations l LEFT JOIN origin_hub_routes r ON r.origin_location_id=l.id
             LEFT JOIN hubs hb ON hb.id=r.hub_id LEFT JOIN locations h ON h.id=hb.location_id
-            WHERE l.organization_id=? AND l.kind='LOCKER' ORDER BY l.code",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+            WHERE l.organization_id=? AND l.kind='LOCKER'".$where.' ORDER BY l.code',$args)->fetchAll(PDO::FETCH_ASSOC);
         $hubs=$this->q("SELECT hb.id,l.name,l.code FROM hubs hb JOIN locations l ON l.id=hb.location_id
             WHERE l.organization_id=? AND hb.status='ACTIVE' AND l.status='ACTIVE' ORDER BY l.code",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
         return [

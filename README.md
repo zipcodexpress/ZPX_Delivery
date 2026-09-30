@@ -50,7 +50,7 @@ The [admin development handoff](docs/admin/README.md) specifies the ThinkPHP-ren
 | docs/DEVELOPMENT_PLAN.md | Cross-application milestones and next sprint |
 | docs/PROGRESS.md | Current stage and session handoff |
 
-Native mobile and a new kiosk terminal are still required. Android is the preferred terminal direction; the old Windows terminal is reference-only, per [decision 0002](docs/decisions/0002-new-terminal-platform.md). Neither application has been scaffolded or built in this increment.
+Native mobile is still required. Phase 1 terminal work uses `terminal_452` as its base while preserving working legacy functions, per [decision 0009](docs/decisions/0009-terminal-452-locker-setup.md). Android remains a future option; terminal work is not included in this increment.
 
 ## Checks
 

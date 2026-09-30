@@ -17,12 +17,14 @@ final class SiteInventory
     private static function id(string $id): string
     { if (!preg_match('/^[1-9][0-9]{0,17}$/D',$id)) { throw new Failure(422,'INVALID_ID','Invalid ID.'); } return $id; }
 
-    public function sites(string $actor,string $cursor=''): array
+    public function sites(string $actor,string $cursor='',string $search='',string $status=''): array
     {
         $this->authorize($actor);
         if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid site cursor.'); }
         $args=[$this->org()]; $where='';
-        if ($cursor!=='') { $where=' AND s.id<?'; $args[]=$cursor; }
+        if ($search!=='') { $where.=' AND (s.name ILIKE ? OR s.code ILIKE ? OR s.id::text=?)'; array_push($args,'%'.$search.'%','%'.$search.'%',$search); }
+        if (in_array($status,['DRAFT','ACTIVE','SUSPENDED','ARCHIVED'],true)) { $where.=' AND s.status=?'; $args[]=$status; }
+        if ($cursor!=='') { $where.=' AND s.id<?'; $args[]=$cursor; }
         $rows=$this->q('SELECT s.id,s.code,s.name,s.site_type,s.status,s.version,s.address,
             op.display_name AS owner_name,
             (SELECT count(*) FROM locations l WHERE l.site_id=s.id) AS location_count
@@ -32,12 +34,15 @@ final class SiteInventory
         return ['items'=>$rows,'next_cursor'=>$more?(string)end($rows)['id']:null,'create_key'=>Secrets::uuid()];
     }
 
-    public function lockers(string $actor,string $cursor=''): array
+    public function lockers(string $actor,string $cursor='',string $search='',string $status=''): array
     {
         $this->authorize($actor);
         if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid locker cursor.'); }
         $args=[$this->org()]; $where='';
-        if ($cursor!=='') { $where=' AND k.id<?'; $args[]=$cursor; }
+        if ($search!=='') { $where.=' AND (k.external_locker_id ILIKE ? OR l.name ILIKE ? OR l.code ILIKE ? OR s.name ILIKE ? OR k.id::text=?)';
+            array_push($args,'%'.$search.'%','%'.$search.'%','%'.$search.'%','%'.$search.'%',$search); }
+        if (in_array($status,['ACTIVE','INACTIVE'],true)) { $where.=' AND l.status=?'; $args[]=$status; }
+        if ($cursor!=='') { $where.=' AND k.id<?'; $args[]=$cursor; }
         $rows=$this->q('SELECT k.id,k.external_locker_id,l.name AS location_name,l.status AS location_status,
             s.id AS site_id,s.name AS site_name,s.status AS site_status,
             (SELECT count(*) FROM compartments c WHERE c.locker_id=k.id) AS box_count
@@ -45,7 +50,114 @@ final class SiteInventory
             LEFT JOIN installation_sites s ON s.id=l.site_id
             WHERE l.organization_id=?'.$where.' ORDER BY k.id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
         $more=count($rows)>25; $rows=array_slice($rows,0,25);
-        return ['items'=>$rows,'next_cursor'=>$more?(string)end($rows)['id']:null];
+        $sites=$this->q("SELECT id,name,code FROM installation_sites WHERE organization_id=? AND status='DRAFT'
+            ORDER BY name,id LIMIT 100",[$this->org()])->fetchAll(PDO::FETCH_ASSOC);
+        return ['items'=>$rows,'next_cursor'=>$more?(string)end($rows)['id']:null,
+            'sites'=>$sites,'create_key'=>Secrets::uuid()];
+    }
+
+    public function createLocker(string $actor,array $input,string $key): string
+    {
+        $this->authorize($actor);
+        Input::fields($input,['site_id','code','name','address_text','reason']);
+        $siteId=self::id((string)$input['site_id']);
+        $locationId=$this->addLocation($actor,$siteId,[
+            'code'=>$input['code'],'name'=>$input['name'],
+            'address_text'=>$input['address_text'],'reason'=>$input['reason'],
+        ],$key);
+        $locker=$this->q('SELECT k.id FROM lockers k JOIN locations l ON l.id=k.location_id
+            WHERE l.id=? AND l.organization_id=?',[$locationId,$this->org()])->fetchColumn();
+        if ($locker===false) { throw new Failure(409,'LOCKER_DELETED','That create request refers to a deleted locker; reload and try again.'); }
+        return (string)$locker;
+    }
+
+    private function lockerManagementState(array $locker): array
+    {
+        $id=(string)$locker['id']; $location=(string)$locker['location_id'];
+        $eligible=$locker['location_status']==='INACTIVE' && $locker['site_status']==='DRAFT'
+            && $locker['kind']==='LOCKER' && $locker['site_mode']==='DELIVERY_ONLY';
+        if (!$eligible) { return ['can_update'=>false,'can_delete'=>false]; }
+        $activity=$this->q('SELECT
+            EXISTS(SELECT 1 FROM legacy_location_links WHERE location_id=?)
+            OR EXISTS(SELECT 1 FROM locker_devices WHERE locker_id=?)
+            OR EXISTS(SELECT 1 FROM controller_boards WHERE locker_id=?)
+            OR EXISTS(SELECT 1 FROM ownership_manifests WHERE locker_id=?)
+            OR EXISTS(SELECT 1 FROM cabinet WHERE bound_locker_id=? OR bound_location_id=?)
+            OR EXISTS(SELECT 1 FROM locker_setup_drafts WHERE bound_locker_id=? OR bound_location_id=?)
+            OR EXISTS(SELECT 1 FROM shipments WHERE origin_location_id=? OR destination_location_id=?)
+            OR EXISTS(SELECT 1 FROM packages WHERE current_location_id=? OR (custodian_type=\'LOCKER\' AND custodian_ref=?))',
+            [$location,$id,$id,$id,$id,$location,$id,$location,$location,$location,$location,$id])->fetchColumn();
+        if (in_array($activity,['t','1',true],true)) { return ['can_update'=>false,'can_delete'=>false]; }
+        $empty=$this->q('SELECT NOT (
+            EXISTS(SELECT 1 FROM compartments WHERE locker_id=?)
+            OR EXISTS(SELECT 1 FROM locker_body_modules WHERE locker_id=?)
+            OR EXISTS(SELECT 1 FROM locker_box_modules WHERE locker_id=?))',[$id,$id,$id])->fetchColumn();
+        $created=$this->q("SELECT 1 FROM audit_events WHERE entity_type='location' AND entity_id=?
+            AND action='LOCATION_DRAFT_CREATED' LIMIT 1",[$location])->fetchColumn();
+        return ['can_update'=>true,'can_delete'=>in_array($empty,['t','1',true],true) && (bool)$created];
+    }
+
+    private function managedLocker(string $id,bool $lock): array
+    {
+        $row=$this->q('SELECT k.id,k.version,k.location_id,k.external_locker_id,l.code,l.name AS location_name,
+            l.address_text,l.kind,l.site_mode,l.status AS location_status,s.status AS site_status
+            FROM lockers k JOIN locations l ON l.id=k.location_id JOIN installation_sites s ON s.id=l.site_id
+            WHERE k.id=? AND l.organization_id=?'.($lock?' FOR UPDATE OF k,l':''),
+            [$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
+        return $row;
+    }
+
+    public function updateLocker(string $actor,string $id,array $input): void
+    {
+        $this->authorize($actor); self::id($id);
+        Input::fields($input,['name','address_text','external_locker_id','version','reason']);
+        $name=trim(Input::text($input['name'],1,160));
+        $address=trim(Input::text($input['address_text'],1,500));
+        $external=trim(Input::text($input['external_locker_id'],0,160));
+        $reason=Input::text(trim(Input::text($input['reason'],10,500)),10,500);
+        if ($name==='' || $address==='' || !is_string($input['version']) || !ctype_digit($input['version'])) {
+            throw new Failure(422,'INVALID_INPUT','Name, address and version are required.');
+        }
+        try {
+            (new Transaction($this->db))->run(function() use($actor,$id,$name,$address,$external,$input,$reason) {
+                $row=$this->managedLocker($id,true);
+                if (!$this->lockerManagementState($row)['can_update']) {
+                    throw new Failure(409,'LOCKER_NOT_DRAFT','Pause and reconcile locker activity before editing its placement.');
+                }
+                if ((int)$row['version']!==(int)$input['version']) { throw new Failure(412,'STALE_VERSION','Reload the locker before editing.'); }
+                $this->q('UPDATE locations SET name=?,address_text=? WHERE id=?',[$name,$address,$row['location_id']]);
+                $this->q('UPDATE lockers SET external_locker_id=?,version=version+1 WHERE id=?',[$external===''?null:$external,$id]);
+                $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason)
+                    VALUES (?,'LOCKER_DRAFT_UPDATED','locker',?,?)",[$actor,$id,$reason]);
+            });
+        } catch (\PDOException $error) {
+            if ($error->getCode()==='23505') { throw new Failure(409,'LOCKER_ID_EXISTS','External locker ID is already used.'); }
+            throw $error;
+        }
+    }
+
+    public function deleteLocker(string $actor,string $id,string $version,string $reason): void
+    {
+        $this->authorize($actor); self::id($id);
+        if (!ctype_digit($version)) { throw new Failure(422,'INVALID_INPUT','A locker version is required.'); }
+        $reason=Input::text(trim(Input::text($reason,10,500)),10,500);
+        try {
+            (new Transaction($this->db))->run(function() use($actor,$id,$version,$reason) {
+                $row=$this->managedLocker($id,true);
+                if (!$this->lockerManagementState($row)['can_delete']) {
+                    throw new Failure(409,'LOCKER_NOT_EMPTY','Only an empty, uncommissioned draft locker can be deleted.');
+                }
+                if ((int)$row['version']!==(int)$version) { throw new Failure(412,'STALE_VERSION','Reload the locker before deleting.'); }
+                $this->q('DELETE FROM lockers WHERE id=?',[$id]);
+                $this->q('DELETE FROM locations WHERE id=?',[$row['location_id']]);
+                $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id,reason)
+                    VALUES (?,'LOCKER_DRAFT_DELETED','locker',?,?)",[$actor,$id,$reason]);
+            });
+        } catch (\PDOException $error) {
+            if ($error->getCode()==='23503') { throw new Failure(409,'LOCKER_REFERENCED','Locker has related records and cannot be deleted.'); }
+            throw $error;
+        }
     }
 
     public function site(string $actor,string $id): array
@@ -358,10 +470,12 @@ final class SiteInventory
     {
         $this->authorize($actor); self::id($id);
         if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid package cursor.'); }
-        $locker=$this->q('SELECT k.id,k.external_locker_id,l.id AS location_id,l.name AS location_name,l.status AS location_status,
+        $locker=$this->q('SELECT k.id,k.version,k.external_locker_id,l.id AS location_id,l.code AS location_code,
+            l.name AS location_name,l.address_text,l.kind,l.site_mode,l.status AS location_status,
             s.id AS site_id,s.name AS site_name,s.status AS site_status FROM lockers k JOIN locations l ON l.id=k.location_id
             LEFT JOIN installation_sites s ON s.id=l.site_id WHERE k.id=? AND l.organization_id=?',[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
         if (!$locker) { throw new Failure(404,'LOCKER_NOT_FOUND','Locker not found.'); }
+        $management=$this->lockerManagementState($locker);
         $boxes=$this->q('SELECT c.id,c.code,c.width_mm,c.height_mm,c.depth_mm,c.max_weight_g,c.status,c.box_module_id,c.box_model_id,
                 bm.size_class,
                 m.code AS module_code,body.code AS body_code,
@@ -437,12 +551,14 @@ final class SiteInventory
                     ? 'Locker custody; no box claim' : 'Route association only');
         }
         unset($package);
-        $bodies=$this->q('SELECT body.id,body.code,body.display_sequence,body.status,body.body_model_id,
+        $bodies=$this->q('SELECT body.id,body.code,body.display_name,body.display_sequence,body.status,body.body_model_id,
+                board.board_address AS controller_address,board.protocol_profile,
                 model.code AS model_code,model.version AS model_version,model.name AS model_name
                 FROM locker_body_modules body LEFT JOIN locker_body_models model ON model.id=body.body_model_id
+                LEFT JOIN controller_boards board ON board.id=body.controller_board_id
                 WHERE body.locker_id=? ORDER BY body.display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC);
         $nextBodyPosition=$bodies ? 1+max(array_map(static fn(array $body): int => (int)$body['display_sequence'],$bodies)) : 1;
-        return ['locker'=>$locker,'occupancy'=>$occupancy,'unclaimed_custody'=>$unclaimedCustody,'packages'=>$packages,
+        return ['locker'=>$locker,'management'=>$management,'occupancy'=>$occupancy,'unclaimed_custody'=>$unclaimedCustody,'packages'=>$packages,
             'next_package_cursor'=>$more?(string)end($packages)['id']:null,
             'devices'=>$this->q('SELECT id,external_device_id,status,created_at FROM locker_devices WHERE locker_id=? ORDER BY id',[$id])->fetchAll(PDO::FETCH_ASSOC),
             'boards'=>$this->q('SELECT id,board_address,protocol_profile,display_sequence FROM controller_boards WHERE locker_id=? ORDER BY display_sequence',[$id])->fetchAll(PDO::FETCH_ASSOC),

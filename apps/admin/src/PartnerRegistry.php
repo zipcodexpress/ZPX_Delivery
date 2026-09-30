@@ -23,12 +23,14 @@ final class PartnerRegistry
             'legal_name'=>$row['legal_name'],'kind'=>$row['kind'],'status'=>$row['status'],
             'version'=>(int)$row['version'],'roles'=>$roles,'created_at'=>$row['created_at']];
     }
-    public function list(string $actor,string $cursor=''): array
+    public function list(string $actor,string $cursor='',string $search='',string $status=''): array
     {
         $this->authorize($actor);
         if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) { throw new Failure(422,'INVALID_CURSOR','Invalid partner cursor.'); }
         $args=[$this->org()]; $where='';
-        if ($cursor!=='') { $where=' AND id<?'; $args[]=$cursor; }
+        if ($search!=='') { $where.=' AND (display_name ILIKE ? OR code ILIKE ? OR id::text=?)'; array_push($args,'%'.$search.'%','%'.$search.'%',$search); }
+        if (in_array($status,['DRAFT','ACTIVE','SUSPENDED','ARCHIVED'],true)) { $where.=' AND status=?'; $args[]=$status; }
+        if ($cursor!=='') { $where.=' AND id<?'; $args[]=$cursor; }
         $rows=$this->q('SELECT id,code,display_name,legal_name,kind,status,version,created_at FROM network_partners WHERE organization_id=?'
             .$where.' ORDER BY id DESC LIMIT 26',$args)->fetchAll(PDO::FETCH_ASSOC);
         $more=count($rows)>25; $rows=array_slice($rows,0,25);

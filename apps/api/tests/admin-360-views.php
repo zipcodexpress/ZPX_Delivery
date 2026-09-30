@@ -80,6 +80,11 @@ try {
     $second=$history->page($adminUser,'driver',$driverId,'earnings',(string)$first['next_cursor']);
     check(count($first['items'])===25 && $first['next_cursor']!==null && count($second['items'])>=2,
         'driver earnings history pages through older transactions');
+    $filtered=$history->page($adminUser,'driver',$driverId,'earnings','','Entry');
+    $filteredNext=$history->page($adminUser,'driver',$driverId,'earnings',(string)$filtered['next_cursor'],'Entry');
+    check(count($filtered['items'])===25 && str_contains((string)$filtered['next_url'],'q=Entry')
+        && count($filteredNext['items'])>=2,
+        'driver history search remains active across older pages');
     failsIdentity(fn()=>$history->page($applicant,'driver',$driverId,'earnings'),403,
         'driver cannot inspect admin earnings history');
     failsIdentity(fn()=>$history->page($adminUser,'driver',$foreignId,'earnings'),404,

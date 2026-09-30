@@ -1,4 +1,5 @@
 <p><a href="{$data.back}">← {$data.name}</a></p>
 <section class="table-panel"><h2>{$data.name} · {$data.kind}</h2><p>History is ordered newest first. Each page shows up to 25 recorded entries.</p>
+<form method="get" action="{$data.back}/history" class="list-filter" role="search"><input type="hidden" name="kind" value="{$data.kind}"><label>Search<input type="search" name="q" value="{$data.search}" maxlength="120" placeholder="Reference, detail, or status"></label><button type="submit" class="primary">Search</button>{if $data.search}<a href="{$data.back}/history?kind={$data.kind}">Clear</a>{/if}</form>
 {empty name="data.items"}<p class="empty">No entries recorded.</p>{else /}<div class="table-scroll"><table><thead><tr><th>When</th><th>Reference</th><th>Details</th><th>Status</th></tr></thead><tbody>{volist name="data.items" id="row"}<tr><td>{$row.occurred_at}</td><td>{if $row.shipment_id}<a href="/admin/shipments/{$row.shipment_id}">{$row.reference}</a>{else /}{$row.reference}{/if}</td><td>{$row.detail}</td><td>{$row.status}</td></tr>{/volist}</tbody></table></div>{/empty}
-{if $data.next_cursor}<p><a href="{$data.back}/history?kind={$data.kind}&amp;cursor={$data.next_cursor}">Older entries →</a></p>{/if}</section>
+{if $data.next_url}<p><a href="{$data.next_url}">Older entries →</a></p>{/if}</section>

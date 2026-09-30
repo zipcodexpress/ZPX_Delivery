@@ -450,18 +450,20 @@ final class Service
 
     // ── Admin: List pending drivers ──────────────────────────────────
 
-    public function listPending(string $adminUser): array
+    public function listPending(string $adminUser,string $search='',string $status=''): array
     {
         $this->requireAdmin($adminUser);
+        if ($status!=='' && $status!=='PENDING') { return ['items'=>[]]; }
 
         $rows = $this->q(
             "SELECT d.id, d.user_id, d.engagement_type, d.status, d.phone, d.email, d.applied_at,
                     u.display_name
              FROM drivers d
              JOIN users u ON u.id=d.user_id
-             WHERE d.status='PENDING' AND u.organization_id=?
+             WHERE d.status='PENDING' AND u.organization_id=?".
+             ($search!==''?' AND (u.display_name ILIKE ? OR d.id::text=?)':'')."
              ORDER BY d.applied_at DESC",
-            [$this->org()]
+            $search!==''?[$this->org(),'%'.$search.'%',$search]:[$this->org()]
         )->fetchAll(PDO::FETCH_ASSOC);
 
         return ['items' => array_map(fn($r) => [

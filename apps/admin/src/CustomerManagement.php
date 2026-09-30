@@ -15,7 +15,7 @@ final class CustomerManagement
     private function org(): string { return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0'); }
     private function authorize(string $actor): void { (new Access($this->db))->requireNetworkAdmin($actor); }
 
-    public function list(string $actor, string $cursor=''): array
+    public function list(string $actor, string $cursor='',string $search='',string $status=''): array
     {
         $this->authorize($actor);
         if ($cursor!=='' && !preg_match('/^[1-9][0-9]{0,17}$/D',$cursor)) {
@@ -23,7 +23,10 @@ final class CustomerManagement
         }
         $args=[$this->org()];
         $cursorWhere='';
-        if ($cursor!=='') { $cursorWhere=' AND u.id<?'; $args[]=$cursor; }
+        if ($search!=='') { $cursorWhere.=' AND (u.display_name ILIKE ? OR u.id::text=?)'; array_push($args,'%'.$search.'%',$search); }
+        if ($status==='RESTRICTED') { $cursorWhere.=' AND EXISTS (SELECT 1 FROM customer_shipping_restrictions sr WHERE sr.user_id=u.id AND sr.revoked_at IS NULL)'; }
+        if ($status==='AVAILABLE') { $cursorWhere.=' AND NOT EXISTS (SELECT 1 FROM customer_shipping_restrictions sr WHERE sr.user_id=u.id AND sr.revoked_at IS NULL)'; }
+        if ($cursor!=='') { $cursorWhere.=' AND u.id<?'; $args[]=$cursor; }
         $rows=$this->query("SELECT u.id,u.display_name,u.status,u.created_at,
             (SELECT sr.id FROM customer_shipping_restrictions sr WHERE sr.user_id=u.id AND sr.revoked_at IS NULL) AS restriction_id
             FROM users u WHERE u.organization_id=? AND EXISTS(

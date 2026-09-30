@@ -1,7 +1,7 @@
 # 0002 — New terminal application; legacy terminal is reference only
 
 Purpose: correct terminal scope following Richard's explicit clarification.
-Audience: developers and project owner. Status: accepted scope; Android implementation/toolchain provisional.
+Audience: developers and project owner. Status: terminal choice superseded by [0009](0009-terminal-452-locker-setup.md); custody and controller safety requirements remain.
 Owner: Richard (product direction). Last reviewed: 2026-09-18.
 
 ## Decision
