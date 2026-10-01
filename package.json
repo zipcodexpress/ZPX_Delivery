@@ -8,17 +8,19 @@
   },
   "workspaces": [
     "apps/customer-web",
-    "apps/operations-web"
+    "apps/operations-web",
+    "apps/mobile"
   ],
   "scripts": {
-    "check": "npm run contracts:check && tsc --noEmit && npm test",
+    "check": "npm run contracts:check && tsc --noEmit && npm run check --workspace=@zpx/mobile && npm test",
     "contracts:generate": "node scripts/contracts.mjs generate",
     "contracts:check": "node scripts/contracts.mjs check && tsc -p packages/contracts/tsconfig.json",
-    "test": "node --test tests/simulator/*.test.mjs tests/contracts/*.test.mjs",
+    "test": "node --test tests/simulator/*.test.mjs tests/contracts/*.test.mjs tests/mobile/*.test.mjs",
     "test-simulator": "node --test tests/simulator/*.test.mjs",
     "build": "npm run build --workspaces",
     "dev:customer": "npm run dev --workspace=@zpx/customer-web",
     "dev:operations": "npm run dev --workspace=@zpx/operations-web",
+    "dev:mobile": "npm run start --workspace=@zpx/mobile",
     "dev:simulator": "node --env-file=.env simulators/locker/server.mjs",
     "test-db": "python3 scripts/dev.py test-db",
     "test-smoke": "python3 scripts/dev.py smoke",

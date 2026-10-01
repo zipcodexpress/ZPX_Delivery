@@ -25,6 +25,9 @@ __pycache__/
 .venv/
 .local/
 apps/api/runtime/
+apps/mobile/.expo/
+apps/mobile/ios/
+apps/mobile/android/
 
 # Local editor and OS files
 .vs/
