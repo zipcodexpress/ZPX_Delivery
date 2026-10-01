@@ -4,6 +4,8 @@ Date: 2026-09-30. Agent: Codex. Publication branch: `codex/terminal-final-deposi
 
 ## Objective and decisions
 
+Publication: PR [#44](https://github.com/zipcodexpress/ZPX_Delivery/pull/44) targets `main` from `codex/terminal-final-deposit-api`; implementation commit `0ad890e`. Local checks passed; GitHub CI is checked separately after publication. Review/merge this PR before the next integration milestone.
+
 Current objective: implement Delivery terminal-facing APIs against the existing cabinet/body/box inventory and custody model, using the documented TP8 route inventory as reference. Owner decision [0009](decisions/0009-terminal-452-locker-setup.md) keeps `terminal_452` as the Phase 1 base. Preserve its legacy API behavior; shared-cabinet allocation remains gated.
 
 ## Completed locally
@@ -46,7 +48,7 @@ Current objective: implement Delivery terminal-facing APIs against the existing 
 
 ## Remaining exact continuation
 
-Admin list search and the read-only reference-cabinet review are complete and locally verified. Publish the terminal API branch as a PR directly against `main`, including the cabinet-review changes missing there, and check CI before merge. The terminal checkout is available for Stage 3 source review; executable contract verification and physical/legacy parity remain gated below.
+Admin list search and the read-only reference-cabinet review are complete and locally verified. PR #44 publishes the terminal APIs and cabinet-review changes directly against `main`; check CI and review before merge. The terminal checkout is available for Stage 3 source review; executable contract verification and physical/legacy parity remain gated below.
 
 0. Live MySQL was accessed read-only through DBeaver at `192.168.86.202:3306`, database `zipcodexpress` (MySQL 8.0.12). Source addresses range 0–21; sequence 0–11; no duplicate per-parent sequence/address/position. All body directions are empty, all cabinets service_type=zippora. Box statuses are 0 (3,352), 1 (2,675), 3 (1); three box models lack positive dimensions. Owner authorized a local historical copy and it is complete. Source rows are reference only; reconcile ownership, hardware identity, source dimensions/units and profile before any physical mapping. No real locker test.
 1. Terminal source review at clean `0494a99`: `ExpressBoxService` sends form POSTs to `{Api_Host}/cabinet/zippora/{action}` and deserializes `ret/msg/data` via `DataContractJsonSerializer`. `getBoxConfig` maps `data.boxConfig.cabinets[].boxes[]`; C# distinguishes `sequence`, `lockAddr`, `boxAddr`, row/column, `bodyId`, `boxId` and string `isAllocable`. Factory selects `v1`, `v2` or `test`; V2 adds one to `boxAddr` before its wire command, V1 passes it through. No universal door range is yet verified. `InitBoxModel` assigns received config without structural validation. Delivery has a separate config projection, but its JSON envelope and some field types differ from this terminal DTO. Keep the existing terminal API path intact.
