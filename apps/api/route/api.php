@@ -54,7 +54,14 @@ foreach (['driver/runs'=>'runs','driver/pickup-offers'=>'pickup-offers','driver/
 }
 Route::any('api/delivery/v1/runs/<run_id>/stops/<stop_id>/arrive', static fn(Request $request, string $runId, string $stopId) => Zpx\Http\DriverController::handle($request,'arrive',$runId,$stopId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','stop_id'=>'[1-9][0-9]{0,17}']);
 Route::any('api/delivery/v1/runs/<run_id>/stops/<stop_id>/final-deposits', static fn(Request $request, string $runId, string $stopId) => Zpx\Http\DriverController::handle($request,'final-deposit',$runId,$stopId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','stop_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/runs/<run_id>/stops/<stop_id>/final-deposits/<session_id>/confirm', static fn(Request $request, string $runId, string $stopId, string $sessionId) => Zpx\Http\DriverController::handle($request,'final-deposit-confirm',$runId,$stopId,$sessionId))->pattern(['run_id'=>'[1-9][0-9]{0,17}','stop_id'=>'[1-9][0-9]{0,17}','session_id'=>'[1-9][0-9]{0,17}']);
 Route::any('api/delivery/v1/devices/me/commands', static fn(Request $request) => Zpx\Http\DeviceController::commands($request));
+Route::any('api/delivery/v1/devices/me/cabinet-config', static fn(Request $request) => Zpx\Http\DeviceController::cabinetConfig($request));
+Route::any('api/delivery/v1/devices/me/box-models', static fn(Request $request) => Zpx\Http\DeviceController::boxModels($request));
+Route::any('api/delivery/v1/devices/me/command-events', static fn(Request $request) => Zpx\Http\DeviceController::commandEvent($request));
+Route::any('api/delivery/v1/devices/me/pairings', static fn(Request $request) => Zpx\Http\PairingController::handle($request,'create'));
+Route::any('api/delivery/v1/devices/me/pairings/<pairing_id>', static fn(Request $request, string $pairingId) => Zpx\Http\PairingController::handle($request,'poll',$pairingId))->pattern(['pairing_id'=>'[1-9][0-9]{0,17}']);
+Route::any('api/delivery/v1/pairings/<pairing_id>/approve', static fn(Request $request, string $pairingId) => Zpx\Http\PairingController::handle($request,'approve',$pairingId))->pattern(['pairing_id'=>'[1-9][0-9]{0,17}']);
 foreach (['driver/register'=>'register','driver/profile'=>'profile','driver/profile/update'=>'update-profile','driver/wallet'=>'wallet','driver/transactions'=>'transactions','admin/drivers/pending'=>'pending','admin/drivers/<driver_id>/approve'=>'approve','admin/drivers/<driver_id>/reject'=>'reject','admin/driver-pay'=>'pay-run','admin/pickup-routes'=>'pickup-routes','admin/pickup-routes/assign'=>'pickup-route-assign','admin/pickup-recovery'=>'pickup-recovery'] as $path=>$action) {
     Route::any('api/delivery/v1/'.$path, static fn(Request $request, string $driverId='') => Zpx\Http\DriverManagementController::handle($request,$action,$driverId))->pattern(['driver_id'=>'[1-9][0-9]{0,17}']);
 }

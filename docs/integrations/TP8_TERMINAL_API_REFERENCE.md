@@ -1,0 +1,31 @@
+# TP8 cabinet API reference for Delivery terminal integration
+
+Source review: local `zpxapi_tp8` `main` at `929d5d1`, `terminal_452` `master` at `0494a99`, 2026-09-30. This is a source-level reference, not a tested wire contract or authorization to call a physical locker. The effective terminal server path is `POST /cabinet/zippora/{action}` with form-encoded fields. Keep that legacy path working; Delivery's implemented API is under `/api/delivery/v1`.
+
+## Effective legacy endpoints
+
+| Action | TP8 implementation | Terminal consumer / useful behavior |
+| --- | --- | --- |
+| `getAccessToken`, `checkAccessToken` | `zpxapi_tp8/route/app.php:180-181`; `app/cabinet/controller/Zippora.php:773-851`; `Base.php:37-61` | Terminal `ExpressBoxService.GetAccessToken` signs `apiKey`, secret, timestamp and cabinet ID, then sends `apiKey`, `kts`, `cabinetId`, `sign`. The API caches a cabinet-scoped token and uses it to set `_cabinetId`. Response is `ret/msg/data` with `accessToken`, `expire`, `cabinetId`, `address`, `zipcode`, `serviceType`. Do not transplant this MD5/form token scheme into Delivery device authentication. |
+| `getBoxConfig` | `Zippora.php:969-1042`; `Base.php:127-185`; model configuration in `app/common/model/CabinetBoxModelModel.php:76-125` | Terminal `ExpressBoxService.getBoxConfig` reads `data.boxConfig.cabinets[].boxes[]`. Body rows expose `bodyId`, `cabinetType`, `model`, `lockAddr`, `sequence`; box rows expose `boxId`, `boxAddr`, `row`, `column`, `blocked`, `model`, `boxModelId`, name/price/dimensions/image. TP8 also adds live `status`, `occupied`, occupant fields, and computed string `isAllocable`. Preserve physical IDs and addresses separately from display order. |
+| `getBoxModelList` | `Zippora.php:1092-1099`; `CabinetBoxModelModel.php:76-125` | Returns `data.boxModelList[]` with model ID/name/price/dimensions/image and cabinet availability count. Count is derived from live `cabinet_box` status/blocked state; it is not a static model property. |
+| `preAuthForBox` | `Zippora.php:1778-1818`; `CabinetBoxModel.php:31-62` | Selects a box for a model and returns `data.box` with legacy box ID, controller/door address and body sequence. This is a legacy allocator, not an ownership-aware Delivery claim. |
+| `commitForStore`, `proveCode`, `commitForPick` | `Zippora.php:3386-3455`, `3069-3159`, `3198-3245` | Legacy apartment parcel records, pickup codes, charges and box status transitions. They must remain on the legacy service. Delivery custody and payment states must use Delivery's own services. |
+| `commitForManualDropoff` | `Zippora.php:3458-3520` | Current TP8 has an additive non-locker legacy dropoff flow. Preserve it when testing terminal regression. |
+
+TP8's `getBoxConfig` merges structural rows with current stores and box status. `Base.php:169-185` reports a box allocable only if static allocability is `1`, it is unblocked, has no active store, and status is `0` or `3`. `CabinetBoxModel::assignBox` at `31-62` instead selects by cabinet, model, blocked and status `available` without consulting Delivery ownership; `releaseBox` at `182-200` resets status and blocked. A configuration response or an `isAllocable` flag cannot establish exclusive shared-cabinet ownership. TP8 `getBoxModelList` availability count uses status `0` via `countByBoxModel`, so its count may differ from per-box allocability for status `3`.
+
+## Delivery mapping and boundaries
+
+- Delivery already has `cabinet`, `cabinet_body`, `cabinet_box`, model/layout tables, historical source IDs, and links to `compartments` (migrations 032–035). Reuse these rows; do not create another live cabinet inventory. Historical `REFERENCE` cabinets remain unbound and inactive.
+- Delivery now has a **read-only** signed `GET /api/delivery/v1/devices/me/cabinet-config` projection using `boxConfig.cabinets[].boxes[]` for a bound, active, Delivery-only cabinet. It reuses enrolled-device signatures, requires complete cabinet-box-to-compartment links and matching board/door addresses, and reports every box `isAllocable: "0"` and `blocked: 1`. It makes no claim, writes no TP8 state, and cannot activate Send. Its `revision` is the cabinet version, not a terminal acknowledgment. Map IDs explicitly; never substitute display sequence or row/column for electrical addresses. Exact C# wire compatibility remains unverified.
+- Keep TP8's occupancy, blocked flags, apartment stores, token scheme, and `preAuthForBox` writes in TP8. Delivery's `/api/delivery/v1/devices/me/commands` currently uses signed device requests and ownership/claim checks; terminal integration should add a distinct Delivery client and use its existing controller/serial owner.
+- The terminal has an `ExpressBoxService.getConfig` method but no call site in this checkout. TP8 has a general operator/member config action for cargo types, box models and hold times, but no explicit `cabinet/zippora/getConfig` route or `Zippora::getConfig` method. Verify any deployed consumer before adding a Delivery equivalent.
+- TP8 `getAccessToken` currently includes a `debugSign` field on signature mismatch (`Zippora.php:803-808`). Do not copy that behavior into Delivery; review and remove it in the legacy service through its own change process.
+
+## Verification needed before implementation claims
+
+1. Capture sanitized **nonproduction** successful and failed responses for `getAccessToken`, `getBoxConfig`, `getBoxModelList`, and any effective `getConfig`, including empty cabinet/model lists and occupied/blocked boxes. Do not store credentials, tokens or personal occupant data in fixtures.
+2. Deserialize fixtures with the current C# DTOs and `JsonHelper` on a supported build; compare exact casing/types. The checked-in `DeserializeTest` only covers pickup lists. This Mac has no .NET/Mono tools, and the terminal checkout lacks its referenced `ZipporaService` project.
+3. Test Delivery's projection against frozen fixtures and authority rules. It must not make a referenced, frozen, occupied, or legacy-owned door available for Delivery allocation.
+4. Test existing TP8 deposit and pickup behavior with the Delivery feature off. Before shared-cabinet use, prove both allocators enforce one acknowledged ownership boundary; the current TP8 allocator does not read Delivery manifests.
