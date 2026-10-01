@@ -64,6 +64,16 @@ Drivers can view their own profile:
 GET /api/delivery/v1/driver/profile
 ```
 
+Drivers can update their own contact, license, address, emergency contact, vehicle and insurance fields:
+
+```
+POST /api/delivery/v1/driver/profile/update
+Headers: Authorization: Bearer <native token>, Idempotency-Key: <unique request key>
+Body: { "phone": "+12025550100", "address_city": "Austin" }
+```
+
+The endpoint accepts a partial update and returns the current profile. Driver status and verification status are not editable through this endpoint. Updates to license or insurance details do not automatically change verification status; operations must review those changes separately before treating the new documents as verified.
+
 Returns:
 - Driver ID, name, status, engagement type
 - Contact info (email, phone)

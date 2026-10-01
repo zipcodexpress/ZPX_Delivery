@@ -1,0 +1,27 @@
+{
+  "name": "@zpx/mobile",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --ios --localhost",
+    "ios:native": "expo run:ios",
+    "check": "tsc --noEmit",
+    "build": "expo export --platform all --output-dir dist"
+  },
+  "dependencies": {
+    "expo": "57.0.26",
+    "expo-crypto": "~57.0.3",
+    "expo-secure-store": "~57.0.4",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-maps": "1.27.2",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4"
+  }
+}
