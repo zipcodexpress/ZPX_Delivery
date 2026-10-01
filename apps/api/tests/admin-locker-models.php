@@ -264,8 +264,31 @@ try {
         'bound cabinet setup is immutable');
     failsIdentity(fn()=>$setups->removeBody($customerAdmin,$setupId,['body_id'=>(string)$preview['bodies'][0]['id'],
         'version'=>'4','reason'=>'Bound setup removal attempt']),409,'bound cabinet body cannot be removed');
+    $referenceBody=(string)$runtime->query("INSERT INTO cabinet_body(cabinet_id,body_model_id,body_name,sequence,
+        display_sequence,addr,protocol_profile,legacy_body_id) VALUES ($correctionId,$historicalBody,
+        'Historical body','0',0,0,'UNVERIFIED',980002) RETURNING body_id")->fetchColumn();
+    $runtime->query("INSERT INTO cabinet_box(cabinet_id,body_id,box_model_id,\"row\",\"column\",addr,legacy_box_id)
+        VALUES ($correctionId,$referenceBody,$historicalBox,1,1,0,980002),
+               ($correctionId,$referenceBody,$historicalBox,2,1,1,980003)");
     $runtime->prepare("UPDATE cabinet SET status='REFERENCE',legacy_cabinet_id=? WHERE cabinet_id=?")
         ->execute([90000000+(int)$correctionId,$correctionId]);
+    $referenceDetail=$setups->detail($customerAdmin,$correctionId);
+    $review=$referenceDetail['reference_review'];
+    check((int)$review['body']['total']===1 && (int)$review['box']['total']===2
+        && (int)$review['box']['template_differences']===1
+        && (int)$review['box']['unverified_dimensions']===2
+        && (int)$referenceDetail['boxes'][0]['template_difference']===0
+        && (int)$referenceDetail['boxes'][1]['template_difference']===1
+        && $review['location_links']===[],
+        'historical review reports raw identities, template drift, and unverified dimensions without binding');
+    $runtime->prepare('INSERT INTO legacy_location_links(location_id,source_system,legacy_cabinet_id,source_revision)
+        VALUES (?,\'zipcodexpress\',?,\'synthetic-link-revision\')')
+        ->execute([$location,90000000+(int)$correctionId]);
+    $linkedReview=$setups->detail($customerAdmin,$correctionId)['reference_review'];
+    check(count($linkedReview['location_links'])===1
+        && $linkedReview['location_links'][0]['source_revision']==='synthetic-link-revision'
+        && $setups->detail($customerAdmin,$correctionId)['draft']['status']==='REFERENCE',
+        'a matching location link remains a review candidate and never promotes a historical cabinet');
     failsIdentity(fn()=>$setups->addBody($customerAdmin,$correctionId,array_replace($first,['version'=>'3'])),409,
         'historical reference cannot be edited into an operational draft');
     failsIdentity(fn()=>$setups->bind($customerAdmin,$correctionId,array_replace($bind,['version'=>'3'])),409,
@@ -274,6 +297,22 @@ try {
     try {
         rejected($runtime,"UPDATE cabinet SET status='DRAFT' WHERE cabinet_id=$correctionId",'42501');
     } finally { $runtime->rollBack(); }
+
+    $referencePage=new think\Request();
+    $referenceUri='/admin/locker-setups/'.$correctionId;
+    $referencePage->withServer(['REQUEST_METHOD'=>'GET','REQUEST_URI'=>$referenceUri,
+        'PATH_INFO'=>$referenceUri,'HTTP_HOST'=>'localhost:8000']);
+    $referencePage->withCookie(['zpx_delivery_session'=>$adminToken]);
+    $referenceApp=new think\App(dirname(__DIR__)); $referenceApp->debug(false);
+    $referenceResponse=$referenceApp->http->run($referencePage);
+    check($referenceResponse->getCode()===200
+        && str_contains($referenceResponse->getContent(),'Historical reconciliation review')
+        && str_contains($referenceResponse->getContent(),'Template check')
+        && str_contains($referenceResponse->getContent(),'No matching slot')
+        && str_contains($referenceResponse->getContent(),'synthetic-link-revision')
+        && !str_contains($referenceResponse->getContent(),'name="location_id"'),
+        'historical cabinet page shows review evidence without a bind control');
+    $referenceApp->http->end($referenceResponse);
 
     $request=new think\Request();
     $request->withServer(['REQUEST_METHOD'=>'GET','REQUEST_URI'=>'/admin/body-box-layouts',
