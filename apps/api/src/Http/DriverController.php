@@ -12,7 +12,7 @@ use Zpx\Infrastructure\Database\Connection;
 
 final class DriverController
 {
-    public static function handle(Request $request, string $action, string $runId = '', string $stopId = ''): Response
+    public static function handle(Request $request, string $action, string $runId = '', string $stopId = '', string $sessionId = ''): Response
     {
         $requestId = Secrets::uuid();
         try {
@@ -30,6 +30,7 @@ final class DriverController
                 'depart' => 'POST',
                 'arrive' => 'POST',
                 'final-deposit' => 'POST',
+                'final-deposit-confirm' => 'POST',
                 default => 'GET',
             };
             if ($method !== $expected) { throw new Failure(405, 'METHOD_NOT_ALLOWED', 'Unsupported method.'); }
@@ -90,6 +91,7 @@ final class DriverController
                 'depart' => $custody->departRun($user, $runId, $input, $key, $request->header('if-match','')),
                 'arrive' => $custody->arriveAtStop($user, $runId, $stopId, $input, $key, $request->header('if-match','')),
                 'final-deposit' => (new FinalDeposit($db,$crypto))->prepare($user,$runId,$stopId,$input,$key,$request->header('if-match','')),
+                'final-deposit-confirm' => (new FinalDeposit($db,$crypto))->confirm($user,$runId,$stopId,$sessionId,$input,$key,$request->header('if-match','')),
             };
 
             return Reply::json(200, $body, $requestId);

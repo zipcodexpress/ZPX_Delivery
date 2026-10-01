@@ -1427,6 +1427,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{run_id}/stops/{stop_id}/final-deposits/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm driver placement after ordered signed terminal observations and transfer custody to the destination locker. */
+        post: operations["driver_confirm_final_deposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{run_id}/complete": {
         parameters: {
             query?: never;
@@ -1518,8 +1535,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enrolled terminal creates short-lived customer/driver pairing scene.
-         * @description Enrolled terminal creates short-lived customer/driver pairing scene.
+         * Enrolled terminal creates a short-lived final-deposit driver pairing scene.
+         * @description Requires the enrolled device's Ed25519 signature over POST, exact path, timestamp, nonce and raw JSON body hash. Only an active Delivery-only site without a legacy location link can create a scene. Other pairing workflows are reserved until implemented.
          */
         post: operations["delivery_29__devices_me_pairings"];
         delete?: never;
@@ -1538,8 +1555,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Authenticated app user approves explicit site/action.
-         * @description Authenticated app user approves explicit site/action.
+         * Authenticated driver approves the scanned final-deposit scene for the exact site.
+         * @description The app must send the scene_payload scanned from the terminal. Approval binds the authenticated driver to the short-lived device scene; it does not authorize a door by itself.
          */
         post: operations["delivery_30__pairings_pairing_id_approve"];
         delete?: never;
@@ -1556,8 +1573,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Terminal polls only own scene.
-         * @description Terminal polls only own scene.
+         * Enrolled terminal polls only its own final-deposit pairing scene.
+         * @description Requires the enrolled device's Ed25519 signature over GET, exact path, timestamp, nonce and raw request body hash. Expired pending scenes become EXPIRED.
          */
         get: operations["delivery_31__devices_me_pairings_pairing_id"];
         put?: never;
@@ -1622,6 +1639,66 @@ export interface paths {
          * @description Actor attests placed/removed; insufficient alone without device evidence.
          */
         post: operations["delivery_34__locker_sessions_session_id_attest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/command-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an enrolled terminal's ordered command observations without transferring parcel custody.
+         * @description Ed25519 signature covers POST, the exact path, timestamp, nonce and SHA-256 of the raw JSON body. The terminal must journal dispatch before reporting an observed open and close. A repeated event ID with the same command and type is accepted idempotently using a fresh signed request. Signed reports are retained as terminal claims; physical verification and actor confirmation remain separate.
+         */
+        post: operations["delivery_device_command_event"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/box-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List models installed in the enrolled Delivery cabinet without advertising available capacity.
+         * @description Uses the same signed device credential, cabinet mapping, revision and safety checks as cabinet-config. Every model has availableCount 0 until a separately verified allocation boundary is released. This is a Delivery client contract, not a legacy TP8 response envelope.
+         */
+        get: operations["delivery_device_box_models"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/cabinet-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the enrolled terminal's bound Delivery cabinet structure without allocating a door.
+         * @description Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. Only one active Delivery-only bound cabinet with complete installed address mapping is returned. Every box is blocked and unavailable until a separate ownership and allocation release. This is a new Delivery client contract, not a drop-in replacement for TP8 getBoxConfig.
+         */
+        get: operations["delivery_device_cabinet_config"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2481,7 +2558,7 @@ export interface components {
         };
         PairingCreate: {
             /** @enum {string} */
-            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
+            workflow: "FINAL_DEPOSIT";
         };
         Pairing: {
             /** @description Opaque identifier; serialize as string. */
@@ -2494,9 +2571,11 @@ export interface components {
         };
         PairingApproval: {
             /** @enum {string} */
-            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
+            workflow: "FINAL_DEPOSIT";
             /** @description Opaque identifier; serialize as string. */
             location_id: string;
+            /** @description Opaque scene code scanned from the terminal; required to approve this pairing. */
+            scene_payload: string;
         };
         LockerSessionCreate: {
             /** @description Opaque identifier; serialize as string. */
@@ -2532,6 +2611,79 @@ export interface components {
             locker_id: string;
             board_address: number;
             door_address: number;
+        };
+        TerminalCommandEventRequest: {
+            /** Format: uuid */
+            command_id: string;
+            /** Format: uuid */
+            event_id: string;
+            /** @enum {string} */
+            event_type: "DISPATCH_RECORDED" | "OPEN_OBSERVED" | "CLOSE_OBSERVED" | "UNKNOWN";
+        };
+        TerminalCommandEventResult: {
+            /** Format: uuid */
+            command_id: string;
+            /** Format: uuid */
+            event_id: string;
+            recorded: boolean;
+            replayed: boolean;
+            command_status?: string;
+            session_status?: string;
+            /** @enum {boolean} */
+            custody_transferred: false;
+        };
+        TerminalBoxModels: {
+            revision: number;
+            items: {
+                boxModelId: string;
+                boxModelName: string;
+                sizeClass: string | null;
+                /** @enum {integer} */
+                availableCount: 0;
+            }[];
+        };
+        TerminalCabinetConfig: {
+            revision: number;
+            boxConfig: {
+                cabinetId: string;
+                address: string;
+                zipcode: string;
+                cabinets: {
+                    bodyId: string;
+                    sequence: string;
+                    displaySequence: number;
+                    cabinetType: string;
+                    model: string;
+                    lockAddr: number;
+                    protocolProfile: string;
+                    boxes: {
+                        boxId: string;
+                        boxAddr: number;
+                        row: number;
+                        column: number;
+                        model: string;
+                        boxModelId: string;
+                        boxModelName: string;
+                        dimensionsMm: {
+                            width?: number;
+                            height?: number;
+                            depth?: number;
+                        };
+                        maxWeightG: number;
+                        /** @enum {string} */
+                        isAllocable: "0";
+                        /** @enum {integer} */
+                        blocked: 1;
+                    }[];
+                }[];
+            };
+            boxModels: {
+                boxModelId: string;
+                boxModelName: string;
+                sizeClass: string | null;
+                /** @enum {integer} */
+                availableCount: 0;
+            }[];
         };
         DeviceCommand: {
             /** Format: uuid */
@@ -7461,6 +7613,63 @@ export interface operations {
             };
         };
     };
+    driver_confirm_final_deposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+                /** @description Required for browser cookie authentication. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                run_id: string;
+                stop_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {boolean} */
+                    placed: true;
+                    expected_package_version: number;
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Destination locker custody confirmed; notification event queued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session_id: string;
+                        package_id: string;
+                        /** @enum {string} */
+                        package_state: "AT_DESTINATION";
+                        package_version: number;
+                        /** @enum {boolean} */
+                        custody_transferred: true;
+                        stop_completed: boolean;
+                        run_revision: number;
+                    };
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     delivery_25__runs_run_id_complete: {
         parameters: {
             query?: never;
@@ -8495,6 +8704,109 @@ export interface operations {
             };
             /** @description Structured error */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delivery_device_command_event: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TerminalCommandEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Observation recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalCommandEventResult"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delivery_device_box_models: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed model summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalBoxModels"];
+                };
+            };
+            /** @description Structured error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delivery_device_cabinet_config: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Device-Key-Id": string;
+                "X-Device-Timestamp": string;
+                "X-Device-Nonce": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalCabinetConfig"];
+                };
+            };
+            /** @description Structured error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };

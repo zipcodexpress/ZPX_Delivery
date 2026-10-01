@@ -16,4 +16,25 @@ final class DeviceController
         try { return Reply::json(200,(new DeviceCommands(Connection::fromEnvironment()))->poll($request),$id); }
         catch (Failure $e) { return Reply::json($e->status,['code'=>$e->errorCode,'message'=>$e->getMessage(),'request_id'=>$id,'retryable'=>false],$id); }
     }
+
+    public static function cabinetConfig(Request $request): Response
+    {
+        $id=Secrets::uuid();
+        try { return Reply::json(200,(new DeviceCommands(Connection::fromEnvironment()))->cabinetConfig($request),$id); }
+        catch (Failure $e) { return Reply::json($e->status,['code'=>$e->errorCode,'message'=>$e->getMessage(),'request_id'=>$id,'retryable'=>false],$id); }
+    }
+
+    public static function boxModels(Request $request): Response
+    {
+        $id=Secrets::uuid();
+        try { return Reply::json(200,(new DeviceCommands(Connection::fromEnvironment()))->boxModels($request),$id); }
+        catch (Failure $e) { return Reply::json($e->status,['code'=>$e->errorCode,'message'=>$e->getMessage(),'request_id'=>$id,'retryable'=>false],$id); }
+    }
+
+    public static function commandEvent(Request $request): Response
+    {
+        $id=Secrets::uuid();
+        try { return Reply::json(200,(new DeviceCommands(Connection::fromEnvironment()))->reportEvent($request),$id); }
+        catch (Failure $e) { return Reply::json($e->status,['code'=>$e->errorCode,'message'=>$e->getMessage(),'request_id'=>$id,'retryable'=>false],$id); }
+    }
 }

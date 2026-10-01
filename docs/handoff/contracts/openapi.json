@@ -4721,6 +4721,32 @@
         }
       }
     },
+    "/runs/{run_id}/stops/{stop_id}/final-deposits/{session_id}/confirm": {
+      "post": {
+        "operationId": "driver_confirm_final_deposit",
+        "summary": "Confirm driver placement after ordered signed terminal observations and transfer custody to the destination locker.",
+        "parameters": [
+          {"name":"run_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"stop_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"session_id","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"Idempotency-Key","in":"header","required":true,"schema":{"type":"string","minLength":16,"maxLength":100}},
+          {"name":"If-Match","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-CSRF-Token","in":"header","required":false,"description":"Required for browser cookie authentication.","schema":{"type":"string"}}
+        ],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+          "properties":{"placed":{"type":"boolean","enum":[true]},"expected_package_version":{"type":"integer","minimum":0},
+            "expected_revision":{"type":"integer","minimum":1}},
+          "required":["placed","expected_package_version","expected_revision"]}}}},
+        "responses":{
+          "200":{"description":"Destination locker custody confirmed; notification event queued.","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
+            "properties":{"session_id":{"type":"string"},"package_id":{"type":"string"},"package_state":{"type":"string","enum":["AT_DESTINATION"]},
+              "package_version":{"type":"integer"},"custody_transferred":{"type":"boolean","enum":[true]},
+              "stop_completed":{"type":"boolean"},"run_revision":{"type":"integer"}},
+            "required":["session_id","package_id","package_state","package_version","custody_transferred","stop_completed","run_revision"]}}}},
+          "default":{"description":"Structured error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+        }
+      }
+    },
     "/runs/{run_id}/complete": {
       "post": {
         "operationId": "delivery_25__runs_run_id_complete",
@@ -5343,8 +5369,8 @@
     "/devices/me/pairings": {
       "post": {
         "operationId": "delivery_29__devices_me_pairings",
-        "summary": "Enrolled terminal creates short-lived customer/driver pairing scene.",
-        "description": "Enrolled terminal creates short-lived customer/driver pairing scene.",
+        "summary": "Enrolled terminal creates a short-lived final-deposit driver pairing scene.",
+        "description": "Requires the enrolled device's Ed25519 signature over POST, exact path, timestamp, nonce and raw JSON body hash. Only an active Delivery-only site without a legacy location link can create a scene. Other pairing workflows are reserved until implemented.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -5469,8 +5495,8 @@
     "/pairings/{pairing_id}/approve": {
       "post": {
         "operationId": "delivery_30__pairings_pairing_id_approve",
-        "summary": "Authenticated app user approves explicit site/action.",
-        "description": "Authenticated app user approves explicit site/action.",
+        "summary": "Authenticated driver approves the scanned final-deposit scene for the exact site.",
+        "description": "The app must send the scene_payload scanned from the terminal. Approval binds the authenticated driver to the short-lived device scene; it does not authorize a door by itself.",
         "parameters": [
           {
             "name": "pairing_id",
@@ -5608,8 +5634,8 @@
     "/devices/me/pairings/{pairing_id}": {
       "get": {
         "operationId": "delivery_31__devices_me_pairings_pairing_id",
-        "summary": "Terminal polls only own scene.",
-        "description": "Terminal polls only own scene.",
+        "summary": "Enrolled terminal polls only its own final-deposit pairing scene.",
+        "description": "Requires the enrolled device's Ed25519 signature over GET, exact path, timestamp, nonce and raw request body hash. Expired pending scenes become EXPIRED.",
         "parameters": [
           {
             "name": "pairing_id",
@@ -6106,6 +6132,58 @@
             }
           }
         }
+      }
+    },
+    "/devices/me/command-events": {
+      "post": {
+        "operationId": "delivery_device_command_event",
+        "summary": "Record an enrolled terminal's ordered command observations without transferring parcel custody.",
+        "description": "Ed25519 signature covers POST, the exact path, timestamp, nonce and SHA-256 of the raw JSON body. The terminal must journal dispatch before reporting an observed open and close. A repeated event ID with the same command and type is accepted idempotently using a fresh signed request. Signed reports are retained as terminal claims; physical verification and actor confirmation remain separate.",
+        "parameters": [
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
+        ],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCommandEventRequest"}}}},
+        "responses": {
+          "200": {"description":"Observation recorded", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCommandEventResult"}}}},
+          "default": {"description":"Structured error", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+        },
+        "security": [{"DeviceAuth":[]}]
+      }
+    },
+    "/devices/me/box-models": {
+      "get": {
+        "operationId": "delivery_device_box_models",
+        "summary": "List models installed in the enrolled Delivery cabinet without advertising available capacity.",
+        "description": "Uses the same signed device credential, cabinet mapping, revision and safety checks as cabinet-config. Every model has availableCount 0 until a separately verified allocation boundary is released. This is a Delivery client contract, not a legacy TP8 response envelope.",
+        "parameters": [
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
+        ],
+        "responses": {
+          "200": {"description":"Installed model summary", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalBoxModels"}}}},
+          "default": {"description":"Structured error", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+        },
+        "security": [{"DeviceAuth":[]}]
+      }
+    },
+    "/devices/me/cabinet-config": {
+      "get": {
+        "operationId": "delivery_device_cabinet_config",
+        "summary": "Read the enrolled terminal's bound Delivery cabinet structure without allocating a door.",
+        "description": "Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. Only one active Delivery-only bound cabinet with complete installed address mapping is returned. Every box is blocked and unavailable until a separate ownership and allocation release. This is a new Delivery client contract, not a drop-in replacement for TP8 getBoxConfig.",
+        "parameters": [
+          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
+          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
+        ],
+        "responses": {
+          "200": {"description":"Read-only configuration", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCabinetConfig"}}}},
+          "default": {"description":"Structured error", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+        },
+        "security": [{"DeviceAuth":[]}]
       }
     },
     "/devices/me/commands": {
@@ -9201,12 +9279,7 @@
         "properties": {
           "workflow": {
             "type": "string",
-            "enum": [
-              "ORIGIN_DEPOSIT",
-              "INBOUND_PICKUP",
-              "FINAL_DEPOSIT",
-              "RECIPIENT_PICKUP"
-            ]
+            "enum": ["FINAL_DEPOSIT"]
           }
         },
         "required": [
@@ -9252,21 +9325,21 @@
         "properties": {
           "workflow": {
             "type": "string",
-            "enum": [
-              "ORIGIN_DEPOSIT",
-              "INBOUND_PICKUP",
-              "FINAL_DEPOSIT",
-              "RECIPIENT_PICKUP"
-            ]
+            "enum": ["FINAL_DEPOSIT"]
           },
           "location_id": {
             "type": "string",
             "description": "Opaque identifier; serialize as string."
+          },
+          "scene_payload": {
+            "type": "string",
+            "description": "Opaque scene code scanned from the terminal; required to approve this pairing."
           }
         },
         "required": [
           "workflow",
-          "location_id"
+          "location_id",
+          "scene_payload"
         ]
       },
       "LockerSessionCreate": {
@@ -9388,6 +9461,63 @@
           "board_address",
           "door_address"
         ]
+      },
+      "TerminalCommandEventRequest": {
+        "type":"object","additionalProperties":false,
+        "properties":{
+          "command_id":{"type":"string","format":"uuid"},
+          "event_id":{"type":"string","format":"uuid"},
+          "event_type":{"type":"string","enum":["DISPATCH_RECORDED","OPEN_OBSERVED","CLOSE_OBSERVED","UNKNOWN"]}
+        },"required":["command_id","event_id","event_type"]
+      },
+      "TerminalCommandEventResult": {
+        "type":"object","additionalProperties":false,
+        "properties":{
+          "command_id":{"type":"string","format":"uuid"},
+          "event_id":{"type":"string","format":"uuid"},
+          "recorded":{"type":"boolean"},
+          "replayed":{"type":"boolean"},
+          "command_status":{"type":"string"},
+          "session_status":{"type":"string"},
+          "custody_transferred":{"type":"boolean","enum":[false]}
+        },"required":["command_id","event_id","recorded","replayed","custody_transferred"]
+      },
+      "TerminalBoxModels": {
+        "type":"object",
+        "properties":{
+          "revision":{"type":"integer","minimum":1},
+          "items":{"type":"array","items":{"type":"object","properties":{
+            "boxModelId":{"type":"string"},"boxModelName":{"type":"string"},
+            "sizeClass":{"type":"string","nullable":true},
+            "availableCount":{"type":"integer","enum":[0]}
+          },"required":["boxModelId","boxModelName","sizeClass","availableCount"]}}
+        },
+        "required":["revision","items"]
+      },
+      "TerminalCabinetConfig": {
+        "type": "object",
+        "properties": {
+          "revision": {"type":"integer","minimum":1},
+          "boxConfig": {"type":"object","properties":{
+            "cabinetId":{"type":"string"},"address":{"type":"string"},"zipcode":{"type":"string"},
+            "cabinets":{"type":"array","items":{"type":"object","properties":{
+              "bodyId":{"type":"string"},"sequence":{"type":"string"},"displaySequence":{"type":"integer"},
+              "cabinetType":{"type":"string"},"model":{"type":"string"},"lockAddr":{"type":"integer"},
+              "protocolProfile":{"type":"string"},
+              "boxes":{"type":"array","items":{"type":"object","properties":{
+                "boxId":{"type":"string"},"boxAddr":{"type":"integer"},"row":{"type":"integer"},"column":{"type":"integer"},
+                "model":{"type":"string"},"boxModelId":{"type":"string"},"boxModelName":{"type":"string"},
+                "dimensionsMm":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"},"depth":{"type":"integer"}}},
+                "maxWeightG":{"type":"integer"},"isAllocable":{"type":"string","enum":["0"]},"blocked":{"type":"integer","enum":[1]}
+              },"required":["boxId","boxAddr","row","column","model","boxModelId","boxModelName","dimensionsMm","maxWeightG","isAllocable","blocked"]}}
+            },"required":["bodyId","sequence","displaySequence","cabinetType","model","lockAddr","protocolProfile","boxes"]}}
+          },"required":["cabinetId","address","zipcode","cabinets"]},
+          "boxModels":{"type":"array","items":{"type":"object","properties":{
+            "boxModelId":{"type":"string"},"boxModelName":{"type":"string"},"sizeClass":{"type":"string","nullable":true},
+            "availableCount":{"type":"integer","enum":[0]}
+          },"required":["boxModelId","boxModelName","sizeClass","availableCount"]}}
+        },
+        "required": ["revision","boxConfig","boxModels"]
       },
       "DeviceCommand": {
         "type": "object",
