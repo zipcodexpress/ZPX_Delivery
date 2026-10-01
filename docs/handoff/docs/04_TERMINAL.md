@@ -56,5 +56,4 @@ Origin deposit now includes size reconciliation:
 
 Recipient pickup may use a one-time transferable pickup grant intentionally shared by the sender-as-recipient. SI alone never opens a door.
 
-Historical Windows-host implementation notes are reference material; Android remains the preferred new terminal direction per current project decisions.
-
+[Decision 0009](../../decisions/0009-terminal-452-locker-setup.md) supersedes the earlier Android/reference-only direction: Phase 1 extends terminal_452 while preserving legacy behavior. Follow the [current Windows Codex handoff](../../terminal/WINDOWS_CODEX_HANDOFF.md) for the implemented API boundary and ordered Windows work. The current Windows 7 SP1 pilot needs .NET Framework 4.8; 4.8.1 is incompatible.
