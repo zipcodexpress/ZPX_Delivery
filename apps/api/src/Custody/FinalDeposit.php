@@ -16,11 +16,19 @@ final class FinalDeposit
     private function q(string $sql,array $args=[]): \PDOStatement { $q=$this->db->prepare($sql); $q->execute($args); return $q; }
     private function org(): string { return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0'); }
 
-    public function prepare(string $user,string $runId,string $stopId,array $input,string $key,string $match=''): array
+    public function retry(string $user,string $session,array $input,string $key): array {
+        Input::fields($input,['box_model_id']);Shipping::id($input['box_model_id']);
+        $r=$this->q("SELECT *,encode(credential_hash,'hex') AS credential_hex FROM locker_sessions WHERE id=? AND actor_user_id=? AND status='CANCELLED' AND action='FINAL_DEPOSIT'",[$session,$user])->fetch(PDO::FETCH_ASSOC);
+        if(!$r) throw new Failure(409,'DEPOSIT_RETRY_UNAVAILABLE','Only a declined deposit can select another size.');
+        $ctx=json_decode($r['workflow_context'],true,512,JSON_THROW_ON_ERROR);
+        return $this->prepareVerified($user,$ctx['run_id'],$ctx['stop_id'],['package_id'=>(string)$r['package_id'],'pairing_id'=>(string)$r['pairing_id'],'label_payload'=>'retry:'.$session,'expected_package_version'=>(int)$r['expected_package_version'],'expected_revision'=>$ctx['expected_revision'],'box_model_id'=>$input['box_model_id']],$key,'',$r['credential_hex']);
+    }
+    public function prepare(string $user,string $runId,string $stopId,array $input,string $key,string $match=''): array { return $this->prepareVerified($user,$runId,$stopId,$input,$key,$match); }
+    private function prepareVerified(string $user,string $runId,string $stopId,array $input,string $key,string $match='',?string $verifiedHash=null): array
     {
         $this->identity->requireRole($user,'DRIVER');
         Shipping::id($runId); Shipping::id($stopId);
-        Input::fields($input,['package_id','pairing_id','label_payload','expected_package_version','expected_revision']);
+        Input::fields($input,['package_id','pairing_id','label_payload','expected_package_version','expected_revision'],['box_model_id']);
         $package=Shipping::id($input['package_id']); $pairing=Shipping::id($input['pairing_id']);
         $label=Input::text($input['label_payload'],1,500); Input::text($key,16,100);
         if (!is_int($input['expected_revision']) || $input['expected_revision']<1 || !is_int($input['expected_package_version']) || $input['expected_package_version']<0) {
@@ -28,7 +36,7 @@ final class FinalDeposit
         }
         $revision=$input['expected_revision'];
         if ($match!=='' && $match!=='"'.$revision.'"') { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision precondition does not match.'); }
-        return (new Transaction($this->db))->run(function () use ($user,$runId,$stopId,$package,$pairing,$label,$input,$key,$revision) {
+        return (new Transaction($this->db))->run(function () use ($user,$runId,$stopId,$package,$pairing,$label,$input,$key,$revision,$verifiedHash) {
             $scope='final-deposit:'.$this->org().':'.$user;
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))',[$scope.':'.$key]);
             $request=['run_id'=>$runId,'stop_id'=>$stopId]+$input;
@@ -69,7 +77,7 @@ final class FinalDeposit
                 throw new Failure(409,'PHYSICAL_LOCKER_REQUIRED','Destination is not enabled for physical commands.');
             }
             $token=$this->q("SELECT encode(token_hash,'hex') FROM package_labels WHERE package_id=? AND status='ACTIVE' AND expires_at>now()",[$package])->fetchColumn();
-            if (!$token || !hash_equals((string)$token,hash('sha256',$label))) { throw new Failure(422,'LABEL_REJECTED','Scan the active parcel label.'); }
+            if (!$token || !hash_equals((string)$token,$verifiedHash ?? hash('sha256',$label))) { throw new Failure(422,'LABEL_REJECTED','Scan the active parcel label.'); }
             if ($this->q("SELECT 1 FROM locker_sessions WHERE package_id=? AND action='FINAL_DEPOSIT' AND status IN ('READY','OPEN','CLOSED','UNKNOWN','CONFIRMED') LIMIT 1",[$package])->fetchColumn()) {
                 throw new Failure(409,'SESSION_EXISTS','A final deposit session already exists; reconcile it before retrying.');
             }
@@ -78,23 +86,25 @@ final class FinalDeposit
                   AND d.locker_id=? AND d.status='ACTIVE' FOR UPDATE OF tp",[$pairing,$user,$row['locker_id']])->fetch(PDO::FETCH_ASSOC);
             if (!$pair) { throw new Failure(409,'PAIRING_REQUIRED','Approve a current pairing at this destination device.'); }
             if (!$this->q("SELECT 1 FROM device_credentials WHERE device_id=? AND public_key IS NOT NULL AND revoked_at IS NULL
-                AND valid_from<=now() AND (expires_at IS NULL OR expires_at>now()) LIMIT 1",[$pair['device_id']])->fetchColumn()) {
+                AND valid_from<=now() AND (expires_at IS NULL OR expires_at>now()) LIMIT 1",[$pair['device_id']])->fetchColumn() && !(new CabinetConfigAuth($this->db))->configured((string)$pair['device_id'])) {
                 throw new Failure(409,'DEVICE_NOT_ENROLLED','Destination device has no valid enrolled credential.');
             }
+            $sizeClause='';$sizeArgs=[];
+            if(isset($input['box_model_id'])) {$sizeClause=' AND EXISTS(SELECT 1 FROM cabinet_box bx WHERE bx.compartment_id=c.id AND bx.box_model_id=?)';$sizeArgs[] = Shipping::id($input['box_model_id']);}
             $comp=$this->q("SELECT c.id,c.code,co.generation FROM compartments c
                 JOIN controller_boards cb ON cb.id=c.controller_board_id AND cb.locker_id=c.locker_id
                 JOIN compartment_ownership co ON co.compartment_id=c.id AND co.owner='DELIVERY'
                 JOIN ownership_manifests om ON om.id=co.manifest_id AND om.locker_id=c.locker_id AND om.generation=co.generation AND om.state='ACTIVE'
                 LEFT JOIN compartment_claims cc ON cc.compartment_id=c.id
                 WHERE c.locker_id=? AND c.status='AVAILABLE' AND c.door_address IS NOT NULL AND cc.id IS NULL
-                  AND c.width_mm>=? AND c.height_mm>=? AND c.depth_mm>=? AND c.max_weight_g>=?
+                  AND c.width_mm>=? AND c.height_mm>=? AND c.depth_mm>=? AND c.max_weight_g>=? $sizeClause
                   AND om.generation=(SELECT max(generation) FROM ownership_manifests WHERE locker_id=c.locker_id AND state='ACTIVE')
                 ORDER BY c.width_mm*c.height_mm*c.depth_mm,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED",
-                [$row['locker_id'],$row['width_mm'],$row['height_mm'],$row['depth_mm'],$row['weight_g']])->fetch(PDO::FETCH_ASSOC);
+                [$row['locker_id'],$row['width_mm'],$row['height_mm'],$row['depth_mm'],$row['weight_g'],...$sizeArgs])->fetch(PDO::FETCH_ASSOC);
             if (!$comp) { throw new Failure(409,'NO_COMPARTMENT','No eligible delivery compartment is available.'); }
-            $session=(string)$this->q("INSERT INTO locker_sessions(package_id,compartment_id,actor_user_id,action,status,expires_at,credential_hash,evidence_policy,pairing_id,expected_package_version,ownership_generation)
-                VALUES (?,?,?,'FINAL_DEPOSIT','READY',now()+interval '10 minutes',decode(?,'hex'),'ENROLLED_DOOR_PLUS_ACTOR',?,?,?) RETURNING id",
-                [$package,$comp['id'],$user,$token,$pairing,$row['package_version'],$comp['generation']])->fetchColumn();
+            $session=(string)$this->q("INSERT INTO locker_sessions(package_id,compartment_id,actor_user_id,action,status,expires_at,credential_hash,evidence_policy,pairing_id,expected_package_version,ownership_generation,workflow_context)
+                VALUES (?,?,?,'FINAL_DEPOSIT','READY',now()+interval '10 minutes',decode(?,'hex'),'ENROLLED_DOOR_PLUS_ACTOR',?,?,?,?::jsonb) RETURNING id",
+                [$package,$comp['id'],$user,$token,$pairing,$row['package_version'],$comp['generation'],json_encode(['run_id'=>$runId,'stop_id'=>$stopId,'expected_revision'=>$revision],JSON_THROW_ON_ERROR)])->fetchColumn();
             $this->q("INSERT INTO compartment_claims(compartment_id,package_id,session_id,state,expires_at) VALUES (?,?,?,'HELD',now()+interval '10 minutes')",[$comp['id'],$package,$session]);
             $command=Secrets::uuid();
             $this->q("INSERT INTO device_commands(session_id,device_id,command_uuid,status,expires_at,ownership_generation)
@@ -171,8 +181,8 @@ final class FinalDeposit
                 || $row['compartment_status']!=='AVAILABLE' || $row['door_address']===null) {
                 throw new Failure(409,'OWNERSHIP_CHANGED','Destination compartment ownership changed.');
             }
-            $events=$this->q("SELECT id,evidence->>'event_type' AS type FROM device_events
-                WHERE command_id=? AND device_id=? AND evidence->>'source'='SIGNED_TERMINAL_REPORT'
+            $events=$this->q("SELECT id,evidence->>'event_type' AS type,evidence->>'source' AS source FROM device_events
+                WHERE command_id=? AND device_id=? AND evidence->>'source' IN ('SIGNED_TERMINAL_REPORT','CABINET_TOKEN_REPORT')
                 ORDER BY id",[$row['command_id'],$row['device_id']])->fetchAll(PDO::FETCH_ASSOC);
             if (array_column($events,'type')!==['DISPATCH_RECORDED','OPEN_OBSERVED','CLOSE_OBSERVED']) {
                 throw new Failure(409,'EVIDENCE_INCOMPLETE','Ordered signed terminal observations are required.');
@@ -183,7 +193,7 @@ final class FinalDeposit
                 [$row['locker_id'],$row['location_id'],$newVersion,$row['package_id']]);
             $this->q("UPDATE locker_sessions SET status='CONFIRMED',actor_attested_at=now(),version=version+1 WHERE id=?",[$sessionId]);
             $evidence=['locker_session_id'=>$sessionId,'device_event_ids'=>array_map('strval',array_column($events,'id')),
-                'actor_attested'=>true,'source'=>'SIGNED_TERMINAL_REPORT','physical_hardware_verified'=>false];
+                'actor_attested'=>true,'source'=>$events[0]['source'],'physical_hardware_verified'=>false];
             $json=json_encode($evidence,JSON_THROW_ON_ERROR);
             $this->q("INSERT INTO custody_events(package_id,operation_uuid,package_version,actor_user_id,event_type,previous_custodian_type,previous_custodian_ref,new_custodian_type,new_custodian_ref,location_id,evidence,occurred_at)
                 VALUES (?,?,?,?,'FINAL_DEPOSIT','DRIVER',?,'LOCKER',?,?,?::jsonb,now())",

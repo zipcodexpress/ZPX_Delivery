@@ -71,7 +71,7 @@ $dir = dirname(__DIR__) . '/database/migrations';
 $migrator = new Migrator($owner, $dir);
 check($migrator->up() === 0, 'repeated migrations apply nothing');
 $migrator->assertCurrent();
-check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 100, 'cabinet configuration tables added without removing existing inventory tables');
+check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery' AND table_type='BASE TABLE'")->fetchColumn() === 102, 'cabinet configuration and admin card tables added without removing existing inventory tables');
 check((int)$owner->query("SELECT count(*) FROM information_schema.tables WHERE table_schema='delivery'
  AND table_name IN ('cabinet_box_model','cabinet_body_model','cabinet_body_box') AND table_type='BASE TABLE'")->fetchColumn()===3,
  'legacy model and layout names are physical PostgreSQL tables');
@@ -180,6 +180,7 @@ require __DIR__ . '/hub-receiving.php';
 require __DIR__ . '/hub-dispatch.php';
 require __DIR__ . '/final-deposit.php';
 require __DIR__ . '/device-commands.php';
+require __DIR__ . '/terminal-workflows.php';
 require __DIR__ . '/driver-management.php';
 require __DIR__ . '/driver-administration.php';
 require __DIR__ . '/partner-registry.php';

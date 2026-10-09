@@ -146,7 +146,7 @@ final class LockerSetups
         $address=self::position($input['controller_address'],255);
         $version=self::number($input['version'],1000000);
         $profile=Input::text($input['protocol_profile'],1,40);
-        if (!in_array($profile,['UNVERIFIED','SIMULATED_24'],true)) {
+        if (!in_array($profile,['UNVERIFIED','SIMULATED_24','TERMINAL452_V1','TERMINAL452_V2'],true)) {
             throw new Failure(422,'PROFILE_UNVERIFIED','No verified physical controller profile is configured.');
         }
         $reason=self::reason($input['reason']);
@@ -217,9 +217,6 @@ final class LockerSetups
             }
             if ($draft['status']!=='DRAFT') { throw new Failure(409,'SETUP_REFERENCE','Historical cabinets cannot be bound.'); }
             if ((int)$draft['version']!==$version) { throw new Failure(412,'STALE_VERSION','Reload the cabinet setup.'); }
-            if (!in_array(getenv('APP_ENV'),['test','development'],true)) {
-                throw new Failure(409,'PROFILE_UNVERIFIED','No production controller profile has been verified for binding.');
-            }
             $bodies=$this->q('SELECT b.*,m.status AS model_status FROM cabinet_body b
                 JOIN cabinet_body_model m ON m.model_id=b.body_model_id AND m.organization_id=?
                 WHERE b.cabinet_id=? ORDER BY b.display_sequence',[$this->org(),$cabinetId])->fetchAll(PDO::FETCH_ASSOC);
@@ -240,17 +237,20 @@ final class LockerSetups
                 throw new Failure(409,'LOCATION_NOT_EMPTY','Destination has hardware, legacy identity or custody; use a reconciliation workflow.');
             }
             foreach ($bodies as $body) {
-                if ($body['model_status']!=='READY' || $body['protocol_profile']!=='SIMULATED_24'
-                    || $body['addr']===null || (int)$body['addr']<1 || (int)$body['display_sequence']<1) {
-                    throw new Failure(409,'PROFILE_UNVERIFIED','Only addressed simulator profiles can bind until physical controller rules are verified.');
+                $simulated=$body['protocol_profile']==='SIMULATED_24';
+                if ($body['model_status']!=='READY' || !in_array($body['protocol_profile'],['SIMULATED_24','TERMINAL452_V1','TERMINAL452_V2'],true)
+                    || ($simulated && !in_array(getenv('APP_ENV'),['test','development'],true))
+                    || $body['addr']===null || ($simulated && (int)$body['addr']<1) || (int)$body['display_sequence']<1) {
+                    throw new Failure(409,'PROFILE_UNVERIFIED','Use the configured Terminal452 controller or a local simulator.');
                 }
                 $boxes=$this->q('SELECT x.*,m.dimensions_source_unit FROM cabinet_box x
                     JOIN cabinet_box_model m ON m.model_id=x.box_model_id WHERE x.body_id=? ORDER BY x."row",x."column"',
                     [$body['body_id']])->fetchAll(PDO::FETCH_ASSOC);
                 if (!$boxes) { throw new Failure(409,'MODEL_EMPTY','Body has no boxes.'); }
                 foreach ($boxes as $box) {
-                    if ($box['addr']===null || (int)$box['addr']<1 || (int)$box['addr']>24 || $box['dimensions_source_unit']!=='MM') {
-                        throw new Failure(409,'MODEL_UNVERIFIED','Simulator binding needs millimeter dimensions and channels 1–24.');
+                    $min=$simulated?1:0;$max=$body['protocol_profile']==='TERMINAL452_V1'?27:($simulated?24:9);
+                    if ($box['addr']===null || (int)$box['addr']<$min || (int)$box['addr']>$max || $box['dimensions_source_unit']!=='MM') {
+                        throw new Failure(409,'MODEL_UNVERIFIED','Layout needs millimeter dimensions and channels supported by the configured controller.');
                     }
                 }
             }

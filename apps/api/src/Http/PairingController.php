@@ -46,6 +46,7 @@ final class PairingController
             $user=(string)$identity->authenticate($token,$kind)['user_id'];
             if ($kind==='BROWSER') { $identity->csrf($token,$request->header('x-csrf-token','')); }
             $identity->limit('pairing:'.$user,30);
+            if ($action==='inspect') { return Reply::json(200,$pairings->inspect($user,$pairingId,self::input($request)),$requestId); }
             return Reply::json(200,$pairings->approve($user,$pairingId,self::input($request),
                 $request->header('idempotency-key','')),$requestId);
         } catch (Failure $e) {

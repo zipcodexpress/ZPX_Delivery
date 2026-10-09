@@ -3,6 +3,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshCo
 import * as Crypto from 'expo-crypto';
 import { command, request } from './api';
 import { apiDate, displayDate } from './dates';
+import { Locker } from './Locker';
 import { Button, colors, Field, Message, pretty, styles, Tabs } from './ui';
 
 type Run = { id: string; kind: string; state: string; revision: number; hub: string; vehicle: string; planned_start: string; expected_count: number; loaded_count: number };
@@ -70,6 +71,7 @@ function validateProfileChanges(changes: Partial<DriverForm>) {
 }
 
 export function Driver({ onNameChange }: { onNameChange: (name: string) => void }) {
+  const [lockerOpen, setLockerOpen] = useState(false);
   const { width, fontScale } = useWindowDimensions();
   const [tab, setTab] = useState<Tab>('inbound');
   const [runs, setRuns] = useState<Run[]>([]);
@@ -208,12 +210,14 @@ export function Driver({ onNameChange }: { onNameChange: (name: string) => void 
   const hasProfileChanges = editingProfile && originalProfileForm && (Object.keys(editingProfile) as (keyof DriverForm)[])
     .some(key => editingProfile[key].trim() !== originalProfileForm[key].trim());
   function cancelProfileEdit() { setEditingProfile(null); setOriginalProfileForm(null); setError(''); }
+  if (lockerOpen) return <Locker role="carrier" onClose={() => { setLockerOpen(false); void refresh(); }} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.page}><ScrollView style={styles.page}
     contentContainerStyle={[styles.content, runTab && !selected && { gap: 10, paddingTop: 12 }]}
     keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={!selected && !(tab === 'profile' && editingProfile)
       ? <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} /> : undefined}>
     {!profileEditorOpen && <Message error={error} />}{notice ? <View style={[styles.card, { backgroundColor: colors.mint }]}><Text style={styles.body}>{notice}</Text></View> : null}
     {loading && <ActivityIndicator />}
+    {runTab && <Button secondary onPress={() => setLockerOpen(true)}>Use locker · Scan terminal QR</Button>}
     {runTab && (selected ? <>
       <Button secondary onPress={() => { setSelected(null); setScanIntent(null); }}>← All {pretty(tab)} runs</Button>
       <View style={styles.hero}>
@@ -240,9 +244,9 @@ export function Driver({ onNameChange }: { onNameChange: (name: string) => void 
         {selected.manifest.filter(item => item.stop_sequence === stop.sequence).map(item => <Text key={item.manifest_item_id} style={styles.body}>
           {item.public_reference} · {pretty(item.state)} · {pretty(item.package_state)}
         </Text>)}
-        {selected.kind === 'OUTBOUND' && selected.state === 'IN_PROGRESS' && stop.state === 'EXPECTED' && <Button secondary onPress={() => void run(() => arrive(stop))}>Report arrival</Button>}
+        {(selected.kind === 'INBOUND' ? ['ACKNOWLEDGED', 'IN_PROGRESS'].includes(selected.state) : selected.state === 'IN_PROGRESS') && stop.state === 'EXPECTED' && <Button secondary onPress={() => void run(() => arrive(stop))}>Report arrival</Button>}
       </View>)}
-      <Text style={styles.muted}>Final locker deposit requires terminal pairing and stays in the existing driver workflow until mobile hardware checks are complete.</Text>
+      <Text style={styles.muted}>Use locker to approve the terminal, then scan each parcel at the locker. Mark this stop Arrived before collection or deposit.</Text>
       <Button secondary onPress={() => void run(() => open(selected.id))}>Refresh run</Button>
     </> : <>
       <View><Text style={styles.eyebrow}>YOUR RUNS</Text><Text style={styles.title}>{tab === 'inbound' ? 'Driver in' : 'Driver out'}</Text>

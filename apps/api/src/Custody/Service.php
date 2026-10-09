@@ -596,27 +596,32 @@ final class Service
             $hash=$this->crypto->digest('stop-arrival',json_encode(['run_id'=>$runId,'stop_id'=>$stopId,'expected_revision'=>$revision],JSON_THROW_ON_ERROR));
             $saved=$this->q("SELECT encode(payload_hash,'hex') AS hash,response_body FROM idempotency_records WHERE scope=? AND request_key=?",[$scope,$key])->fetch(PDO::FETCH_ASSOC);
             if ($saved) { if (!hash_equals($saved['hash'],$hash)) { throw new Failure(409,'IDEMPOTENCY_CONFLICT','This request key was already used for different details.'); } return json_decode($saved['response_body'],true,512,JSON_THROW_ON_ERROR); }
-            $run=$this->q("SELECT id,state,revision,departed_at FROM route_runs WHERE id=? AND driver_id=? AND organization_id=? AND kind='OUTBOUND' FOR UPDATE",[$runId,$driverId,$this->org()])->fetch(PDO::FETCH_ASSOC);
-            if (!$run) { throw new Failure(404,'RUN_NOT_FOUND','Outbound run not found or not assigned to you.'); }
+            $run=$this->q("SELECT id,kind,state,revision,departed_at FROM route_runs WHERE id=? AND driver_id=? AND organization_id=? AND kind IN ('INBOUND','OUTBOUND') FOR UPDATE",[$runId,$driverId,$this->org()])->fetch(PDO::FETCH_ASSOC);
+            if (!$run) { throw new Failure(404,'RUN_NOT_FOUND','Run not found or not assigned to you.'); }
             if ((int)$run['revision']!==$revision) { throw new Failure(409,'RUN_REVISION_CONFLICT','Run revision changed. Refresh before arrival.'); }
-            if ($run['state']!=='IN_PROGRESS' || $run['departed_at']===null) { throw new Failure(409,'RUN_NOT_DEPARTED','Run must depart before reporting stop arrival.'); }
-            $stop=$this->q('SELECT id,sequence_no,state FROM route_run_stops WHERE id=? AND run_id=? FOR UPDATE',[$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
+            if ($run['kind']==='OUTBOUND' ? ($run['state']!=='IN_PROGRESS' || $run['departed_at']===null) : !in_array($run['state'],['ACKNOWLEDGED','IN_PROGRESS'],true)) { throw new Failure(409,'RUN_NOT_DEPARTED','Acknowledge an inbound run or depart an outbound run before reporting arrival.'); }
+            $stop=$this->q('SELECT id,location_id,sequence_no,state FROM route_run_stops WHERE id=? AND run_id=? FOR UPDATE',[$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
             if (!$stop) { throw new Failure(404,'STOP_NOT_FOUND','Stop not found on this run.'); }
             if ($stop['state']!=='EXPECTED') { throw new Failure(409,'STOP_NOT_EXPECTED','Stop is not awaiting arrival.'); }
             if ($this->q("SELECT 1 FROM route_run_stops WHERE run_id=? AND sequence_no<? AND state<>'COMPLETED'",[$runId,$stop['sequence_no']])->fetchColumn()) {
                 throw new Failure(409,'STOP_OUT_OF_ORDER','Complete preceding stops before arriving here.');
             }
-            $counts=$this->q("SELECT COUNT(*) AS expected,COUNT(*) FILTER (WHERE mi.state='LOADED' AND p.state='OUTBOUND_CUSTODY' AND p.custodian_type='DRIVER' AND p.custodian_ref=?) AS in_custody FROM manifest_items mi JOIN packages p ON p.id=mi.package_id WHERE mi.stop_id=? AND mi.run_id=?",[$driverId,$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
-            if ((int)$counts['expected']===0 || (int)$counts['expected']!==(int)$counts['in_custody']) { throw new Failure(409,'STOP_CUSTODY_UNRESOLVED','Every package for this stop must remain in driver custody.'); }
+            if ($run['kind']==='OUTBOUND') {
+                $counts=$this->q("SELECT COUNT(*) AS expected,COUNT(*) FILTER (WHERE mi.state='LOADED' AND p.state='OUTBOUND_CUSTODY' AND p.custodian_type='DRIVER' AND p.custodian_ref=?) AS in_custody FROM manifest_items mi JOIN packages p ON p.id=mi.package_id WHERE mi.stop_id=? AND mi.run_id=?",[$driverId,$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
+            } else {
+                $counts=$this->q("SELECT COUNT(*) AS expected,COUNT(*) FILTER (WHERE mi.state='EXPECTED' AND p.state='AT_ORIGIN' AND p.custodian_type='LOCKER' AND s.origin_location_id=? AND p.current_location_id=? AND pd.status='ASSIGNED' AND pd.assigned_run_id=mi.run_id) AS in_custody FROM manifest_items mi JOIN packages p ON p.id=mi.package_id JOIN shipments s ON s.id=p.shipment_id LEFT JOIN pickup_demands pd ON pd.package_id=p.id WHERE mi.stop_id=? AND mi.run_id=?",[$stop['location_id'],$stop['location_id'],$stopId,$runId])->fetch(PDO::FETCH_ASSOC);
+            }
+            if ((int)$counts['expected']===0 || (int)$counts['expected']!==(int)$counts['in_custody']) { throw new Failure(409,'STOP_CUSTODY_UNRESOLVED','Every package must retain its expected custody and assignment before arrival.'); }
             $this->q("UPDATE route_run_stops SET state='ARRIVED' WHERE id=?",[$stopId]);
             $this->q('UPDATE route_runs SET revision=revision+1 WHERE id=?',[$runId]);
+            if ($run['kind']==='INBOUND') { $this->q("UPDATE route_runs SET state='IN_PROGRESS' WHERE id=?",[$runId]); }
             $packages=$this->q('SELECT package_id FROM manifest_items WHERE run_id=? AND stop_id=?',[$runId,$stopId])->fetchAll(PDO::FETCH_COLUMN);
             $details=json_encode(['run_id'=>$runId,'stop_id'=>$stopId],JSON_THROW_ON_ERROR);
             foreach ($packages as $packageId) {
                 $this->q("INSERT INTO package_events(package_id,event_uuid,event_type,actor_user_id,details,occurred_at) VALUES (?,?,'DRIVER_REPORTED_STOP_ARRIVAL',?,?::jsonb,now())",[$packageId,Secrets::uuid(),$user,$details]);
             }
             $this->q("INSERT INTO audit_events(actor_user_id,action,entity_type,entity_id) VALUES (?,'STOP_ARRIVED','route_run_stop',?)",[$user,$stopId]);
-            $result=['run_id'=>$runId,'stop_id'=>$stopId,'sequence'=>(int)$stop['sequence_no'],'state'=>'ARRIVED','run_revision'=>$revision+1,'packages_in_driver_custody'=>(int)$counts['in_custody']];
+            $result=['run_id'=>$runId,'stop_id'=>$stopId,'sequence'=>(int)$stop['sequence_no'],'state'=>'ARRIVED','run_revision'=>$revision+1,'packages_in_driver_custody'=>$run['kind']==='OUTBOUND'?(int)$counts['in_custody']:0];
             $this->q("INSERT INTO idempotency_records(scope,request_key,payload_hash,response_status,response_body,expires_at) VALUES (?,?,decode(?,'hex'),200,?,now()+interval '30 days')",[$scope,$key,$hash,json_encode($result,JSON_THROW_ON_ERROR)]);
             return $result;
         });

@@ -140,7 +140,7 @@ function identityHttp(string $method, string $path, array $input=[], array $head
     $request->withServer(['REQUEST_METHOD'=>$method,'REQUEST_URI'=>$path,'PATH_INFO'=>$path,'REMOTE_ADDR'=>'127.0.0.1']);
     $request->withHeader($headers+['content-type'=>'application/json','origin'=>'http://localhost:5173']);
     $request->withCookie($cookies);
-    $request->withInput(json_encode($input ?: new stdClass(),JSON_THROW_ON_ERROR));
+    $request->withInput(($headers['content-type'] ?? '')==='application/x-www-form-urlencoded' ? http_build_query($input) : json_encode($input ?: new stdClass(),JSON_THROW_ON_ERROR));
     $response=$app->http->run($request);
     $body=json_decode($response->getContent(),true,512,JSON_THROW_ON_ERROR);
     $app->http->end($response);

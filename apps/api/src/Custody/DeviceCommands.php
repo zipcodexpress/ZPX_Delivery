@@ -63,7 +63,8 @@ final class DeviceCommands
                 $this->q("UPDATE device_commands SET dispatched_at=COALESCE(dispatched_at,now()),payload_hash=decode(?,'hex') WHERE id=?",[$hash,$row['id']]);
                 $commands[]=$command;
             }
-            return ['items'=>$commands];
+            $additional=(new PhysicalSessions($this->db,new \Zpx\Identity\Secrets()))->pendingCommands($credential);
+            return ['items'=>array_merge($commands,$additional)];
         });
     }
 
@@ -100,11 +101,12 @@ final class DeviceCommands
         return (new Transaction($this->db))->run(function () use ($request,$input,$next) {
             $credential=$this->authenticate($request,self::EVENTS_PATH,'POST');
             $row=$this->q("SELECT dc.id,dc.status AS command_status,dc.dispatched_at,dc.payload_hash,dc.expires_at,
-                    ls.id AS session_id,ls.status AS session_status,ls.action,ls.evidence_policy
+                    ls.id AS session_id,ls.status AS session_status,ls.action,ls.evidence_policy,cb.protocol_profile
                 FROM device_commands dc JOIN locker_sessions ls ON ls.id=dc.session_id
                 JOIN compartments c ON c.id=ls.compartment_id
+                JOIN controller_boards cb ON cb.id=c.controller_board_id AND cb.locker_id=c.locker_id
                 WHERE dc.command_uuid=?::uuid AND dc.device_id=? AND c.locker_id=?
-                  AND ls.action='FINAL_DEPOSIT' AND ls.evidence_policy='ENROLLED_DOOR_PLUS_ACTOR'
+                  AND ls.action IN ('FINAL_DEPOSIT','ORIGIN_DEPOSIT','INBOUND_PICKUP','RECIPIENT_PICKUP') AND ls.evidence_policy='ENROLLED_DOOR_PLUS_ACTOR'
                 FOR UPDATE OF dc,ls",[$input['command_id'],$credential['id'],$credential['locker_id']])->fetch(PDO::FETCH_ASSOC);
             if (!$row) { throw new Failure(404,'COMMAND_NOT_FOUND','Device command not found.'); }
             $existing=$this->q("SELECT command_id,evidence->>'event_type' AS event_type FROM device_events
@@ -123,7 +125,11 @@ final class DeviceCommands
             if ($event==='DISPATCH_RECORDED' && strtotime($row['expires_at'])<=time()) {
                 throw new Failure(409,'COMMAND_EXPIRED','Command expired before dispatch.');
             }
-            if ($event==='DISPATCH_RECORDED' && !$this->q("SELECT 1 FROM locker_sessions ls
+            if ($event==='DISPATCH_RECORDED' && $row['action']!=='FINAL_DEPOSIT') {
+                $authorized=(new PhysicalSessions($this->db,new \Zpx\Identity\Secrets()))->authorizeCommand((string)$row['session_id']);
+                if (strtotime($authorized['expires_at'])<=time()) { throw new Failure(409,'COMMAND_EXPIRED','Session expired before dispatch.'); }
+            }
+            if ($event==='DISPATCH_RECORDED' && $row['action']==='FINAL_DEPOSIT' && !$this->q("SELECT 1 FROM locker_sessions ls
                 JOIN device_commands dc ON dc.session_id=ls.id AND dc.id=?
                 JOIN packages p ON p.id=ls.package_id
                 JOIN compartments c ON c.id=ls.compartment_id
@@ -150,6 +156,11 @@ final class DeviceCommands
                 [$row['id'],$row['session_id'],(string)(getenv('ZPX_ORGANIZATION_ID') ?: '0')])->fetchColumn()) {
                 throw new Failure(409,'COMMAND_STALE','Command authorization changed before dispatch.');
             }
+            if ($event==='DISPATCH_RECORDED' && $row['action']==='FINAL_DEPOSIT') {
+                $address=$this->q("SELECT dc.command_uuid,dc.expires_at,encode(dc.payload_hash,'hex') AS hash,ls.id AS session_id,c.locker_id,c.door_address,cb.board_address,cb.protocol_profile,co.generation FROM device_commands dc JOIN locker_sessions ls ON ls.id=dc.session_id JOIN compartments c ON c.id=ls.compartment_id JOIN controller_boards cb ON cb.id=c.controller_board_id AND cb.locker_id=c.locker_id JOIN compartment_ownership co ON co.compartment_id=c.id WHERE dc.id=?",[$row['id']])->fetch(PDO::FETCH_ASSOC);
+                $payload=['command_id'=>$address['command_uuid'],'session_id'=>(string)$address['session_id'],'action'=>'OPEN','address'=>['locker_id'=>(string)$address['locker_id'],'board_address'=>(int)$address['board_address'],'door_address'=>(int)$address['door_address']],'protocol_profile'=>$address['protocol_profile'],'ownership_generation'=>(int)$address['generation'],'expires_at'=>$address['expires_at']];
+                if ($address['hash']===null || !hash_equals($address['hash'],hash('sha256',json_encode($payload,JSON_THROW_ON_ERROR)))) { throw new Failure(409,'COMMAND_PAYLOAD_CHANGED','Address or profile changed after polling; reconcile before actuation.'); }
+            }
             if ($event==='UNKNOWN') {
                 if (!in_array($row['command_status'],['PENDING','DISPATCH_RECORDED','OPEN_OBSERVED'],true)) {
                     throw new Failure(409,'EVENT_SEQUENCE_INVALID','Command cannot enter an unknown state.');
@@ -157,8 +168,8 @@ final class DeviceCommands
             } elseif ([$row['command_status'],$row['session_status']]!==$next[$event]) {
                 throw new Failure(409,'EVENT_SEQUENCE_INVALID','Command observations must be reported in order.');
             }
-            $evidence=['event_type'=>$event,'source'=>'SIGNED_TERMINAL_REPORT',
-                'synthetic_simulation'=>false,'physical_hardware_verified'=>false];
+            $evidence=['event_type'=>$event,'source'=>trim((string)($_SERVER['HTTP_X_CABINET_ACCESS_TOKEN'] ?? ''))!==''?'CABINET_TOKEN_REPORT':'SIGNED_TERMINAL_REPORT',
+                'synthetic_simulation'=>$row['protocol_profile']==='SIMULATED_24','physical_hardware_verified'=>false];
             $this->q("INSERT INTO device_events(device_id,command_id,external_event_id,occurred_at,evidence)
                 VALUES (?,?,?,now(),?::jsonb)",[$credential['id'],$row['id'],$input['event_id'],json_encode($evidence,JSON_THROW_ON_ERROR)]);
             $this->q('UPDATE device_commands SET status=? WHERE id=?',[$event,$row['id']]);
@@ -226,15 +237,47 @@ final class DeviceCommands
                 $models[(string)$row['box_model_id']]=['boxModelId'=>(string)$row['box_model_id'],
                     'boxModelName'=>$row['box_model_name'],'sizeClass'=>$row['size_class'],'availableCount'=>0];
             }
+            $reference=$this->q("SELECT r.cabinet_id,r.legacy_cabinet_id,r.zipcode FROM lockers k
+                JOIN cabinet r ON r.cabinet_id=(k.capabilities->>'legacy_reference_cabinet_id')::bigint
+                WHERE k.id=? AND r.organization_id=? AND r.status='REFERENCE'",
+                [$credential['locker_id'],(string)(getenv('ZPX_ORGANIZATION_ID') ?: '0')])->fetch(PDO::FETCH_ASSOC);
+            if($reference){
+                $display=$this->q('SELECT b.addr,b.display_sequence,x.box_id,x.addr AS box_addr,x."row",x."column",m.height,m.model_id
+                    FROM cabinet_body b JOIN cabinet_box x ON x.body_id=b.body_id
+                    JOIN cabinet_box_model m ON m.model_id=x.box_model_id
+                    WHERE b.cabinet_id=? AND m.height>0 AND (coalesce(m.width,0)=0 OR coalesce(m.length,0)=0)',
+                    [$reference['cabinet_id']])->fetchAll(PDO::FETCH_ASSOC);
+                foreach($display as $cell)foreach($bodies as &$body){
+                    if($body['lockAddr']!==(int)$cell['addr'] || $body['displaySequence']!==(int)$cell['display_sequence'])continue;
+                    if(in_array((int)$cell['box_addr'],array_column($body['boxes'],'boxAddr'),true))continue;
+                    $body['boxes'][]=['boxId'=>(string)$cell['box_id'],'boxAddr'=>(int)$cell['box_addr'],
+                        'row'=>(int)$cell['row'],'column'=>(int)$cell['column'],'model'=>(string)$cell['model_id'],
+                        'boxModelId'=>(string)$cell['model_id'],'boxModelName'=>'Controller','displayOnly'=>true,'maxWeightG'=>0,
+                        'dimensionsMm'=>['width'=>0,'height'=>(int)$cell['height'],'depth'=>0],'isAllocable'=>'0','blocked'=>1];
+                    usort($body['boxes'],static fn($a,$b)=>[$a['column'],$a['row']]<=>[$b['column'],$b['row']]);
+                }
+                unset($body);
+            }
             return ['revision'=>(int)$cabinet['version'],'boxConfig'=>[
                 'cabinetId'=>(string)$cabinet['cabinet_id'],'address'=>$cabinet['address'] ?: $cabinet['address_text'],
-                'zipcode'=>$cabinet['zipcode'] ?: '', 'cabinets'=>array_values($bodies)],
+                'originalCabinetId'=>(string)($reference['legacy_cabinet_id'] ?? $cabinet['cabinet_id']),
+                'zipcode'=>$cabinet['zipcode'] ?: ($reference['zipcode'] ?? ''), 'cabinets'=>array_values($bodies)],
                 'boxModels'=>array_values($models)];
         });
     }
 
     public function authenticate(Request $request,string $path,string $method='GET'): array
     {
+        $cabinetToken=$request->header('x-cabinet-access-token','');
+        if($cabinetToken!=='') {
+            if($request->header('x-device-key-id','')!=='')throw new Failure(400,'AMBIGUOUS_AUTH','Use one terminal authentication method.');
+            $device=(new CabinetConfigAuth($this->db))->authenticate($cabinetToken);
+            $nonce=$request->header('x-device-nonce','');
+            if(!is_string($nonce)||!preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8a-f][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/D',$nonce))throw new Failure(401,'CABINET_AUTH_REQUIRED','A fresh request nonce is required.');
+            try{$this->q('INSERT INTO device_request_nonces(device_id,nonce) VALUES (?,?::uuid)',[$device['id'],$nonce]);}
+            catch(PDOException $e){if($e->getCode()==='23505')throw new Failure(409,'DEVICE_REQUEST_REPLAY','Terminal request already used.');throw $e;}
+            return $device;
+        }
         $key=$request->header('x-device-key-id','');
         $time=$request->header('x-device-timestamp','');
         $nonce=$request->header('x-device-nonce','');
