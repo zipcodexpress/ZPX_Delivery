@@ -1,5 +1,13 @@
 # Current Development Status
 
+## Local PostgreSQL LAN access enabled (2026-10-01)
+
+- Agent Codex, branch `main` at `fb4fe4d`; preserved existing status-file changes. User explicitly approved the exact LAN scope after automatic review initially blocked it. Homebrew PostgreSQL 17 remains independent of Docker.
+- Applied listener `localhost,192.168.86.203` on port 5432 via ALTER SYSTEM; HBA permits only `zpx_delivery_dev` / `zpx_runtime` from `192.168.86.0/24` with scram-sha-256. No public/unrestricted rule, trust authentication or superuser LAN access. macOS application firewall was already disabled and was not changed.
+- Config backups: private ignored `.local/postgres-backups/lan-config-20261001-164401/`. Homebrew restart initially waited for existing sessions; orderly pg_ctl fast shutdown completed it, then Homebrew restarted successfully.
+- Verified: password-authenticated zpx_runtime SELECT through both `127.0.0.1:5432` and `192.168.86.203:5432`; other-database LAN connection refused by HBA; listener and valid HBA confirmed. Passwords not printed. No data/schema changes. Actual connection from another PC still needs owner confirmation.
+- Other-PC settings: host 192.168.86.203, port 5432, database zpx_delivery_dev, user zpx_runtime, existing DB_PASSWORD from private .env.dev. Mac must remain awake/on home LAN; reserve its IP or update listener if DHCP changes it. See LOCAL_DEVELOPMENT_MAC.md for scope/rollback.
+
 ## Windows terminal handoff (2026-10-01)
 
 - Current agent Codex; repository now on clean-start `main` at `1b0b018`, including merged PR #44 terminal APIs and PR #45 mobile work. This session changes documentation only; no terminal source/build, database, deployment or hardware operation. Do not commit/push without request.
