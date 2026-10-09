@@ -2,7 +2,7 @@
 
 Purpose: run the first development increment locally.
 Audience: Richard and ZPX developers. Status: local M4 setup verified.
-Owner: unassigned. Last reviewed: 2026-09-29.
+Owner: unassigned. LAN notes reconciled: 2026-10-09 (no fresh host checks).
 
 ## Verified SSD and host database setup (2026-09-29)
 
@@ -36,9 +36,39 @@ username `zpx_runtime`, and the existing `DB_PASSWORD` value in the private
 `.env.dev` file. The host service starts at macOS login; check or restart it with
 `brew services list` or `brew services start postgresql@17`. A localhost TCP
 login was verified with Colima stopped; the web/API containers still require Colima. PostgreSQL
-accepts authenticated TCP connections on localhost only. If this checkout is
+accepts authenticated TCP connections on localhost and the scoped home-LAN
+listener described below. If this checkout is
 used on another machine, install PostgreSQL 17 and restore or initialize its
 database before setting `DB_HOST=host.docker.internal`.
+
+### Home-network PostgreSQL access (2026-10-01)
+
+Owner-approved host configuration now listens on `localhost,192.168.86.203`, port
+5432. Other home PCs use host `192.168.86.203`, database `zpx_delivery_dev`, user
+`zpx_runtime`, and the existing `DB_PASSWORD` from the private `.env.dev` file.
+`pg_hba.conf` allows only that database/role from `192.168.86.0/24` using
+`scram-sha-256`; other non-loopback connections remain denied. No remote
+superuser/migrator access was added. SSL was already off; this change does not
+configure TLS. Use this direct connection only on the approved home network.
+The terminal application itself should use the Delivery API, not direct DB access.
+
+The October 1 checks verified authenticated SELECT through localhost and the Mac's
+LAN IP, plus denial of a different database through the LAN listener. Subsequent
+Windows handoffs report successful API/database use against this shared Mac;
+connectivity was not rechecked during the October 9 documentation reconciliation.
+The Mac must be awake and connected to the home LAN.
+Reserve `192.168.86.203` in the router's DHCP configuration, or update the listener
+if the Mac's address changes; no router port forwarding is needed.
+
+Changed files are host-local `/opt/homebrew/var/postgresql@17/postgresql.auto.conf`
+and `pg_hba.conf`. Pre-change copies are in the ignored private folder
+`.local/postgres-backups/lan-config-20261001-164401/`. To undo this scope, first
+compare the current files with those backups so later authorized settings are not
+lost. Revert only the LAN listener/HBA additions, or restore both files if no later
+changes must be retained, then restart `postgresql@17`. The intended rollback is
+the original localhost-only configuration. Do not restore database data files.
+A restart disconnects existing sessions. The macOS application firewall was
+already disabled and was not altered by this change.
 
 The 2026-09-28 cutover used a private custom-format backup and role export under
 `.local/postgres-backups/`. The original `zpx-delivery-dev_postgres_data` Docker
