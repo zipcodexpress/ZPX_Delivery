@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { command, request, type Profile, type Schemas } from './api';
 import { displayDate } from './dates';
 import { LocationMap, mapPosition } from './LocationMap';
+import { Locker } from './Locker';
 import { Button, colors, Field, Message, pretty, styles, Tabs } from './ui';
 
 type Shipment = Schemas['Shipment'];
@@ -34,6 +35,7 @@ function LocationPicker({ label, locations, value, onChange }: { label: string; 
 }
 
 export function Customer({ profile, onProfile }: { profile: Profile; onProfile: (profile: Profile) => void }) {
+  const [lockerOpen, setLockerOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const [view, setView] = useState<ViewMode>('sending');
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -188,12 +190,14 @@ export function Customer({ profile, onProfile }: { profile: Profile; onProfile: 
     setError(''); setDraftStep(step => step + 1);
   }
 
+  if (lockerOpen) return <Locker role="customer" onClose={() => { setLockerOpen(false); void loadShipments().catch(e => setError(e.message)); }} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.page}><ScrollView style={styles.page}
     contentContainerStyle={[styles.content, tab === 'shipments' && !creating && !selected && { gap: 10, paddingTop: 12 }]}
     keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" refreshControl={tab === 'shipments' && !creating && !selected
       ? <RefreshControl refreshing={refreshingShipments} onRefresh={() => void refreshShipmentList()} /> : undefined}>
     {!profileEditorOpen && <Message error={error} />}{notice ? <Text style={styles.body}>{notice}</Text> : null}
     {loading && <ActivityIndicator />}
+    {!profileEditorOpen && <Button secondary onPress={() => setLockerOpen(true)}>Use locker · Scan terminal QR</Button>}
     {tab === 'home' && <>
       <View style={styles.hero}>
         <Text style={[styles.eyebrow, { color: '#8BE1D2' }]}>YOUR DELIVERY HUB</Text>

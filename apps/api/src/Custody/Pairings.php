@@ -7,7 +7,7 @@ use think\Request;
 use Zpx\Identity\{Failure,Input,Secrets,Service as Identity};
 use Zpx\Infrastructure\Database\Transaction;
 
-/** Short-lived Delivery terminal/app pairing for the currently implemented final-deposit flow. */
+/** Short-lived, actor-bound Delivery terminal/app pairing for parcel workflows. */
 final class Pairings
 {
     private const CREATE_PATH='/api/delivery/v1/devices/me/pairings';
@@ -15,13 +15,28 @@ final class Pairings
     private function q(string $sql,array $args=[]): \PDOStatement { $q=$this->db->prepare($sql);$q->execute($args);return $q; }
     private function org(): string { return (string)(getenv('ZPX_ORGANIZATION_ID') ?: '0'); }
     private function response(array $row): array {
+        $site=$this->q('SELECT tp.workflow,l.id,l.name FROM terminal_pairing_sessions tp JOIN locker_devices d ON d.id=tp.device_id JOIN lockers k ON k.id=d.locker_id JOIN locations l ON l.id=k.location_id WHERE tp.id=?',[$row['id']])->fetch(PDO::FETCH_ASSOC);
         return ['pairing_id'=>(string)$row['id'],'scene_payload'=>'ZPXPAIR:'.$row['id'].':'.$row['scene_uuid'],
-            'status'=>$row['status'],'expires_at'=>gmdate('c',strtotime($row['expires_at']))];
+            'status'=>$row['status'],'expires_at'=>gmdate('c',strtotime($row['expires_at'])),
+            'workflow'=>$site['workflow'],'location_id'=>(string)$site['id'],'location_name'=>$site['name']];
+    }
+    public function inspect(string $user,string $pairingId,array $input): array {
+        Input::fields($input,['scene_payload']);$id=\Zpx\Shipping\Service::id($pairingId);$scene=Input::text($input['scene_payload'],40,120);
+        $row=$this->q("SELECT tp.id,tp.scene_uuid,tp.status,tp.expires_at,tp.workflow,tp.actor_user_id FROM terminal_pairing_sessions tp
+            JOIN locker_devices d ON d.id=tp.device_id AND d.status='ACTIVE' JOIN lockers k ON k.id=d.locker_id JOIN locations l ON l.id=k.location_id
+            WHERE tp.id=? AND l.organization_id=? AND l.site_mode='DELIVERY_ONLY' AND l.status='ACTIVE'
+              AND NOT EXISTS (SELECT 1 FROM legacy_location_links ll WHERE ll.location_id=l.id)",[$id,$this->org()])->fetch(PDO::FETCH_ASSOC);
+        if (!$row || ($row['actor_user_id']!==null && $row['actor_user_id']!==$user) || !hash_equals('ZPXPAIR:'.$row['id'].':'.$row['scene_uuid'],$scene)) { throw new Failure(404,'PAIRING_NOT_FOUND','Scanned scene unavailable.'); }
+        (new Identity($this->db,$this->crypto))->requireRole($user,in_array($row['workflow'],['FINAL_DEPOSIT','INBOUND_PICKUP'],true)?'DRIVER':'CUSTOMER');
+        $result=$this->response($row);
+        $session=$this->q('SELECT id FROM locker_sessions WHERE pairing_id=? AND actor_user_id=? ORDER BY id DESC LIMIT 1',[$id,$user])->fetchColumn();
+        $result['session_id']=$session?(string)$session:null;
+        return $result;
     }
     public function create(Request $request,array $input): array
     {
         Input::fields($input,['workflow']);
-        if ($input['workflow']!=='FINAL_DEPOSIT') { throw new Failure(409,'PAIRING_WORKFLOW_UNAVAILABLE','This Delivery pairing workflow is not implemented.'); }
+        if (!in_array($input['workflow'],['FINAL_DEPOSIT',...PhysicalSessions::ACTIONS],true)) { throw new Failure(409,'PAIRING_WORKFLOW_UNAVAILABLE','This Delivery pairing workflow is not implemented.'); }
         $key=Input::text($request->header('idempotency-key',''),16,100);
         return (new Transaction($this->db))->run(function () use ($request,$input,$key) {
             $device=(new DeviceCommands($this->db))->authenticate($request,self::CREATE_PATH,'POST');
@@ -61,7 +76,10 @@ final class Pairings
                 $this->q("UPDATE terminal_pairing_sessions SET status='EXPIRED' WHERE id=?",[$id]);
                 $row['status']='EXPIRED';
             }
-            return $this->response($row);
+            $result=$this->response($row);
+            $session=$this->q('SELECT id FROM locker_sessions WHERE pairing_id=? AND evidence_policy=\'ENROLLED_DOOR_PLUS_ACTOR\' ORDER BY id DESC LIMIT 1',[$id])->fetchColumn();
+            $result['session_id']=$session?(string)$session:null;
+            return $result;
         });
     }
     public function approve(string $user,string $pairingId,array $input,string $key): array
@@ -71,8 +89,10 @@ final class Pairings
         $location=\Zpx\Shipping\Service::id($input['location_id']);
         $scene=Input::text($input['scene_payload'],40,120);
         Input::text($key,16,100);
-        if ($input['workflow']!=='FINAL_DEPOSIT') { throw new Failure(409,'PAIRING_WORKFLOW_UNAVAILABLE','This Delivery pairing workflow is not implemented.'); }
-        (new Identity($this->db,$this->crypto))->requireRole($user,'DRIVER');
+        if (!in_array($input['workflow'],['FINAL_DEPOSIT',...PhysicalSessions::ACTIONS],true)) { throw new Failure(409,'PAIRING_WORKFLOW_UNAVAILABLE','This Delivery pairing workflow is not implemented.'); }
+        $identity=new Identity($this->db,$this->crypto);
+        $identity->requireRole($user,in_array($input['workflow'],['FINAL_DEPOSIT','INBOUND_PICKUP'],true)?'DRIVER':'CUSTOMER');
+        if ($input['workflow']!=='FINAL_DEPOSIT') { $identity->requireVerified($user); }
         return (new Transaction($this->db))->run(function () use ($user,$id,$input,$location,$scene,$key) {
             $scope='pairing-approval:'.$this->org().':'.$user.':'.$id;
             $this->q('SELECT pg_advisory_xact_lock(hashtextextended(?,0))',[$scope.':'.$key]);

@@ -21,6 +21,6 @@ export default {
     android: {
       package: 'com.zipcodexpress.delivery',
     },
-    plugins: ['expo-secure-store'],
+    plugins: ['expo-secure-store', ['expo-camera', { cameraPermission: 'Allow ZipcodeXpress to scan the locker terminal pairing QR code.', microphonePermission: false, recordAudioAndroid: false, barcodeScannerEnabled: true }]],
   },
 };

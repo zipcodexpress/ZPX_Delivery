@@ -79,6 +79,24 @@ check($response->getCode()===200 && $body['boxConfig']['cabinetId']===$cabinet
     && $body['boxModels'][0]['availableCount']===0,
     'signed cabinet config preserves mapped IDs and addresses without offering capacity');
 $configModels=$body['boxModels']; $configRevision=$body['revision'];
+check($body['boxConfig']['originalCabinetId']===$cabinet,'unmapped cabinet retains its enrolled display identity');
+$reference=(string)$runtime->query("INSERT INTO cabinet(organization_id,cabinet_name,status,legacy_cabinet_id,zipcode)
+    VALUES ($orgId,'Terminal display reference','REFERENCE',99910191,'60601') RETURNING cabinet_id")->fetchColumn();
+$referenceBody=(string)$runtime->query("INSERT INTO cabinet_body(cabinet_id,body_model_id,body_name,sequence,display_sequence,addr)
+    VALUES ($reference,$bodyModel,'Reference main','1',1,1) RETURNING body_id")->fetchColumn();
+$displayModel=(string)$runtime->query("INSERT INTO cabinet_box_model(organization_id,code,version,model_name,is_allocable,height,width,length)
+    VALUES ($orgId,'TERMINAL-CONTROLLER-DISPLAY',1,'Controller',false,80,0,0) RETURNING model_id")->fetchColumn();
+$runtime->exec("INSERT INTO cabinet_box(cabinet_id,body_id,box_model_id,\"row\",\"column\",addr)
+    VALUES ($reference,$referenceBody,$displayModel,2,1,6)");
+$runtime->exec("UPDATE lockers SET capabilities=coalesce(capabilities,'{}'::jsonb)||jsonb_build_object('legacy_reference_cabinet_id',$reference) WHERE id=$locker");
+[$response,$body]=identityHttp('GET',$configPath,[],$signedConfig());
+$displayCell=$body['boxConfig']['cabinets'][0]['boxes'][1]??[];
+check($response->getCode()===200 && $body['boxConfig']['cabinetId']===$cabinet
+    && $body['boxConfig']['originalCabinetId']==='99910191' && $body['boxConfig']['zipcode']==='60601'
+    && ($displayCell['displayOnly']??false)===true && $displayCell['boxAddr']===6
+    && $displayCell['dimensionsMm']===['width'=>0,'height'=>80,'depth'=>0]
+    && $displayCell['isAllocable']==='0' && $body['boxModels']===$configModels,
+    'original identity and controller display restored without adding physical inventory or capacity');
 check(in_array($runtime->query("SELECT status IS NULL AND blocked IS NULL FROM cabinet_box WHERE box_id=$boxId")->fetchColumn(),[true,'t','1'],true),
     'reading terminal config does not mark a cabinet box available or alter legacy flags');
 [$response,$body]=identityHttp('POST',$modelsPath);
@@ -124,6 +142,10 @@ $runtime->exec("UPDATE locations SET site_mode='HYBRID_PARTITIONED' WHERE id=$de
 [$response,$body]=identityHttp('POST',$eventPath,$journal,$signEvent($journal));
 check($response->getCode()===409 && $body['code']==='COMMAND_STALE','shared-site switch blocks terminal dispatch');
 $runtime->exec("UPDATE locations SET site_mode='DELIVERY_ONLY' WHERE id=$destLocation");
+$runtime->exec("UPDATE compartments SET door_address=2 WHERE id=$door");
+[$response,$body]=identityHttp('POST',$eventPath,$journal,$signEvent($journal));
+check($response->getCode()===409 && $body['code']==='COMMAND_PAYLOAD_CHANGED','address drift after polling blocks final dispatch');
+$runtime->exec("UPDATE compartments SET door_address=1 WHERE id=$door");
 [$response,$body]=identityHttp('POST',$eventPath,$journal,$signEvent($journal));
 check($response->getCode()===200 && $body['command_status']==='DISPATCH_RECORDED' && $body['custody_transferred']===false,
     'signed terminal journal records dispatch without changing custody');

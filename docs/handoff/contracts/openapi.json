@@ -779,7 +779,7 @@
         }
       }
     },
-  "/auth/challenges": {
+    "/auth/challenges": {
     "post": {
       "operationId": "delivery_post__auth_challenges",
       "summary": "Request rate-limited one-time verification; return neutral response to prevent account enumeration.",
@@ -830,7 +830,7 @@
       }
     }
   },
-  "/runs/{run_id}/acknowledgments": {
+    "/runs/{run_id}/acknowledgments": {
     "post": {
       "operationId": "delivery_post__runs_run_id_acknowledgments",
       "summary": "Assigned driver acknowledges published revision before continuing.",
@@ -896,7 +896,7 @@
       }
     }
   },
-  "/hub/receiving-sessions/{session_id}/close": {
+    "/hub/receiving-sessions/{session_id}/close": {
     "post": {
       "operationId": "delivery_post__hub_receiving_sessions_session_id_close",
       "summary": "Receiver closes intake with explicit missing items; never fabricate their receipt.",
@@ -962,7 +962,7 @@
       }
     }
   },
-  "/hub/dispatch-calls": {
+    "/hub/dispatch-calls": {
     "get": {
       "operationId": "hub_dispatch_calls_list",
       "summary": "List dispatch state and load progress for the assigned hub.",
@@ -985,7 +985,7 @@
       }
     }
   },
-  "/hub/slots": {
+    "/hub/slots": {
     "get": {
       "operationId": "delivery_get__hub_slots",
       "summary": "Hub-scoped sorting slots with destination/run mapping.",
@@ -1015,7 +1015,7 @@
       }
     }
   },
-  "/hub/inventory": {
+    "/hub/inventory": {
     "get": {
       "operationId": "delivery_get__hub_inventory",
       "summary": "Hub staff inventory projection; read-only.",
@@ -1045,7 +1045,7 @@
       }
     }
   },
-  "/hub/routing-print-jobs": {
+    "/hub/routing-print-jobs": {
     "post": {
       "operationId": "delivery_post__hub_routing_print_jobs",
       "summary": "Print routing stickers at frozen revision; not new primary label.",
@@ -1103,7 +1103,7 @@
       }
     }
   },
-  "/devices/me/heartbeat": {
+    "/devices/me/heartbeat": {
     "post": {
       "operationId": "delivery_post__devices_me_heartbeat",
       "summary": "Device reports health and journal backlog; no custody mutation.",
@@ -1148,7 +1148,7 @@
       }
     }
   },
-  "/admin/role-grants": {
+    "/admin/role-grants": {
     "post": {
       "operationId": "delivery_post__admin_role_grants",
       "summary": "Operations admin grants scoped role; audit reason.",
@@ -1206,7 +1206,7 @@
       }
     }
   },
-  "/admin/drivers": {
+    "/admin/drivers": {
     "get": {
       "operationId": "admin_drivers_list",
       "summary": "List network drivers with status, engagement, active-run count, and version.",
@@ -1270,7 +1270,7 @@
       }
     }
   },
-  "/admin/vehicles": {
+    "/admin/vehicles": {
     "post": {
       "operationId": "delivery_post__admin_vehicles",
       "summary": "Dispatcher/admin creates vehicle limits.",
@@ -1328,7 +1328,7 @@
       }
     }
   },
-  "/admin/locations": {
+    "/admin/locations": {
     "post": {
       "operationId": "delivery_post__admin_locations",
       "summary": "Admin creates inactive location; hardware ownership commissioning required before enablement.",
@@ -1386,7 +1386,7 @@
       }
     }
   },
-  "/admin/pricing-policies": {
+    "/admin/pricing-policies": {
     "post": {
       "operationId": "delivery_post__admin_pricing_policies",
       "summary": "Finance admin creates versioned pricing policy; validate rules against policy engine schema.",
@@ -1444,7 +1444,7 @@
       }
     }
   },
-  "/integrations/payments/webhook": {
+    "/integrations/payments/webhook": {
     "post": {
       "operationId": "delivery_post__integrations_payments_webhook",
       "summary": "Payment provider callback records signature-verified event.",
@@ -4663,7 +4663,7 @@
     "/runs/{run_id}/stops/{stop_id}/arrive": {
       "post": {
         "operationId": "driver_arrive_at_stop",
-        "summary": "Assigned outbound driver reports arrival at the next ordered stop without transferring custody.",
+        "summary": "Assigned inbound or outbound driver reports arrival at the next ordered stop without transferring custody. Inbound requires an acknowledged run and assigned parcels in origin locker custody; outbound requires departure and loaded driver custody.",
         "parameters": [
           {"name": "run_id", "in": "path", "required": true, "schema": {"type": "string"}},
           {"name": "stop_id", "in": "path", "required": true, "schema": {"type": "string"}},
@@ -4707,11 +4707,30 @@
           {"name":"If-Match","in":"header","required":true,"schema":{"type":"string"}},
           {"name":"X-CSRF-Token","in":"header","required":false,"description":"Required for browser cookie authentication.","schema":{"type":"string"}}
         ],
-        "requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
-          "properties":{"package_id":{"type":"string"},"pairing_id":{"type":"string"},"label_payload":{"type":"string"},
-            "expected_package_version":{"type":"integer","minimum":0},"expected_revision":{"type":"integer","minimum":1}},
-          "required":["package_id","pairing_id","label_payload","expected_package_version","expected_revision"]}}}},
-        "responses":{
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "package_id": {"type":"string"},
+                  "pairing_id": {"type":"string"},
+                  "label_payload": {"type":"string"},
+                  "expected_package_version": {"type":"integer","minimum":0},
+                  "expected_revision": {"type":"integer","minimum":1},
+                  "box_model_id": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]{0,17}$"
+                  }
+                },
+                "required": ["package_id","pairing_id","label_payload","expected_package_version","expected_revision"]
+              }
+            }
+          }
+        },
+        "responses": {
           "200":{"description":"Reservation pending physical evidence; no custody transfer.","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,
             "properties":{"session_id":{"type":"string"},"command_id":{"type":"string"},"compartment_code":{"type":"string"},
               "status":{"type":"string","enum":["READY"]},"package_version":{"type":"integer"},"run_revision":{"type":"integer"},
@@ -5369,7 +5388,7 @@
     "/devices/me/pairings": {
       "post": {
         "operationId": "delivery_29__devices_me_pairings",
-        "summary": "Enrolled terminal creates a short-lived final-deposit driver pairing scene.",
+        "summary": "Enrolled terminal creates a short-lived parcel workflow driver pairing scene.",
         "description": "Requires the enrolled device's Ed25519 signature over POST, exact path, timestamp, nonce and raw JSON body hash. Only an active Delivery-only site without a legacy location link can create a scene. Other pairing workflows are reserved until implemented.",
         "parameters": [
           {
@@ -5478,6 +5497,9 @@
         "security": [
           {
             "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
           }
         ],
         "requestBody": {
@@ -5495,7 +5517,7 @@
     "/pairings/{pairing_id}/approve": {
       "post": {
         "operationId": "delivery_30__pairings_pairing_id_approve",
-        "summary": "Authenticated driver approves the scanned final-deposit scene for the exact site.",
+        "summary": "Authenticated driver approves the scanned parcel workflow scene for the exact site.",
         "description": "The app must send the scene_payload scanned from the terminal. Approval binds the authenticated driver to the short-lived device scene; it does not authorize a door by itself.",
         "parameters": [
           {
@@ -5634,7 +5656,7 @@
     "/devices/me/pairings/{pairing_id}": {
       "get": {
         "operationId": "delivery_31__devices_me_pairings_pairing_id",
-        "summary": "Enrolled terminal polls only its own final-deposit pairing scene.",
+        "summary": "Enrolled terminal polls only its own parcel workflow pairing scene.",
         "description": "Requires the enrolled device's Ed25519 signature over GET, exact path, timestamp, nonce and raw request body hash. Expired pending scenes become EXPIRED.",
         "parameters": [
           {
@@ -5742,15 +5764,17 @@
         "security": [
           {
             "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
           }
         ]
       }
     },
     "/locker-sessions": {
       "post": {
-        "operationId": "delivery_32__locker_sessions",
-        "summary": "Create action-scoped parcel session; require pairing_id or valid pickup_grant and authorize actor.",
-        "description": "Create action-scoped parcel session; require pairing_id or valid pickup_grant and authorize actor.",
+        "operationId": "terminalPrepareParcel",
+        "summary": "Prepare a paired origin deposit, inbound pickup or recipient collection. Final deposit uses the route stop endpoint.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -5773,12 +5797,12 @@
           }
         ],
         "responses": {
-          "201": {
+          "200": {
             "description": "Successful result",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LockerSession"
+                  "$ref": "#/components/schemas/PhysicalSessionPrepared"
                 }
               }
             }
@@ -5869,7 +5893,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LockerSessionCreate"
+                "$ref": "#/components/schemas/PhysicalSessionPrepare"
               }
             }
           }
@@ -5878,9 +5902,8 @@
     },
     "/locker-sessions/{session_id}": {
       "get": {
-        "operationId": "delivery_33__locker_sessions_session_id",
-        "summary": "Read own session progress.",
-        "description": "Read own session progress.",
+        "operationId": "terminalActorSession",
+        "summary": "Read only the signed-door session belonging to the authenticated actor.",
         "parameters": [
           {
             "name": "session_id",
@@ -5888,7 +5911,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Opaque identifier; serialize as string."
+              "pattern": "^[1-9][0-9]{0,17}$"
             }
           }
         ],
@@ -5898,7 +5921,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LockerSession"
+                  "$ref": "#/components/schemas/PhysicalSessionStatus"
                 }
               }
             }
@@ -5990,7 +6013,7 @@
       "post": {
         "operationId": "delivery_34__locker_sessions_session_id_attest",
         "summary": "Actor attests placed/removed; insufficient alone without device evidence.",
-        "description": "Actor attests placed/removed; insufficient alone without device evidence.",
+        "description": "Reserved contract only; this route is not implemented. Use /confirm for enrolled origin/inbound/recipient sessions and the run stop final-deposit confirmation route for final deposit.",
         "parameters": [
           {
             "name": "session_id",
@@ -6140,16 +6163,33 @@
         "summary": "Record an enrolled terminal's ordered command observations without transferring parcel custody.",
         "description": "Ed25519 signature covers POST, the exact path, timestamp, nonce and SHA-256 of the raw JSON body. The terminal must journal dispatch before reporting an observed open and close. A repeated event ID with the same command and type is accepted idempotently using a fresh signed request. Signed reports are retained as terminal claims; physical verification and actor confirmation remain separate.",
         "parameters": [
-          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
-          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {
+            "name": "X-Device-Key-Id",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string","maxLength":80},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
+          {
+            "name": "X-Device-Timestamp",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string"},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
           {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
-        "requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCommandEventRequest"}}}},
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCommandEventRequest"}}}},
         "responses": {
           "200": {"description":"Observation recorded", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCommandEventResult"}}}},
           "default": {"description":"Structured error", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
         },
-        "security": [{"DeviceAuth":[]}]
+        "security": [
+          {"DeviceAuth":[]},
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
       }
     },
     "/devices/me/box-models": {
@@ -6158,15 +6198,32 @@
         "summary": "List models installed in the enrolled Delivery cabinet without advertising available capacity.",
         "description": "Uses the same signed device credential, cabinet mapping, revision and safety checks as cabinet-config. Every model has availableCount 0 until a separately verified allocation boundary is released. This is a Delivery client contract, not a legacy TP8 response envelope.",
         "parameters": [
-          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
-          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {
+            "name": "X-Device-Key-Id",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string","maxLength":80},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
+          {
+            "name": "X-Device-Timestamp",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string"},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
           {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
         "responses": {
           "200": {"description":"Installed model summary", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalBoxModels"}}}},
           "default": {"description":"Structured error", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
         },
-        "security": [{"DeviceAuth":[]}]
+        "security": [
+          {"DeviceAuth":[]},
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
       }
     },
     "/devices/me/cabinet-config": {
@@ -6175,15 +6232,32 @@
         "summary": "Read the enrolled terminal's bound Delivery cabinet structure without allocating a door.",
         "description": "Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. Only one active Delivery-only bound cabinet with complete installed address mapping is returned. Every box is blocked and unavailable until a separate ownership and allocation release. This is a new Delivery client contract, not a drop-in replacement for TP8 getBoxConfig.",
         "parameters": [
-          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
-          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string"}},
+          {
+            "name": "X-Device-Key-Id",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string","maxLength":80},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
+          {
+            "name": "X-Device-Timestamp",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string"},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
           {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
         "responses": {
           "200": {"description":"Read-only configuration", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/TerminalCabinetConfig"}}}},
           "default": {"description":"Structured error", "content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
         },
-        "security": [{"DeviceAuth":[]}]
+        "security": [
+          {"DeviceAuth":[]},
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
       }
     },
     "/devices/me/commands": {
@@ -6192,8 +6266,20 @@
         "summary": "Enrolled terminal polls its authorized commands.",
         "description": "Ed25519 signature covers GET, this exact path, timestamp, nonce and SHA-256 of the raw request body. A repeat nonce is rejected. Polling never confirms custody.",
         "parameters": [
-          {"name":"X-Device-Key-Id","in":"header","required":true,"schema":{"type":"string","maxLength":80}},
-          {"name":"X-Device-Timestamp","in":"header","required":true,"schema":{"type":"string","description":"Unix epoch seconds within 60 seconds of server time."}},
+          {
+            "name": "X-Device-Key-Id",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string","maxLength":80},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
+          {
+            "name": "X-Device-Timestamp",
+            "in": "header",
+            "required": false,
+            "schema": {"type":"string","description":"Unix epoch seconds within 60 seconds of server time."},
+            "description": "Required with Ed25519 device signing; omitted with the original cabinet config access token."
+          },
           {"name":"X-Device-Nonce","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}
         ],
         "responses": {
@@ -6291,6 +6377,9 @@
         "security": [
           {
             "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
           }
         ]
       }
@@ -7484,6 +7573,1385 @@
           }
         }
       }
+    },
+    "/locker-sessions/{session_id}/confirm": {
+      "post": {
+        "operationId": "terminalConfirmParcel",
+        "summary": "Confirm actual parcel placement/removal after ordered signed door evidence.",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalSessionConfirmed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhysicalSessionConfirm"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/me/sessions/{session_id}": {
+      "get": {
+        "operationId": "terminalDeviceSession",
+        "summary": "Read only this enrolled terminal’s session; door closure is distinct from custody confirmation.",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalSessionStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
+      }
+    },
+    "/pickup-grants": {
+      "post": {
+        "operationId": "terminalRecipientGrant",
+        "summary": "Issue a short-lived single-use grant for an owned destination parcel.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipientGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipientGrantRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pairings/{pairing_id}/inspect": {
+      "post": {
+        "operationId": "terminalInspectPairing",
+        "summary": "Verify full pairing scene, site and action; resume a session belonging to this actor.",
+        "parameters": [
+          {
+            "name": "pairing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pairing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairingInspect"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/locker-sessions/{session_id}/didnt-deposit": {
+      "post": {
+        "operationId": "terminalDeclineDeposit",
+        "summary": "terminalDeclineDeposit",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required when authenticated by browser cookie; not needed for native bearer.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositDeclined"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositDecline"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/me/sessions/{session_id}/confirm": {
+      "post": {
+        "operationId": "deviceConfirmParcel",
+        "summary": "deviceConfirmParcel",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-Device-Nonce",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalSessionConfirmed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhysicalSessionConfirm"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
+      }
+    },
+    "/devices/me/sessions/{session_id}/didnt-deposit": {
+      "post": {
+        "operationId": "deviceDeclineDeposit",
+        "summary": "deviceDeclineDeposit",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-Device-Nonce",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositDeclined"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositDecline"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
+      }
+    },
+    "/devices/me/sessions/{session_id}/retry": {
+      "post": {
+        "operationId": "deviceRetryDeposit",
+        "summary": "deviceRetryDeposit",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-Device-Nonce",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalSessionPrepared"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositRetry"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
+      }
+    },
+    "/cabinet/zippora/getAdminCardList": {
+      "post": {
+        "operationId": "cabinetAdminCardList",
+        "summary": "Terminal452 cabinet-scoped active admin code roster",
+        "description": "Requires a current cabinet accessToken in the form body. Returns only active authorized admin rows for that exact cabinet. Sensitive response must not be cached or logged. Empty roster returns ret=0 and data=[].",
+        "servers": [{ "url": "/" }],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/x-www-form-urlencoded": { "schema": {
+            "type": "object", "additionalProperties": false, "required": ["accessToken"],
+            "properties": { "accessToken": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+          } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Sensitive legacy ret/msg/data roster; Cache-Control: no-store",
+            "content": { "application/json": { "schema": {
+              "type": "object", "required": ["ret","msg","data"],
+              "properties": {
+                "ret": { "type": "integer", "enum": [0] }, "msg": { "type": "string" },
+                "data": { "type": "array", "items": {
+                  "type": "object", "required": ["cardId","rfid","cabinetId","zpAdminId","zpAdminName","zpAdminRole"],
+                  "properties": {
+                    "cardId": { "type": "string" }, "rfid": { "type": "string" }, "cabinetId": { "type": "string" },
+                    "zpAdminId": { "type": "string" }, "zpAdminName": { "type": "string" }, "zpAdminRole": { "type": "string" }
+                  }
+                } }
+              }
+            } } }
+          },
+          "default": { "description": "Legacy ret/msg/data error envelope; no codes returned" }
+        }
+      }
+    },
+    "/cabinet/zippora/getAccessToken": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "required": [
+                  "apiKey",
+                  "kts",
+                  "cabinetId",
+                  "sign"
+                ],
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "sign": {
+                    "minLength": 32,
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "kts": {
+                    "pattern": "^[0-9]{1,12}$",
+                    "type": "string"
+                  },
+                  "cabinetId": {
+                    "pattern": "^[1-9][0-9]{0,17}$",
+                    "type": "string"
+                  },
+                  "apiKey": {
+                    "maxLength": 64,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "summary": "Terminal452 config signature exchange",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "ret",
+                    "msg",
+                    "data"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "properties": {
+                        "accessToken": {
+                          "type": "string"
+                        },
+                        "address": {
+                          "type": "string"
+                        },
+                        "cabinetId": {
+                          "type": "string"
+                        },
+                        "serviceType": {
+                          "type": "string"
+                        },
+                        "expire": {
+                          "type": "integer"
+                        },
+                        "zipcode": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Legacy ret/msg/data token envelope"
+          },
+          "default": {
+            "description": "Authentication failed; legacy ret/msg/data error envelope"
+          }
+        },
+        "security": [],
+        "operationId": "cabinetConfigAccessToken",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ]
+      }
+    },
+    "/devices/me/pairings/{pairing_id}/scan": {
+      "post": {
+        "operationId": "deviceScanParcel",
+        "summary": "Prepare scanned parcel at exact approved terminal and assigned stop",
+        "parameters": [
+          {
+            "name": "pairing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,17}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "X-Device-Nonce",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalSessionPrepared"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label_payload": {
+                    "maxLength": 500,
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "label_payload"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "DeviceAuth": []
+          },
+          {
+            "CabinetTokenAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -7506,6 +8974,11 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-Device-Signature"
+      },
+      "CabinetTokenAuth": {
+        "in": "header",
+        "name": "X-Cabinet-Access-Token",
+        "type": "apiKey"
       }
     },
     "schemas": {
@@ -7603,7 +9076,7 @@
           "next_cursor"
         ]
       },
-  "ContactChallengeRequest": {
+      "ContactChallengeRequest": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7632,7 +9105,7 @@
       "purpose"
     ]
   },
-  "ContactChallenge": {
+      "ContactChallenge": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7657,7 +9130,7 @@
       "delivery_status"
     ]
   },
-  "RevisionAck": {
+      "RevisionAck": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7670,7 +9143,7 @@
       "revision"
     ]
   },
-  "ReceivingClose": {
+      "ReceivingClose": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7689,7 +9162,7 @@
       "missing_package_ids"
     ]
   },
-  "HubSlot": {
+      "HubSlot": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7722,7 +9195,7 @@
       "staged_count"
     ]
   },
-  "HubSlotList": {
+      "HubSlotList": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7737,7 +9210,7 @@
       "items"
     ]
   },
-  "HubDispatchCreate": {
+      "HubDispatchCreate": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7746,7 +9219,7 @@
     },
     "required": ["slot_id", "minutes_to_pickup"]
   },
-  "HubDispatchCreated": {
+      "HubDispatchCreated": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7761,7 +9234,7 @@
     },
     "required": ["dispatch_call_id", "hub_id", "slot_id", "destination", "package_count", "status", "expires_at", "expected_pickup_at"]
   },
-  "HubDispatchCall": {
+      "HubDispatchCall": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7784,13 +9257,13 @@
     },
     "required": ["dispatch_call_id", "slot_id", "slot_code", "destination", "destination_name", "package_count", "loaded_count", "remaining_count", "status", "driver_name", "run_id", "called_at", "expires_at", "confirmed_at", "expected_pickup_at", "actual_pickup_at"]
   },
-  "HubDispatchCallList": {
+      "HubDispatchCallList": {
     "type": "object",
     "additionalProperties": false,
     "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/HubDispatchCall" } } },
     "required": ["items"]
   },
-  "HubInventory": {
+      "HubInventory": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7810,7 +9283,7 @@
       "next_cursor"
     ]
   },
-  "PrintRoutingRequest": {
+      "PrintRoutingRequest": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7834,7 +9307,7 @@
       "package_ids"
     ]
   },
-  "PrintJob": {
+      "PrintJob": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7854,7 +9327,7 @@
       "status"
     ]
   },
-  "DeviceHeartbeat": {
+      "DeviceHeartbeat": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7885,7 +9358,7 @@
       "health"
     ]
   },
-  "StaffGrant": {
+      "StaffGrant": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7908,7 +9381,7 @@
       "reason"
     ]
   },
-  "DriverCreate": {
+      "DriverCreate": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7928,7 +9401,7 @@
       "verification_reference"
     ]
   },
-  "DriverResult": {
+      "DriverResult": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7948,7 +9421,7 @@
       "status"
     ]
   },
-  "VehicleCreate": {
+      "VehicleCreate": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -7975,7 +9448,7 @@
       "max_packages"
     ]
   },
-  "LocationCreate": {
+      "LocationCreate": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -8008,7 +9481,7 @@
       "printer_available"
     ]
   },
-  "PolicyCreate": {
+      "PolicyCreate": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -8035,12 +9508,12 @@
       "rules"
     ]
   },
-  "WebhookBody": {
+      "WebhookBody": {
     "type": "object",
     "additionalProperties": true,
     "description": "Provider-native signed JSON body. Verify raw bytes with provider adapter before normalization; never trust client payment flags."
   },
-  "RefundWebhookResult": {
+      "RefundWebhookResult": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -9279,7 +10752,12 @@
         "properties": {
           "workflow": {
             "type": "string",
-            "enum": ["FINAL_DEPOSIT"]
+            "enum": [
+              "ORIGIN_DEPOSIT",
+              "INBOUND_PICKUP",
+              "FINAL_DEPOSIT",
+              "RECIPIENT_PICKUP"
+            ]
           }
         },
         "required": [
@@ -9310,13 +10788,37 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "workflow": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_DEPOSIT",
+              "INBOUND_PICKUP",
+              "FINAL_DEPOSIT",
+              "RECIPIENT_PICKUP"
+            ]
+          },
+          "location_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "location_name": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "nullable": true
           }
         },
         "required": [
           "pairing_id",
           "scene_payload",
           "status",
-          "expires_at"
+          "expires_at",
+          "workflow",
+          "location_id",
+          "location_name"
         ]
       },
       "PairingApproval": {
@@ -9325,7 +10827,12 @@
         "properties": {
           "workflow": {
             "type": "string",
-            "enum": ["FINAL_DEPOSIT"]
+            "enum": [
+              "ORIGIN_DEPOSIT",
+              "INBOUND_PICKUP",
+              "FINAL_DEPOSIT",
+              "RECIPIENT_PICKUP"
+            ]
           },
           "location_id": {
             "type": "string",
@@ -9499,14 +11006,14 @@
         "properties": {
           "revision": {"type":"integer","minimum":1},
           "boxConfig": {"type":"object","properties":{
-            "cabinetId":{"type":"string"},"address":{"type":"string"},"zipcode":{"type":"string"},
+            "cabinetId":{"type":"string"},"originalCabinetId":{"type":"string","description":"Original locker identity for display; cabinetId remains the enrolled API identity."},"address":{"type":"string"},"zipcode":{"type":"string"},
             "cabinets":{"type":"array","items":{"type":"object","properties":{
               "bodyId":{"type":"string"},"sequence":{"type":"string"},"displaySequence":{"type":"integer"},
               "cabinetType":{"type":"string"},"model":{"type":"string"},"lockAddr":{"type":"integer"},
               "protocolProfile":{"type":"string"},
               "boxes":{"type":"array","items":{"type":"object","properties":{
                 "boxId":{"type":"string"},"boxAddr":{"type":"integer"},"row":{"type":"integer"},"column":{"type":"integer"},
-                "model":{"type":"string"},"boxModelId":{"type":"string"},"boxModelName":{"type":"string"},
+                "model":{"type":"string"},"boxModelId":{"type":"string"},"boxModelName":{"type":"string"},"displayOnly":{"type":"boolean","description":"Controller cell: never an opening or allocation target."},
                 "dimensionsMm":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"},"depth":{"type":"integer"}}},
                 "maxWeightG":{"type":"integer"},"isAllocable":{"type":"string","enum":["0"]},"blocked":{"type":"integer","enum":[1]}
               },"required":["boxId","boxAddr","row","column","model","boxModelId","boxModelName","dimensionsMm","maxWeightG","isAllocable","blocked"]}}
@@ -10214,6 +11721,356 @@
           },
           "address": {
             "$ref": "#/components/schemas/Address"
+          }
+        }
+      },
+      "PairingInspect": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scene_payload": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scene_payload"
+        ]
+      },
+      "PhysicalSessionPrepare": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_DEPOSIT",
+              "INBOUND_PICKUP",
+              "RECIPIENT_PICKUP"
+            ]
+          },
+          "package_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "pairing_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "expected_package_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "label_payload": {
+            "type": "string"
+          },
+          "pickup_token": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "stop_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "box_model_id": {
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow",
+          "package_id",
+          "pairing_id",
+          "expected_package_version"
+        ]
+      },
+      "PhysicalSessionPrepared": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "command_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "READY"
+            ]
+          },
+          "workflow": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_DEPOSIT",
+              "INBOUND_PICKUP",
+              "FINAL_DEPOSIT",
+              "RECIPIENT_PICKUP"
+            ]
+          },
+          "compartment_code": {
+            "type": "string"
+          },
+          "package_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "custody_transferred": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "command_id",
+          "status",
+          "workflow",
+          "compartment_code",
+          "package_version",
+          "custody_transferred"
+        ]
+      },
+      "PhysicalSessionStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "pairing_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "package_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "expected_package_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workflow": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_DEPOSIT",
+              "INBOUND_PICKUP",
+              "FINAL_DEPOSIT",
+              "RECIPIENT_PICKUP"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "command_id": {
+            "type": "string"
+          },
+          "command_status": {
+            "type": "string"
+          },
+          "workflow_context": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "run_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$"
+              },
+              "stop_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$"
+              },
+              "expected_revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "grant_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$"
+              }
+            }
+          },
+          "compartment_code": {
+            "type": "string"
+          },
+          "si": {
+            "type": "string"
+          },
+          "package_state": {
+            "type": "string"
+          },
+          "package_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "custody_transferred": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "pairing_id",
+          "package_id",
+          "expected_package_version",
+          "workflow",
+          "status",
+          "command_id",
+          "command_status",
+          "workflow_context",
+          "compartment_code",
+          "si",
+          "package_state",
+          "package_version",
+          "custody_transferred"
+        ]
+      },
+      "PhysicalSessionConfirm": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "attested": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "expected_package_version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "attested",
+          "expected_package_version"
+        ]
+      },
+      "PhysicalSessionConfirmed": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "package_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "package_state": {
+            "type": "string"
+          },
+          "package_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "custody_transferred": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "package_id",
+          "package_state",
+          "package_version",
+          "custody_transferred"
+        ]
+      },
+      "RecipientGrantRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "expected_package_version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "package_id",
+          "expected_package_version"
+        ]
+      },
+      "RecipientGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "pickup_token": {
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "grant_id",
+          "pickup_token",
+          "expires_in_seconds"
+        ]
+      },
+      "DepositDecline": {
+        "additionalProperties": false,
+        "required": [
+          "expected_package_version"
+        ],
+        "type": "object",
+        "properties": {
+          "expected_package_version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DepositDeclined": {
+        "additionalProperties": false,
+        "required": [
+          "session_id",
+          "attempt_abandoned",
+          "custody_transferred"
+        ],
+        "type": "object",
+        "properties": {
+          "attempt_abandoned": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "custody_transferred": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        }
+      },
+      "DepositRetry": {
+        "additionalProperties": false,
+        "required": [
+          "box_model_id"
+        ],
+        "type": "object",
+        "properties": {
+          "box_model_id": {
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "type": "string"
           }
         }
       }

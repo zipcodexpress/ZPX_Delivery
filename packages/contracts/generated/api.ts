@@ -1402,7 +1402,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Assigned outbound driver reports arrival at the next ordered stop without transferring custody. */
+        /** Assigned inbound or outbound driver reports arrival at the next ordered stop without transferring custody. Inbound requires an acknowledged run and assigned parcels in origin locker custody; outbound requires departure and loaded driver custody. */
         post: operations["driver_arrive_at_stop"];
         delete?: never;
         options?: never;
@@ -1535,7 +1535,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enrolled terminal creates a short-lived final-deposit driver pairing scene.
+         * Enrolled terminal creates a short-lived parcel workflow driver pairing scene.
          * @description Requires the enrolled device's Ed25519 signature over POST, exact path, timestamp, nonce and raw JSON body hash. Only an active Delivery-only site without a legacy location link can create a scene. Other pairing workflows are reserved until implemented.
          */
         post: operations["delivery_29__devices_me_pairings"];
@@ -1555,7 +1555,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Authenticated driver approves the scanned final-deposit scene for the exact site.
+         * Authenticated driver approves the scanned parcel workflow scene for the exact site.
          * @description The app must send the scene_payload scanned from the terminal. Approval binds the authenticated driver to the short-lived device scene; it does not authorize a door by itself.
          */
         post: operations["delivery_30__pairings_pairing_id_approve"];
@@ -1573,7 +1573,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enrolled terminal polls only its own final-deposit pairing scene.
+         * Enrolled terminal polls only its own parcel workflow pairing scene.
          * @description Requires the enrolled device's Ed25519 signature over GET, exact path, timestamp, nonce and raw request body hash. Expired pending scenes become EXPIRED.
          */
         get: operations["delivery_31__devices_me_pairings_pairing_id"];
@@ -1594,11 +1594,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Create action-scoped parcel session; require pairing_id or valid pickup_grant and authorize actor.
-         * @description Create action-scoped parcel session; require pairing_id or valid pickup_grant and authorize actor.
-         */
-        post: operations["delivery_32__locker_sessions"];
+        /** Prepare a paired origin deposit, inbound pickup or recipient collection. Final deposit uses the route stop endpoint. */
+        post: operations["terminalPrepareParcel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1612,11 +1609,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read own session progress.
-         * @description Read own session progress.
-         */
-        get: operations["delivery_33__locker_sessions_session_id"];
+        /** Read only the signed-door session belonging to the authenticated actor. */
+        get: operations["terminalActorSession"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1636,7 +1630,7 @@ export interface paths {
         put?: never;
         /**
          * Actor attests placed/removed; insufficient alone without device evidence.
-         * @description Actor attests placed/removed; insufficient alone without device evidence.
+         * @description Reserved contract only; this route is not implemented. Use /confirm for enrolled origin/inbound/recipient sessions and the run stop final-deposit confirmation route for final deposit.
          */
         post: operations["delivery_34__locker_sessions_session_id_attest"];
         delete?: never;
@@ -1975,6 +1969,196 @@ export interface paths {
         get: operations["customer__shipments_lookup"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locker-sessions/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm actual parcel placement/removal after ordered signed door evidence. */
+        post: operations["terminalConfirmParcel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read only this enrolled terminal’s session; door closure is distinct from custody confirmation. */
+        get: operations["terminalDeviceSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a short-lived single-use grant for an owned destination parcel. */
+        post: operations["terminalRecipientGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pairings/{pairing_id}/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify full pairing scene, site and action; resume a session belonging to this actor. */
+        post: operations["terminalInspectPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locker-sessions/{session_id}/didnt-deposit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** terminalDeclineDeposit */
+        post: operations["terminalDeclineDeposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/sessions/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** deviceConfirmParcel */
+        post: operations["deviceConfirmParcel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/sessions/{session_id}/didnt-deposit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** deviceDeclineDeposit */
+        post: operations["deviceDeclineDeposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/sessions/{session_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** deviceRetryDeposit */
+        post: operations["deviceRetryDeposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cabinet/zippora/getAdminCardList": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Terminal452 cabinet-scoped active admin code roster
+         * @description Requires a current cabinet accessToken in the form body. Returns only active authorized admin rows for that exact cabinet. Sensitive response must not be cached or logged. Empty roster returns ret=0 and data=[].
+         */
+        post: operations["cabinetAdminCardList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cabinet/zippora/getAccessToken": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Terminal452 config signature exchange */
+        post: operations["cabinetConfigAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/pairings/{pairing_id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare scanned parcel at exact approved terminal and assigned stop */
+        post: operations["deviceScanParcel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2558,7 +2742,7 @@ export interface components {
         };
         PairingCreate: {
             /** @enum {string} */
-            workflow: "FINAL_DEPOSIT";
+            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
         };
         Pairing: {
             /** @description Opaque identifier; serialize as string. */
@@ -2568,10 +2752,15 @@ export interface components {
             status: "PENDING" | "APPROVED" | "CONSUMED" | "EXPIRED" | "CANCELLED";
             /** Format: date-time */
             expires_at: string;
+            /** @enum {string} */
+            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
+            location_id: string;
+            location_name: string;
+            session_id?: string | null;
         };
         PairingApproval: {
             /** @enum {string} */
-            workflow: "FINAL_DEPOSIT";
+            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
             /** @description Opaque identifier; serialize as string. */
             location_id: string;
             /** @description Opaque scene code scanned from the terminal; required to approve this pairing. */
@@ -2646,6 +2835,8 @@ export interface components {
             revision: number;
             boxConfig: {
                 cabinetId: string;
+                /** @description Original locker identity for display; cabinetId remains the enrolled API identity. */
+                originalCabinetId?: string;
                 address: string;
                 zipcode: string;
                 cabinets: {
@@ -2664,6 +2855,8 @@ export interface components {
                         model: string;
                         boxModelId: string;
                         boxModelName: string;
+                        /** @description Controller cell: never an opening or allocation target. */
+                        displayOnly?: boolean;
                         dimensionsMm: {
                             width?: number;
                             height?: number;
@@ -2896,6 +3089,89 @@ export interface components {
         ProfileUpdate: {
             name: string;
             address: components["schemas"]["Address"];
+        };
+        PairingInspect: {
+            scene_payload: string;
+        };
+        PhysicalSessionPrepare: {
+            /** @enum {string} */
+            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "RECIPIENT_PICKUP";
+            package_id: string;
+            pairing_id: string;
+            expected_package_version: number;
+            label_payload?: string;
+            pickup_token?: string;
+            run_id?: string;
+            stop_id?: string;
+            expected_revision?: number;
+            box_model_id?: string;
+        };
+        PhysicalSessionPrepared: {
+            session_id: string;
+            command_id: string;
+            /** @enum {string} */
+            status: "READY";
+            /** @enum {string} */
+            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
+            compartment_code: string;
+            package_version: number;
+            custody_transferred: boolean;
+        };
+        PhysicalSessionStatus: {
+            session_id: string;
+            pairing_id: string;
+            package_id: string;
+            expected_package_version: number;
+            /** @enum {string} */
+            workflow: "ORIGIN_DEPOSIT" | "INBOUND_PICKUP" | "FINAL_DEPOSIT" | "RECIPIENT_PICKUP";
+            status: string;
+            command_id: string;
+            command_status: string;
+            workflow_context: {
+                run_id?: string;
+                stop_id?: string;
+                expected_revision?: number;
+                grant_id?: string;
+            };
+            compartment_code: string;
+            si: string;
+            package_state: string;
+            package_version: number;
+            custody_transferred: boolean;
+        };
+        PhysicalSessionConfirm: {
+            /** @enum {boolean} */
+            attested: true;
+            expected_package_version: number;
+        };
+        PhysicalSessionConfirmed: {
+            session_id: string;
+            package_id: string;
+            package_state: string;
+            package_version: number;
+            custody_transferred: boolean;
+        };
+        RecipientGrantRequest: {
+            package_id: string;
+            expected_package_version: number;
+        };
+        RecipientGrant: {
+            grant_id: string;
+            pickup_token: string;
+            expires_in_seconds: number;
+        };
+        DepositDecline: {
+            expected_package_version: number;
+        };
+        DepositDeclined: {
+            /** @enum {boolean} */
+            attempt_abandoned: true;
+            session_id: string;
+            /** @enum {boolean} */
+            custody_transferred: false;
+        };
+        DepositRetry: {
+            box_model_id: string;
         };
     };
     responses: never;
@@ -7577,6 +7853,7 @@ export interface operations {
                     label_payload: string;
                     expected_package_version: number;
                     expected_revision: number;
+                    box_model_id?: string;
                 };
             };
         };
@@ -8415,7 +8692,7 @@ export interface operations {
             };
         };
     };
-    delivery_32__locker_sessions: {
+    terminalPrepareParcel: {
         parameters: {
             query?: never;
             header: {
@@ -8428,17 +8705,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LockerSessionCreate"];
+                "application/json": components["schemas"]["PhysicalSessionPrepare"];
             };
         };
         responses: {
             /** @description Successful result */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LockerSession"];
+                    "application/json": components["schemas"]["PhysicalSessionPrepared"];
                 };
             };
             /** @description Structured error */
@@ -8515,7 +8792,7 @@ export interface operations {
             };
         };
     };
-    delivery_33__locker_sessions_session_id: {
+    terminalActorSession: {
         parameters: {
             query?: never;
             header?: never;
@@ -8532,7 +8809,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LockerSession"];
+                    "application/json": components["schemas"]["PhysicalSessionStatus"];
                 };
             };
             /** @description Structured error */
@@ -8717,8 +8994,10 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-Device-Key-Id": string;
-                "X-Device-Timestamp": string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Key-Id"?: string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Timestamp"?: string;
                 "X-Device-Nonce": string;
             };
             path?: never;
@@ -8754,8 +9033,10 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-Device-Key-Id": string;
-                "X-Device-Timestamp": string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Key-Id"?: string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Timestamp"?: string;
                 "X-Device-Nonce": string;
             };
             path?: never;
@@ -8787,8 +9068,10 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-Device-Key-Id": string;
-                "X-Device-Timestamp": string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Key-Id"?: string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Timestamp"?: string;
                 "X-Device-Nonce": string;
             };
             path?: never;
@@ -8820,8 +9103,10 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-Device-Key-Id": string;
-                "X-Device-Timestamp": string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Key-Id"?: string;
+                /** @description Required with Ed25519 device signing; omitted with the original cabinet config access token. */
+                "X-Device-Timestamp"?: string;
                 "X-Device-Nonce": string;
             };
             path?: never;
@@ -9777,6 +10062,1003 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    terminalConfirmParcel: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhysicalSessionConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhysicalSessionConfirmed"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    terminalDeviceSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhysicalSessionStatus"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    terminalRecipientGrant: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipientGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientGrant"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    terminalInspectPairing: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                pairing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairingInspect"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pairing"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    terminalDeclineDeposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Required when authenticated by browser cookie; not needed for native bearer. */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositDecline"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositDeclined"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deviceConfirmParcel: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "X-Device-Nonce": string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhysicalSessionConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhysicalSessionConfirmed"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deviceDeclineDeposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "X-Device-Nonce": string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositDecline"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositDeclined"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deviceRetryDeposit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "X-Device-Nonce": string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositRetry"];
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhysicalSessionPrepared"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    cabinetAdminCardList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    accessToken: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Sensitive legacy ret/msg/data roster; Cache-Control: no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {integer} */
+                        ret: 0;
+                        msg: string;
+                        data: {
+                            cardId: string;
+                            rfid: string;
+                            cabinetId: string;
+                            zpAdminId: string;
+                            zpAdminName: string;
+                            zpAdminRole: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Legacy ret/msg/data error envelope; no codes returned */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cabinetConfigAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    sign: string;
+                    kts: string;
+                    cabinetId: string;
+                    apiKey: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Legacy ret/msg/data token envelope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        msg: string;
+                        data: {
+                            accessToken?: string;
+                            address?: string;
+                            cabinetId?: string;
+                            serviceType?: string;
+                            expire?: number;
+                            zipcode?: string;
+                        };
+                        ret: number;
+                    };
+                };
+            };
+            /** @description Authentication failed; legacy ret/msg/data error envelope */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deviceScanParcel: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "X-Device-Nonce": string;
+            };
+            path: {
+                pairing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    label_payload: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhysicalSessionPrepared"];
+                };
+            };
+            /** @description Structured error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Structured error */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
